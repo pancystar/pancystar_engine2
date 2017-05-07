@@ -170,6 +170,10 @@ void assimp_basic::get_texture(material_list *texture_need, int i)
 {
 	*texture_need = matlist_need[mesh_need[i].material_use];
 }
+void assimp_basic::get_texture_byindex(material_list *texture_need, int index)
+{
+	*texture_need = matlist_need[index];
+}
 void assimp_basic::release()
 {
 	if (model_need != NULL)

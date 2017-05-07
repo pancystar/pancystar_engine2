@@ -282,8 +282,18 @@ private:
 template<typename T>
 mesh_model<T>::mesh_model(T* point_input, UINT* index_input, int vertex_num_need, int index_num_need, bool if_adj) : Geometry<point_common>(if_adj)
 {
-	point_data = point_input;
-	index_data = index_input;
+	//point_data = point_input;
+	//index_data = index_input;
+	point_data = new T[vertex_num_need];
+	index_data = new UINT[index_num_need];
+	for (int i = 0; i < vertex_num_need; ++i)
+	{
+		point_data[i] = point_input[i];
+	}
+	for (int i = 0; i < index_num_need; ++i)
+	{
+		index_data[i] = index_input[i];
+	}
 	all_vertex = vertex_num_need;
 	all_index = index_num_need;
 }

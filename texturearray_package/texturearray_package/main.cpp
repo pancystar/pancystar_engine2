@@ -156,7 +156,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	PSTR szCmdLine, int iCmdShow)
 {
 	engine_windows_main *engine_main = new engine_windows_main(hInstance, hPrevInstance, szCmdLine, iCmdShow, window_width, window_hight);
-	engine_main->game_create();
+	HRESULT hr = engine_main->game_create();
+	if (FAILED(hr)) 
+	{
+		return E_FAIL;
+	}
 	engine_main->game_loop();
 	return engine_main->game_end();
 }

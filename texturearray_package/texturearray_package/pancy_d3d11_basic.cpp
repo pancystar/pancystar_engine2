@@ -190,6 +190,7 @@ engine_basic::engine_fail_reason d3d_pancy_basic_singleton::change_size(int widt
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
+
 engine_basic::engine_fail_reason d3d_pancy_basic_singleton::set_render_target(ID3D11RenderTargetView  *render_target, ID3D11DepthStencilView *depthstencil_target)
 {
 	if (render_target == NULL && depthstencil_target == NULL) 

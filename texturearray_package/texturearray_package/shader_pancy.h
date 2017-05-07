@@ -109,6 +109,8 @@ class virtual_light_shader : public shader_basic
 	ID3DX11EffectShaderResourceVariable   *texture_diffuse_handle;      //漫反射贴图句柄
 	ID3DX11EffectShaderResourceVariable   *texture_normal_handle;       //法线贴图纹理
 	ID3DX11EffectShaderResourceVariable   *texture_specular_handle;     //高光贴图句柄
+
+	ID3DX11EffectShaderResourceVariable   *texture_diffusearray_handle;     //漫反射贴图句柄
 public:
 	virtual_light_shader(LPCWSTR filename);
 	engine_basic::engine_fail_reason set_trans_world(XMFLOAT4X4 *mat_world);//设置总变换
@@ -117,6 +119,8 @@ public:
 	engine_basic::engine_fail_reason set_tex_diffuse(ID3D11ShaderResourceView *tex_in);//设置漫反射纹理
 	engine_basic::engine_fail_reason set_tex_normal(ID3D11ShaderResourceView *tex_in);//设置法线纹理
 	engine_basic::engine_fail_reason set_tex_specular(ID3D11ShaderResourceView *tex_in);//设置高光纹理
+	
+	engine_basic::engine_fail_reason set_tex_diffuse_array(ID3D11ShaderResourceView *tex_in);//设置漫反射纹理数组
 	void release();
 private:
 	void init_handle();                 //注册全局变量句柄
@@ -166,6 +170,7 @@ public:
 	std::shared_ptr<shader_basic> get_shader_by_type(std::string type_name, engine_basic::engine_fail_reason &if_succeed);
 	std::shared_ptr<color_shader> get_shader_color(engine_basic::engine_fail_reason &if_succeed);
 	std::shared_ptr<virtual_light_shader> get_shader_virtual_light(engine_basic::engine_fail_reason &if_succeed);
+	std::shared_ptr<picture_show_shader> get_shader_picture(engine_basic::engine_fail_reason &if_succeed);
 	engine_basic::engine_fail_reason add_a_new_shader(std::type_index class_name, std::shared_ptr<shader_basic> shader_in);
 	void release();
 private:

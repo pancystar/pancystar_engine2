@@ -54,7 +54,10 @@ public:
 	assimp_basic(char* filename, char* texture_path);
 	engine_basic::engine_fail_reason model_create(bool if_adj,int alpha_partnum, int* alpha_part);
 	int get_meshnum();
+	int get_texnum() { return material_optimization; };
 	virtual void get_texture(material_list *texture_need, int i);
+	virtual void get_texture_byindex(material_list *texture_need, int index);
+
 	virtual void release();
 	virtual void draw_part(int i);
 	HRESULT get_technique(ID3DX11EffectTechnique *teque_need);
@@ -68,23 +71,46 @@ protected:
 template<typename T>
 class model_reader_assimp : public assimp_basic
 {
+	T *point_pack_list;
+	UINT *index_pack_list;
+	int vertex_final_num;
+	int index_pack_num;
 public:
 	model_reader_assimp(char* filename, char* texture_path);
+	void get_model_pack_num(int &vertex_num,int &index_num);
+	void get_model_pack_data(T *point_data, UINT *index_data);
 protected:
 	virtual engine_basic::engine_fail_reason init_mesh(bool if_adj);
 };
 template<typename T>
 model_reader_assimp<T>::model_reader_assimp(char* pFile, char *texture_path) : assimp_basic(pFile, texture_path)
 {
+	point_pack_list = NULL;
+	index_pack_list = NULL;
+	vertex_final_num = 0;
+	index_pack_num = 0;
 }
 template<typename T>
 engine_basic::engine_fail_reason model_reader_assimp<T>::init_mesh(bool if_adj)
 {
+
+	for (int i = 0; i < model_need->mNumMeshes; i++)
+	{
+		//获取模型的第i个模块
+		const aiMesh* paiMesh = model_need->mMeshes[i];
+		vertex_final_num += paiMesh->mNumVertices;
+		index_pack_num += paiMesh->mNumFaces * 3;
+	}
+	point_pack_list = (T*)malloc(vertex_final_num * sizeof(T));
+	index_pack_list = (unsigned int*)malloc(index_pack_num * sizeof(unsigned int));
+	int count_point_pack = 0;
+	int count_index_pack = 0;
 	T *point_need;
 	unsigned int *index_need;
 	//创建网格记录表
 	mesh_need = new meshview_list[model_need->mNumMeshes];
 	mesh_optimization = model_need->mNumMeshes;
+	int now_index_start = count_point_pack;
 	for (int i = 0; i < model_need->mNumMeshes; i++)
 	{
 		//获取模型的第i个模块
@@ -126,6 +152,9 @@ engine_basic::engine_fail_reason model_reader_assimp<T>::init_mesh(bool if_adj)
 				point_need[j].tangent.y = 0.0f;
 				point_need[j].tangent.z = 0.0f;
 			}
+			point_pack_list[count_point_pack] = point_need[j];
+			point_pack_list[count_point_pack].tex_id.x = i;
+			count_point_pack += 1;
 		}
 		//索引缓存区
 		int count_index = 0;
@@ -136,6 +165,10 @@ engine_basic::engine_fail_reason model_reader_assimp<T>::init_mesh(bool if_adj)
 				index_need[count_index++] = paiMesh->mFaces[j].mIndices[0];
 				index_need[count_index++] = paiMesh->mFaces[j].mIndices[1];
 				index_need[count_index++] = paiMesh->mFaces[j].mIndices[2];
+
+				index_pack_list[count_index_pack++] = paiMesh->mFaces[j].mIndices[0] + now_index_start;
+				index_pack_list[count_index_pack++] = paiMesh->mFaces[j].mIndices[1] + now_index_start;
+				index_pack_list[count_index_pack++] = paiMesh->mFaces[j].mIndices[2] + now_index_start;
 			}
 			else
 			{
@@ -151,6 +184,7 @@ engine_basic::engine_fail_reason model_reader_assimp<T>::init_mesh(bool if_adj)
 		{
 			return check_fail;
 		}
+		now_index_start = count_point_pack;
 		//释放内存
 		free(point_need);
 		point_need = NULL;
@@ -159,4 +193,23 @@ engine_basic::engine_fail_reason model_reader_assimp<T>::init_mesh(bool if_adj)
 	}
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
+}
+
+template<typename T>
+void model_reader_assimp<T>::get_model_pack_num(int &vertex_num, int &index_num)
+{
+	vertex_num = vertex_final_num;
+	index_num = index_pack_num;
+}
+template<typename T>
+void model_reader_assimp<T>::get_model_pack_data(T *point_data, UINT *index_data)
+{
+	for (int i = 0; i < vertex_final_num; ++i) 
+	{
+		point_data[i] = point_pack_list[i];
+	}
+	for (int i = 0; i < index_pack_num; ++i)
+	{
+		index_data[i] = index_pack_list[i];
+	}
 }

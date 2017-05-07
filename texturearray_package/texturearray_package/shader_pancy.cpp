@@ -178,6 +178,19 @@ void virtual_light_shader::init_handle()
 	texture_diffuse_handle = fx_need->GetVariableByName("texture_diffuse")->AsShaderResource();
 	texture_normal_handle = fx_need->GetVariableByName("texture_specular")->AsShaderResource();
 	texture_specular_handle = fx_need->GetVariableByName("texturet_normal")->AsShaderResource();
+
+	texture_diffusearray_handle = fx_need->GetVariableByName("texture_pack_diffuse")->AsShaderResource();
+}
+engine_basic::engine_fail_reason virtual_light_shader::set_tex_diffuse_array(ID3D11ShaderResourceView *tex_in)
+{
+	HRESULT hr = texture_diffusearray_handle->SetResource(tex_in);
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason failed_message(hr, "set diffuse texarray error in" + shader_file_string);
+		return failed_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
 }
 engine_basic::engine_fail_reason virtual_light_shader::set_trans_world(XMFLOAT4X4 *mat_world)
 {
@@ -400,7 +413,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
-	std::shared_ptr<picture_show_shader> shader_picture_test = std::make_shared<picture_show_shader>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\virtual_light.cso");
+	std::shared_ptr<picture_show_shader> shader_picture_test = std::make_shared<picture_show_shader>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\show_pic.cso");
 	check_error = shader_picture_test->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -436,6 +449,17 @@ std::shared_ptr<virtual_light_shader> shader_control::get_shader_virtual_light(e
 		return std::shared_ptr<virtual_light_shader>();
 	}
 	auto out_pointer = std::dynamic_pointer_cast<virtual_light_shader>(shader_vlight);
+	return out_pointer;
+}
+std::shared_ptr<picture_show_shader> shader_control::get_shader_picture(engine_basic::engine_fail_reason &if_succeed)
+{
+	std::string name_need = std::type_index(typeid(picture_show_shader)).name();
+	auto shader_vlight = get_shader_by_type(std::type_index(typeid(picture_show_shader)).name(), if_succeed);
+	if (!if_succeed.check_if_failed())
+	{
+		return std::shared_ptr<picture_show_shader>();
+	}
+	auto out_pointer = std::dynamic_pointer_cast<picture_show_shader>(shader_vlight);
 	return out_pointer;
 }
 std::shared_ptr<shader_basic> shader_control::get_shader_by_type(std::string type_name, engine_basic::engine_fail_reason &if_succeed)

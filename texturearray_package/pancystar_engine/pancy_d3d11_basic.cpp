@@ -198,6 +198,7 @@ engine_basic::engine_fail_reason d3d_pancy_basic_singleton::set_render_target(ID
 		engine_basic::engine_fail_reason failed_reason("set rendertarget error both RTV & DSV are empty");
 		return failed_reason;
 	}
+
 	contex_pancy->OMSetRenderTargets(1, &render_target, depthstencil_target);
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
@@ -237,40 +238,6 @@ engine_basic::engine_fail_reason d3d_pancy_basic_singleton::end_draw()
 		engine_basic::engine_fail_reason error_message(hr,"swap the backbuffer to screen error");
 		return error_message;
 	}
-	engine_basic::engine_fail_reason succeed;
-	return succeed;
-}
-engine_basic::engine_fail_reason d3d_pancy_basic_singleton::save_texture(ID3D11Resource *resource_in, std::string name_file, int array_count)
-{
-	
-	ScratchImage tgadata;
-	HRESULT hr = DirectX::CaptureTexture(device_pancy,contex_pancy, resource_in, tgadata);
-	int a = tgadata.GetImageCount();
-	if (FAILED(hr)) 
-	{
-		engine_basic::engine_fail_reason error_message(hr, "get the texture pixel error when save picture");
-		return error_message;
-	}
-	size_t length_need = strlen(name_file.c_str()) + 1;
-	size_t converted = 0;
-	wchar_t *data_output;
-	data_output = (wchar_t*)malloc(length_need*sizeof(wchar_t));
-	mbstowcs_s(&converted, data_output, length_need, name_file.c_str(), _TRUNCATE);
-	hr = DirectX::SaveToDDSFile(*tgadata.GetImage(0, array_count,0), 0, data_output);
-	
-	/*
-	size_t length_need = strlen(name_file.c_str()) + 1;
-	size_t converted = 0;
-	wchar_t *data_output;
-	data_output = (wchar_t*)malloc(length_need*sizeof(wchar_t));
-	mbstowcs_s(&converted, data_output, length_need, name_file.c_str(), _TRUNCATE);
-	HRESULT hr = DirectX::SaveDDSTextureToFile(contex_pancy,resource_in, data_output);
-	if (FAILED(hr))
-	{
-		engine_basic::engine_fail_reason error_message(hr, "save the texture pixel error");
-		return error_message;
-	}
-	*/
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }

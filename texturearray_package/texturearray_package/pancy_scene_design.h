@@ -7,6 +7,10 @@
 #include"PancyCamera.h"
 #include"PancyInput.h"
 #include<map>
+#include <Shlobj.h>  
+#include <tchar.h>  
+#include <Commctrl.h> 
+#pragma comment(lib, "comctl32.lib")  
 class scene_root
 {
 protected:
@@ -67,6 +71,7 @@ private:
 
 class scene_test_square : public scene_root 
 {
+	ofstream out_stream;
 	int picture_type_width;
 	int picture_type_height;
 	float rec;
@@ -78,6 +83,8 @@ class scene_test_square : public scene_root
 
 	std::map<std::string, ID3D11ShaderResourceView*> rec_texture_packmap;
 	std::vector<string> picture_namelist;
+
+	ID3D11ShaderResourceView *test_resource;
 public:
 	scene_test_square();
 	engine_basic::engine_fail_reason create();
@@ -89,6 +96,7 @@ private:
 	void show_model();
 	void show_model_single();
 	void show_square();
+	engine_basic::engine_fail_reason read_texture_from_file(std::vector<string> file_name_list);
 	void change_model_texcoord(point_common *vertex_need, int point_num);
 };
 

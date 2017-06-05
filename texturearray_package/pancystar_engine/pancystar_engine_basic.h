@@ -42,6 +42,7 @@ namespace engine_basic
 		engine_fail_reason(std::string failed_reason);
 		engine_fail_reason(HRESULT windows_result_need, std::string failed_reason_need);
 		void show_failed_reason();
+		//返回false代表出现错误，返回true表示成功
 		bool check_if_failed() { return if_succeed; };
 	private:
 		void set_failed_reason_common(std::string failed_reason_need);
@@ -54,6 +55,8 @@ namespace engine_basic
 		float perspective_near_plane;
 		float perspective_far_plane;
 		float perspective_angle;
+		DirectX::XMFLOAT4 FrustumFarCorner[4];         //投影视截体的远截面的四个角点
+		DirectX::XMFLOAT4 FrustumNearCorner[4];         //投影视截体的近截面的四个角点
 	private:
 		perspective_message();
 	public:
@@ -66,9 +69,15 @@ namespace engine_basic
 			}
 			return this_instance;
 		}
+		void get_FrustumFarCorner(DirectX::XMFLOAT4 *FrustumFarCorner_out);
+		void get_FrustumNearCorner(DirectX::XMFLOAT4 *FrustumNearCorner_out);
 		DirectX::XMFLOAT4X4 get_proj_matrix();
 		void reset_perpective_message(int wind_width_need,int wind_height_need,float near_plane,float far_plane,float angle);
+		void BuildFrustumNearFarCorners(float fovy, float farZ);
 		void update_windowsize(int wind_width_need, int wind_height_need);
+		float get_perspective_near_plane() { return perspective_near_plane; };
+		float get_perspective_far_plane() { return perspective_far_plane; };
+		float get_perspective_angle() { return perspective_angle; };
 	};
 	class engine_mathmatic
 	{

@@ -52,7 +52,7 @@ int_list texture_combine::count_dfs(int now_st_x, int now_st_y, int now_width, i
 	data_out.data_num = 0;
 	for (int i = 0; i < all_pic; ++i)
 	{
-		if (width[i] < now_width && height[i] < now_height && check_if_use[i] == true)
+		if (width[i] <= now_width && height[i] <= now_height && check_if_use[i] == true)
 		{
 			check_if_use[i] = false;
 			data_out.data_num = 1;
@@ -250,12 +250,88 @@ void texture_combine::releae()
 
 scene_test_square::scene_test_square()
 {
-	picture_type_width = 2048;
-	picture_type_height = 2048;
+	picture_type_width = 1024;
+	picture_type_height = 1024;
 	rec = 0.0f;
 	mesh_need = new mesh_cube(false);
 	picture_buf = new mesh_square(false);
-	mesh_model_need = new model_reader_assimp<point_common>("castelmodel\\castel.obj", "castelmodel\\");
+	mesh_model_need = new model_reader_assimp<point_common>("square\\square.obj", "square\\");
+}
+engine_basic::engine_fail_reason scene_test_square::read_texture_from_file(std::vector<string> file_name_list)
+{
+	std::vector<ID3D11Texture2D*> srcTex(file_name_list.size());
+	for (int i = 0; i < file_name_list.size(); ++i)
+	{
+		size_t length_need = strlen(file_name_list[i].c_str()) + 1;
+		size_t converted = 0;
+		wchar_t *data_output;
+		data_output = (wchar_t*)malloc(length_need*sizeof(wchar_t));
+		mbstowcs_s(&converted, data_output, length_need, file_name_list[i].c_str(), _TRUNCATE);
+		HRESULT hr = CreateDDSTextureFromFileEx(d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device(), d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex(), data_output, 0, D3D11_USAGE_STAGING, 0, D3D11_CPU_ACCESS_WRITE | D3D11_CPU_ACCESS_READ, 0, false, (ID3D11Resource**)&srcTex[i], 0, 0);
+		//HRESULT hr = CreateDDSTextureFromFileEx(d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device(), d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex(), file_name_list[i], 0, D3D11_USAGE_STAGING, D3D11_CPU_ACCESS_WRITE | D3D11_CPU_ACCESS_READ, 0, 0, false, (ID3D11Resource**)&srcTex[i], NULL);
+		//HRESULT hr = CreateDDSTextureFromFileEx(d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device(), d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex(), file_name_list[i], 0, D3D11_USAGE_STAGING, 0, D3D11_BIND_SHADER_RESOURCE, 0, false, NULL, &srcres[i], 0);
+		if (FAILED(hr))
+		{
+			engine_basic::engine_fail_reason error_message(hr, "load model texture" + file_name_list[i] + "error");
+			return error_message;
+		}
+	}
+	D3D11_TEXTURE2D_DESC texElementDesc;
+	srcTex[0]->GetDesc(&texElementDesc);
+	//创建纹理数组
+	D3D11_TEXTURE2D_DESC texArrayDesc;
+	texArrayDesc.Width = texElementDesc.Width;
+	texArrayDesc.Height = texElementDesc.Height;
+	texArrayDesc.MipLevels = texElementDesc.MipLevels;
+	texArrayDesc.ArraySize = file_name_list.size();
+	texArrayDesc.Format = texElementDesc.Format;
+	texArrayDesc.SampleDesc.Count = 1;
+	texArrayDesc.SampleDesc.Quality = 0;
+	texArrayDesc.Usage = D3D11_USAGE_DEFAULT;
+	texArrayDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+	texArrayDesc.CPUAccessFlags = 0;
+	texArrayDesc.MiscFlags = 0;
+
+	ID3D11Texture2D* texArray = 0;
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateTexture2D(&texArrayDesc, 0, &texArray);
+	//填充纹理数组
+	for (UINT texElement = 0; texElement < file_name_list.size(); ++texElement)
+	{
+		// for each mipmap level...
+		for (UINT mipLevel = 0; mipLevel < texElementDesc.MipLevels; ++mipLevel)
+		{
+			D3D11_MAPPED_SUBRESOURCE mappedTex2D;
+			HRESULT hr;
+			hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->Map(srcTex[texElement], mipLevel, D3D11_MAP_READ, 0, &mappedTex2D);
+			if (FAILED(hr))
+			{
+				engine_basic::engine_fail_reason error_message(hr, "load model texture" + file_name_list[0] + "error");
+				return error_message;
+			}
+			d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->UpdateSubresource(texArray, D3D11CalcSubresource(mipLevel, texElement, texElementDesc.MipLevels), 0, mappedTex2D.pData, mappedTex2D.RowPitch, mappedTex2D.DepthPitch);
+
+			d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->Unmap(srcTex[texElement], mipLevel);
+		}
+	}
+
+	D3D11_SHADER_RESOURCE_VIEW_DESC viewDesc;
+	viewDesc.Format = texArrayDesc.Format;
+	viewDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DARRAY;
+	viewDesc.Texture2DArray.MostDetailedMip = 0;
+	viewDesc.Texture2DArray.MipLevels = texArrayDesc.MipLevels;
+	viewDesc.Texture2DArray.FirstArraySlice = 0;
+	viewDesc.Texture2DArray.ArraySize = file_name_list.size();
+	HRESULT hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateShaderResourceView(texArray, &viewDesc, &test_resource);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "load model texture" + file_name_list[0] + "error");
+		return error_message;
+	}
+	texArray->Release();
+	for (UINT i = 0; i < file_name_list.size(); ++i)
+		srcTex[i]->Release();
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
 }
 engine_basic::engine_fail_reason scene_test_square::create()
 {
@@ -339,7 +415,7 @@ engine_basic::engine_fail_reason scene_test_square::create()
 		*/
 
 	}
-	texture_deal = new texture_combine(rec_texture_packmap.size(), width_list, height_list, 2048, 2048);
+	texture_deal = new texture_combine(rec_texture_packmap.size(), width_list, height_list, 1024, 1024);
 	engine_basic::engine_fail_reason error_message = texture_deal->create();
 	if (!error_message.check_if_failed())
 	{
@@ -371,10 +447,32 @@ engine_basic::engine_fail_reason scene_test_square::create()
 	mesh_model_need->get_model_pack_num(vertex_num, index_num);
 	data_point_need = new point_common[vertex_num];
 	data_index_need = new UINT[index_num];
+
+	/*
+	ifstream in_stream;
+	in_stream.open("outmodel.pancymesh", ios::binary);
+	int vnum_rec, inum_rec, tnum_rec;
+	in_stream.read(reinterpret_cast<char*>(&vnum_rec), sizeof(vnum_rec));
+	in_stream.read(reinterpret_cast<char*>(&inum_rec), sizeof(inum_rec));
+	in_stream.read(reinterpret_cast<char*>(&tnum_rec), sizeof(tnum_rec));
+	in_stream.read(reinterpret_cast<char*>(data_point_need), vnum_rec * sizeof(data_point_need[0]));
+	in_stream.read(reinterpret_cast<char*>(data_index_need), inum_rec * sizeof(data_index_need[0]));
+	*/
+	
 	mesh_model_need->get_model_pack_data(data_point_need, data_index_need);
-
+	//ifstream in_stream;
+	out_stream.open("outmodel.pancymesh", ios::binary);
+	out_stream.write((char *)&vertex_num, sizeof(vertex_num));
+	out_stream.write((char *)&index_num, sizeof(index_num));
+	int texture_num = texture_deal->get_texture_num();
+	out_stream.write((char *)&texture_num, sizeof(texture_num));
 	change_model_texcoord(data_point_need, vertex_num);
-
+	for (int i = 0; i < index_num; ++i) 
+	{
+		out_stream.write((char *)&data_index_need[i], sizeof(data_index_need[i]));
+	}
+	out_stream.close();
+	
 	model_out_test = new mesh_model<point_common>(data_point_need, data_index_need, vertex_num, index_num, false);
 	error_message = model_out_test->create_object();
 	if (!error_message.check_if_failed())
@@ -383,14 +481,50 @@ engine_basic::engine_fail_reason scene_test_square::create()
 	}
 
 	show_square();
-	string data_tail[] = { "a","b","c","d","e","f","g","h","i","j","k","l" };
+	auto rendertarget = texture_deal->get_SRV_texarray();
+	ID3D11Resource *resource_rec;
+	rendertarget->GetResource(&resource_rec);
+	string data_tail[] = { "a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z" };
+	std::vector<string> file_name_saving;
+
+	/*
+	LPITEMIDLIST pil = NULL;
+	INITCOMMONCONTROLSEX InitCtrls = { 0 };
+	TCHAR szBuf[4096] = { 0 };
+	BROWSEINFO bi = { 0 };
+	bi.hwndOwner = NULL;
+	bi.iImage = 0;
+	bi.lParam = NULL;
+	bi.lpfn = NULL;
+	bi.lpszTitle = _T("请选择文件路径");
+	bi.pszDisplayName = szBuf;
+	bi.ulFlags = BIF_BROWSEINCLUDEFILES;
+
+	InitCommonControlsEx(&InitCtrls);//在调用函数SHBrowseForFolder之前需要调用该函数初始化相关环境  
+	pil = SHBrowseForFolder(&bi);
+	if (NULL != pil)//若函数执行成功，并且用户选择问件路径并点击确定  
+	{
+		SHGetPathFromIDList(pil, szBuf);//获取用户选择的文件路径  
+		wprintf_s(_T("%s"), szBuf);
+	}
+	*/
+
+	out_stream.open("outmodel.pancymat");
 	for (int i = 0; i < texture_deal->get_texture_num(); ++i)
 	{
-		auto rendertarget = texture_deal->get_RTV_texarray(i);
-		ID3D11Resource *resource_rec;
-		rendertarget->GetResource(&resource_rec);
-		d3d_pancy_basic_singleton::GetInstance()->save_texture(resource_rec,"tex_pack_" + data_tail[i] + ".dds");
+		string file_name_rec = "tex_pack_" + data_tail[i] + ".dds";
+		file_name_saving.push_back(file_name_rec);
+		d3d_pancy_basic_singleton::GetInstance()->save_texture(resource_rec, file_name_rec, i);
+		out_stream.write(file_name_rec.c_str(), file_name_rec.size() * sizeof(char));
+		out_stream.write("\n", sizeof(char));
 	}
+	out_stream.close();
+	resource_rec->Release();
+
+	read_texture_from_file(file_name_saving);
+
+
+
 
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
@@ -399,13 +533,42 @@ void scene_test_square::change_model_texcoord(point_common *vertex_need, int poi
 {
 	string lastname;
 	texture_rebuild_data last_data;
+
+	string last_normal_name;
+	texture_rebuild_data last_normal_data;
+
+
 	texture_rebuild_data texture_message;
+	//freopen("testerror.dat","wb",stdout);
 	for (int i = 0; i < point_num; ++i)
 	{
+		//暂时存储顶点的原始纹理坐标
+		//纹理坐标归一化
+		while (vertex_need[i].tex.x < 0.0f)
+		{
+			vertex_need[i].tex.x += 1.0f;
+		}
+		while (vertex_need[i].tex.x > 1.0f)
+		{
+			vertex_need[i].tex.x -= 1.0f;
+		}
+		while (vertex_need[i].tex.y < 0.0f)
+		{
+			vertex_need[i].tex.y += 1.0f;
+		}
+		while (vertex_need[i].tex.y > 1.0f)
+		{
+			vertex_need[i].tex.y -= 1.0f;
+		}
+
+		float tex_coord_x_rec = vertex_need[i].tex.x;
+		float tex_coord_y_rec = vertex_need[i].tex.y;
 		//先获取顶点对应的纹理名
 		int id_pre_need = vertex_need[i].tex_id.x;
 		material_list rec_need;
 		mesh_model_need->get_texture(&rec_need, id_pre_need);
+
+		//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~更新漫反射纹理坐标~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 		string name_texture = rec_need.texture_diffuse;
 		if (name_texture == lastname)
 		{
@@ -429,29 +592,88 @@ void scene_test_square::change_model_texcoord(point_common *vertex_need, int poi
 			last_data = texture_message;
 		}
 		vertex_need[i].tex_id.x = texture_message.now_index;
-		//纹理坐标归一化
-		while (vertex_need[i].tex.x < 0.0f)
-		{
-			vertex_need[i].tex.x += 1.0f;
-		}
-		while (vertex_need[i].tex.x > 1.0f)
-		{
-			vertex_need[i].tex.x -= 1.0f;
-		}
-		while (vertex_need[i].tex.y < 0.0f)
-		{
-			vertex_need[i].tex.y += 1.0f;
-		}
-		while (vertex_need[i].tex.y > 1.0f)
-		{
-			vertex_need[i].tex.y -= 1.0f;
-		}
 		//更新纹理坐标位置
-		vertex_need[i].tex.x *= static_cast<float>(texture_message.pic_width) / static_cast<float>(picture_type_width);
-		vertex_need[i].tex.y *= static_cast<float>(texture_message.pic_height) / static_cast<float>(picture_type_height);
+		vertex_need[i].tex.x = tex_coord_x_rec * static_cast<float>(texture_message.pic_width) / static_cast<float>(picture_type_width);
+		vertex_need[i].tex.y = tex_coord_y_rec * static_cast<float>(texture_message.pic_height) / static_cast<float>(picture_type_height);
 
 		vertex_need[i].tex.x += static_cast<float>(texture_message.place_data.x_st) / static_cast<float>(picture_type_width);
 		vertex_need[i].tex.y += static_cast<float>(texture_message.place_data.y_st) / static_cast<float>(picture_type_height);
+		auto texture_message1 = texture_message;
+		//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~更新法线贴图纹理坐标~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+		string name_normal = rec_need.texture_normal;
+		if (rec_need.texture_normal_resource == NULL) 
+		{
+			vertex_need[i].tex_id.y = -1;
+		}
+		else 
+		{
+			if (name_normal == last_normal_name)
+			{
+				texture_message = last_normal_data;
+			}
+			else
+			{
+				//查找该纹理名对应的纹理ID
+				int index_check;
+				for (int i = 0; i < picture_namelist.size(); ++i)
+				{
+					if (picture_namelist[i] == name_normal)
+					{
+						index_check = i;
+						last_normal_name = name_normal;
+						break;
+					}
+				}
+				//寻找其位置及ID
+				texture_message = texture_deal->get_diffusetexture_data_byID(index_check);
+				last_normal_data = texture_message;
+			}
+			vertex_need[i].tex_id.y = texture_message.now_index;
+			//更新纹理坐标位置
+			vertex_need[i].tex.z = tex_coord_x_rec * static_cast<float>(texture_message.pic_width) / static_cast<float>(picture_type_width);
+			vertex_need[i].tex.w = tex_coord_y_rec * static_cast<float>(texture_message.pic_height) / static_cast<float>(picture_type_height);
+			vertex_need[i].tex.z += static_cast<float>(texture_message.place_data.x_st) / static_cast<float>(picture_type_width);
+			vertex_need[i].tex.w += static_cast<float>(texture_message.place_data.y_st) / static_cast<float>(picture_type_height);
+		}
+
+
+		out_stream.write((char *)&vertex_need[i], sizeof(vertex_need[i]));
+		/*
+		out_stream.write((char *)&vertex_need[i].position.x, sizeof(vertex_need[i].position.x));
+		out_stream.write((char *)&vertex_need[i].position.y, sizeof(vertex_need[i].position.y));
+		out_stream.write((char *)&vertex_need[i].position.z, sizeof(vertex_need[i].position.z));
+
+		out_stream.write((char *)&vertex_need[i].normal.x, sizeof(vertex_need[i].normal.x));
+		out_stream.write((char *)&vertex_need[i].normal.y, sizeof(vertex_need[i].normal.y));
+		out_stream.write((char *)&vertex_need[i].normal.z, sizeof(vertex_need[i].normal.z));
+
+		out_stream.write((char *)&vertex_need[i].tangent.x, sizeof(vertex_need[i].tangent.x));
+		out_stream.write((char *)&vertex_need[i].tangent.y, sizeof(vertex_need[i].tangent.y));
+		out_stream.write((char *)&vertex_need[i].tangent.z, sizeof(vertex_need[i].tangent.z));
+
+		out_stream.write((char *)&vertex_need[i].tex_id.x, sizeof(vertex_need[i].tex_id.x));
+		out_stream.write((char *)&vertex_need[i].tex_id.y, sizeof(vertex_need[i].tex_id.y));
+		out_stream.write((char *)&vertex_need[i].tex_id.z, sizeof(vertex_need[i].tex_id.z));
+		out_stream.write((char *)&vertex_need[i].tex_id.w, sizeof(vertex_need[i].tex_id.z));
+
+		out_stream.write((char *)&vertex_need[i].tex.x, sizeof(vertex_need[i].tex.x));
+		out_stream.write((char *)&vertex_need[i].tex.y, sizeof(vertex_need[i].tex.y));
+		out_stream.write((char *)&vertex_need[i].tex.z, sizeof(vertex_need[i].tex.z));
+		out_stream.write((char *)&vertex_need[i].tex.w, sizeof(vertex_need[i].tex.z));
+
+		out_stream.write((char *)&vertex_need[i].tex2.x, sizeof(vertex_need[i].tex2.x));
+		out_stream.write((char *)&vertex_need[i].tex2.y, sizeof(vertex_need[i].tex2.y));
+		out_stream.write((char *)&vertex_need[i].tex2.z, sizeof(vertex_need[i].tex2.z));
+		out_stream.write((char *)&vertex_need[i].tex2.w, sizeof(vertex_need[i].tex2.z));
+		*/
+		/*
+		printf("%.4f %.4f %.4f ", vertex_need[i].position.x, vertex_need[i].position.y, vertex_need[i].position.z);
+		printf("%.4f %.4f %.4f ", vertex_need[i].normal.x, vertex_need[i].normal.y, vertex_need[i].normal.z);
+		printf("%.4f %.4f %.4f ", vertex_need[i].tangent.x, vertex_need[i].tangent.y, vertex_need[i].tangent.z);
+		printf("%d %d %d %d ", vertex_need[i].tex_id.x, vertex_need[i].tex_id.y, vertex_need[i].tex_id.z, vertex_need[i].tex_id.w);
+		printf("%.4f %.4f %.4f %.4f ", vertex_need[i].tex.x, vertex_need[i].tex.y, vertex_need[i].tex.z, vertex_need[i].tex.w);
+		printf("%.4f %.4f %.4f %.4f ", vertex_need[i].tex2.x, vertex_need[i].tex2.y, vertex_need[i].tex2.z, vertex_need[i].tex2.w);
+		*/
 	}
 }
 void scene_test_square::display()
@@ -524,7 +746,7 @@ void scene_test_square::show_model_single()
 	//material_list rec_need;
 	//mesh_model_need->get_texture(&rec_need, 0);
 	//shader_need->set_tex_diffuse(rec_need.tex_diffuse_resource);
-	shader_need->set_tex_diffuse_array(texture_deal->get_SRV_texarray());
+	shader_need->set_tex_diffuse_array(test_resource);
 	model_out_test->show_mesh();
 }
 void scene_test_square::show_square()
@@ -653,6 +875,7 @@ void scene_test_square::release()
 	}
 	model_out_test->release();
 	texture_deal->releae();
+	test_resource->Release();
 }
 
 
@@ -676,6 +899,7 @@ void pancy_scene_control::display()
 		scene_list[scene_now_show]->display_nopost();
 	}
 	//交换到屏幕
+	//HRESULT hr = swapchain->Present(0, 0);
 	d3d_pancy_basic_singleton::GetInstance()->end_draw();
 }
 engine_basic::engine_fail_reason pancy_scene_control::add_a_scene(scene_root* scene_in)

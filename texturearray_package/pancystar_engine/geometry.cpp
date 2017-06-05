@@ -160,3 +160,43 @@ engine_basic::engine_fail_reason mesh_square::find_point(point_2D *vertex, UINT 
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
+//AO平面
+mesh_aosquare::mesh_aosquare(bool if_adj) :Geometry<point_ssao>(if_adj)
+{
+	all_vertex = 4;
+	all_index = 6;
+}
+engine_basic::engine_fail_reason mesh_aosquare::find_point(point_ssao *vertex, UINT *index, int &num_vertex, int &num_index)
+{
+	point_ssao v[4];
+
+	v[0].position = XMFLOAT3(-1.0f, -1.0f, 0.0f);
+	v[1].position = XMFLOAT3(-1.0f, +1.0f, 0.0f);
+	v[2].position = XMFLOAT3(+1.0f, +1.0f, 0.0f);
+	v[3].position = XMFLOAT3(+1.0f, -1.0f, 0.0f);
+
+	// Store far plane frustum corner indices in Normal.x slot.
+	v[0].normal = XMFLOAT3(0.0f, 0.0f, 0.0f);
+	v[1].normal = XMFLOAT3(1.0f, 0.0f, 0.0f);
+	v[2].normal = XMFLOAT3(2.0f, 0.0f, 0.0f);
+	v[3].normal = XMFLOAT3(3.0f, 0.0f, 0.0f);
+
+	v[0].tex = XMFLOAT2(0.0f, 1.0f);
+	v[1].tex = XMFLOAT2(0.0f, 0.0f);
+	v[2].tex = XMFLOAT2(1.0f, 0.0f);
+	v[3].tex = XMFLOAT2(1.0f, 1.0f);
+	//创建索引数组。
+	num_vertex = sizeof(v) / sizeof(point_ssao);
+	for (int i = 0; i < num_vertex; ++i)
+	{
+		vertex[i] = v[i];
+	}
+	UINT indices[] = { 0,1,2, 0,2,3 };
+	num_index = sizeof(indices) / sizeof(UINT);
+	for (int i = 0; i < num_index; ++i)
+	{
+		index[i] = indices[i];
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}

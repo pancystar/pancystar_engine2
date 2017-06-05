@@ -49,6 +49,12 @@ struct point_2D
 	XMFLOAT3 position;
 	XMFLOAT2 texcoord;
 };
+struct point_ssao 
+{
+	XMFLOAT3 position;
+	XMFLOAT3 normal;
+	XMFLOAT2 tex;
+};
 //几何体访问类
 class Geometry_basic
 {
@@ -269,7 +275,13 @@ public:
 private:
 	engine_basic::engine_fail_reason find_point(point_2D *vertex, UINT *index, int &num_vertex, int &num_index);
 };
-
+class mesh_aosquare : public Geometry<point_ssao>
+{
+public:
+	mesh_aosquare(bool if_adj);
+private:
+	engine_basic::engine_fail_reason find_point(point_ssao *vertex, UINT *index, int &num_vertex, int &num_index);
+};
 template<typename T>
 class mesh_model : public Geometry<T> 
 {

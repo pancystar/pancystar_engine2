@@ -50,8 +50,11 @@ public:
 	engine_basic::engine_fail_reason restore_render_target();
 	engine_basic::engine_fail_reason clear_basicrender_target();
 	engine_basic::engine_fail_reason end_draw();
-	engine_basic::engine_fail_reason save_texture(ID3D11Resource *resource_in,std::string name_file,int array_count = 0);
 	IDXGISwapChain          *get_swapchain() { return swapchain; };
+	UINT get_wind_width() { return wind_width; };
+	UINT get_wind_height() { return wind_height; };
+	void set_viewport(D3D11_VIEWPORT viewport_in) { contex_pancy->RSSetViewports(1, &viewport_in); };
+	void reset_viewport() { contex_pancy->RSSetViewports(1, &viewPort); };;
 private:
 	template<class T>
 	void safe_release(T t)

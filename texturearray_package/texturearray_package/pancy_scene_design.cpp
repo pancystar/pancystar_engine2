@@ -255,7 +255,7 @@ scene_test_square::scene_test_square()
 	rec = 0.0f;
 	mesh_need = new mesh_cube(false);
 	picture_buf = new mesh_square(false);
-	mesh_model_need = new model_reader_assimp<point_common>("square\\square.obj", "square\\");
+	mesh_model_need = new model_reader_assimp<point_common>("ball\\ball.obj", "ball\\");
 }
 engine_basic::engine_fail_reason scene_test_square::read_texture_from_file(std::vector<string> file_name_list)
 {

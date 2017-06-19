@@ -4,7 +4,12 @@ cbuffer PerFrame
 	float4x4 normal_matrix;     //法线变换
 	float4x4 final_matrix;      //总变换
 	float4x4 world_matrix_array[300];
-	float4x4 view_proj_matrix;
+	float4x4 normal_matrix_array[300];
+	float4x4 proj_matrix;
+};
+RasterizerState DisableCulling
+{
+	CullMode = FRONT;
 };
 Texture2DArray   texture_pack_array;  //贴图包
 SamplerState samTex_liner
@@ -61,7 +66,7 @@ VertexOut VS_instance(Vertex_IN_instance vin)
 	vout.PosV = mul(float4(vin.pos, 1.0f), world_matrix_array[vin.InstanceId]).xyz;
 	vout.NormalV = mul(float4(vin.normal, 0.0f), world_matrix_array[vin.InstanceId]).xyz;
 	vout.tangent = mul(float4(vin.tangent, 0.0f), world_matrix_array[vin.InstanceId]).xyz;
-	vout.PosH = mul(float4(vout.PosV, 1.0f), view_proj_matrix);
+	vout.PosH = mul(float4(vout.PosV, 1.0f), proj_matrix);
 	vout.texid = vin.texid;
 	vout.tex1 = vin.tex1;
 	vout.tex2 = vin.tex2;
@@ -82,6 +87,10 @@ float4 PS_withnormal(VertexOut pin) : SV_Target
 	float4 tex_color = texture_pack_array.Sample(samTex_liner, float3(pin.tex1.xy, texID_data_diffuse));
 	clip(tex_color.a - 0.5f);
 	pin.NormalV = normalize(pin.NormalV);
+	if (pin.texid.y == -1) 
+	{
+		return float4(pin.NormalV, 10.0f);
+	}
 	pin.tangent = normalize(pin.tangent);
 	//求解图片所在自空间->模型所在统一世界空间的变换矩阵
 	float3 N = pin.NormalV;
@@ -102,6 +111,16 @@ technique11 NormalDepth
 		SetVertexShader(CompileShader(vs_5_0, VS()));
 		SetGeometryShader(NULL);
 		SetPixelShader(CompileShader(ps_5_0, PS()));
+	}
+}
+technique11 NormalDepth_CullFornt
+{
+	pass P0
+	{
+		SetVertexShader(CompileShader(vs_5_0, VS()));
+		SetGeometryShader(NULL);
+		SetPixelShader(CompileShader(ps_5_0, PS_withnormal()));
+		SetRasterizerState(DisableCulling);
 	}
 }
 technique11 NormalDepth_withinstance

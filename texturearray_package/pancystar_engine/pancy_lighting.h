@@ -1,6 +1,7 @@
 #pragma once
 #include"pancy_model_control.h"
 #include"shader_pancy.h"
+#include<map>
 class basic_shadow_map
 {
 	int                      shadowmap_width;
@@ -101,8 +102,9 @@ class light_control_singleton
 {
 	int common_shadow_width;
 	int common_shadow_height;
-private:
 	int max_shadow_num;
+	int sunlight_use;
+	int sunlight_IDcount;
 	ID3D11Texture2D          *ShadowTextureArray;      //阴影图数组资源
 	ID3D11ShaderResourceView *shadow_map_resource;
 	//无影光
@@ -110,7 +112,7 @@ private:
 	//带阴影的聚光灯
 	std::vector<spotlight_with_shadowmap>            shadowmap_light_list;
 	//带阴影的大范围平行光
-	std::vector<sunlight_with_shadowmap>             sun_pssmshadow_light;
+	std::unordered_map<int,sunlight_with_shadowmap>             sun_pssmshadow_light;
 	light_control_singleton(int max_shadow_num_need, int common_shadow_width_need, int common_shadow_height_need);
 public:
 	//对外访问单例接口
@@ -136,8 +138,9 @@ public:
 	//添加光源
 	void add_light_without_shadow(light_type type_need_light);
 	void add_spotlight_with_shadow_map();
-	engine_basic::engine_fail_reason add_sunlight_with_shadow_map(int width_shadow, int height_shadow, int shadow_num);
+	engine_basic::engine_fail_reason add_sunlight_with_shadow_map(int width_shadow, int height_shadow, int shadow_num,int &sunlight_ID);
 	void draw_shadow();
+	void set_sunlight(int sunlight_ID) { sunlight_use = sunlight_ID; };
 	engine_basic::engine_fail_reason create();
 	void release();
 private:

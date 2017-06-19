@@ -29,6 +29,18 @@ void Geometry_basic::show_mesh()
 		d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->DrawIndexed(all_index, 0, 0);
 	}
 }
+void Geometry_basic::show_mesh_pass(int pass) 
+{
+	UINT offset_need = 0;                       //顶点结构的首地址偏移
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->IASetVertexBuffers(0, 1, &vertex_need, &stride_vertex, &offset_need);
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->IASetIndexBuffer(index_need, DXGI_FORMAT_R32_UINT, 0);
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	//选定绘制路径
+	D3DX11_TECHNIQUE_DESC techDesc;
+	teque_pancy->GetDesc(&techDesc);
+	teque_pancy->GetPassByIndex(pass)->Apply(0, d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex());
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->DrawIndexed(all_index, 0, 0);
+}
 void Geometry_basic::show_mesh_adj()
 {
 	UINT offset_need = 0;

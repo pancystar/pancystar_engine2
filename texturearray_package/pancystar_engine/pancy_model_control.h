@@ -2,7 +2,9 @@
 #include"geometry.h"
 #include"shader_pancy.h"
 #include"PancyCamera.h"
+#include<map>
 using namespace std;
+
 class model_reader_pancymesh
 {
 protected:
@@ -69,7 +71,11 @@ engine_basic::engine_fail_reason model_reader_pancymesh_build<T>::create()
 		getline(in_stream, texture_name_now);
 		file_name_saving.push_back(texture_name_now);
 	}
-	read_texture_from_file(file_name_saving);
+	error_message = read_texture_from_file(file_name_saving);
+	if (!error_message.check_if_failed())
+	{
+		return error_message;
+	}
 	in_stream.close();
 	delete[] data_point_need;
 	delete[] data_index_need;
@@ -113,6 +119,7 @@ class geometry_resource_view
 {
 	int resource_view_ID;
 	int ID_instance_index;//自增ID号
+	bool if_cull_front;
 	model_reader_pancymesh *model_data;
 	std::unordered_map<int, geometry_instance_view> instance_list;
 	std::vector<XMFLOAT4X4> world_matrix_array;
@@ -125,6 +132,8 @@ public:
 	engine_basic::engine_fail_reason sleep_a_instance(int instance_ID);
 	engine_basic::engine_fail_reason wakeup_a_instance(int instance_ID);
 	engine_basic::engine_fail_reason update(int instance_ID, XMFLOAT4X4 mat_world, float delta_time);
+	void set_cull_front() { if_cull_front = true; };
+	bool check_if_cullfront() { return if_cull_front; };
 	ID3D11ShaderResourceView *get_texture() { return model_data->get_texture(); }
 	void draw();
 	void release();
@@ -143,7 +152,8 @@ public:
 	engine_basic::engine_fail_reason delete_geometry_byindex(int resource_ID);
 	T *get_geometry_byindex(int index_input);
 	int get_geometry_num() { return ModelResourceView_list.size(); };
-	void render_gbuffer();
+	//void render_gbuffer();
+	void render_gbuffer(XMFLOAT4X4 view_matrix, XMFLOAT4X4 proj_matrix);
 	void render_shadowmap(XMFLOAT4X4 shadow_matrix);
 	void release();
 };
@@ -191,8 +201,10 @@ T* geometry_ResourceView_list<T>::get_geometry_byindex(int resource_ID)
 	return &data_now->second;
 }
 template<typename T>
-void geometry_ResourceView_list<T>::render_gbuffer()
+void geometry_ResourceView_list<T>::render_gbuffer(XMFLOAT4X4 view_matrix, XMFLOAT4X4 proj_matrix)
 {
+	//绘制一种模型
+	ID3DX11EffectTechnique *teque_need;
 	for (auto data_need = ModelResourceView_list.begin(); data_need != ModelResourceView_list.end(); ++data_need)
 	{
 		engine_basic::engine_fail_reason check_error;
@@ -202,20 +214,22 @@ void geometry_ResourceView_list<T>::render_gbuffer()
 		{
 			continue;
 		}
-		XMFLOAT4X4 view_mat, final_mat,viewproj_mat;
+		XMFLOAT4X4 final_mat,viewproj_mat;
+		/*
 		//从摄像机获取取景变换矩阵
-		pancy_camera::get_instance()->count_view_matrix(&view_mat);
+		//pancy_camera::get_instance()->count_view_matrix(&view_mat);
 		//从投影单例获得投影变换矩阵
-		XMMATRIX proj = XMLoadFloat4x4(&engine_basic::perspective_message::get_instance()->get_proj_matrix());
+		//XMMATRIX proj = XMLoadFloat4x4(&engine_basic::perspective_message::get_instance()->get_proj_matrix());
+		*/
+		XMMATRIX proj = XMLoadFloat4x4(&proj_matrix);
 		//从模型访问器获得世界变换矩阵
 		XMFLOAT4X4 world_matrix_rec = data_need->second.get_matrix_list()[0];
-		XMMATRIX rec_world = XMLoadFloat4x4(&world_matrix_rec) * XMLoadFloat4x4(&view_mat) * proj;
+		XMMATRIX rec_world = XMLoadFloat4x4(&world_matrix_rec) * XMLoadFloat4x4(&view_matrix) * proj;
 		XMStoreFloat4x4(&final_mat, rec_world);
-		XMStoreFloat4x4(&viewproj_mat, XMLoadFloat4x4(&view_mat) * proj);
 		//设置单个instance的变换矩阵
-		shader_gbuffer->set_trans_world(&world_matrix_rec, &view_mat);
+		shader_gbuffer->set_trans_world(&world_matrix_rec, &view_matrix);
 		shader_gbuffer->set_trans_all(&final_mat);
-		shader_gbuffer->set_trans_viewproj(&viewproj_mat);
+		shader_gbuffer->set_trans_proj(&proj_matrix);
 		//设置所有instance的世界变换矩阵
 		XMFLOAT4X4 *data_worldmat_array = new XMFLOAT4X4[data_need->second.get_matrix_list().size()];
 		int count_num = 0;
@@ -224,15 +238,24 @@ void geometry_ResourceView_list<T>::render_gbuffer()
 		{
 			data_worldmat_array[count_num++] = *mat_need._Ptr;
 		}
-		shader_gbuffer->set_world_matrix_array(data_worldmat_array, data_need->second.get_matrix_list().size());
+
+
+		shader_gbuffer->set_world_matrix_array(data_worldmat_array, view_matrix, data_need->second.get_matrix_list().size());
 		delete[] data_worldmat_array;
 		//设置纹理数据
 		shader_gbuffer->set_texturepack_array(data_need->second.get_texture());
-		//绘制一种模型
-		ID3DX11EffectTechnique *teque_need;
+		
 		if (data_need->second.get_matrix_list().size() == 1)
 		{
-			shader_gbuffer->get_technique(&teque_need,"NormalDepth_withnormal");
+			if (data_need->second.check_if_cullfront()) 
+			{
+				shader_gbuffer->get_technique(&teque_need, "NormalDepth_CullFornt");
+			}
+			else 
+			{
+				shader_gbuffer->get_technique(&teque_need,"NormalDepth_withnormal");
+			}
+			
 		}
 		else 
 		{
@@ -240,6 +263,16 @@ void geometry_ResourceView_list<T>::render_gbuffer()
 		}
 		data_need->second.get_technique(teque_need);
 		data_need->second.draw();
+		d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->RSSetState(NULL);
+	}
+	//还原渲染状态
+	ID3D11RenderTargetView* NULL_target[1] = { NULL };
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetRenderTargets(1, NULL_target, NULL);
+	D3DX11_TECHNIQUE_DESC techDesc;
+	teque_need->GetDesc(&techDesc);
+	for (UINT p = 0; p < techDesc.Passes; ++p)
+	{
+		teque_need->GetPassByIndex(p)->Apply(0, d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex());
 	}
 }
 template<typename T>
@@ -336,7 +369,7 @@ public:
 	engine_basic::engine_fail_reason wakeup_a_model_instance(pancy_model_ID model_ID);
 	//绘制
 	engine_basic::engine_fail_reason get_a_model_type(geometry_resource_view **data_out,int model_type_ID);
-	void render_gbuffer() { model_view_list->render_gbuffer(); };
+	void render_gbuffer(XMFLOAT4X4 view_matrix, XMFLOAT4X4 proj_matrix) { model_view_list->render_gbuffer(view_matrix, proj_matrix); };
 	void render_shadowmap(XMFLOAT4X4 shadow_matrix) { model_view_list->render_shadowmap(shadow_matrix); };
 	void release();
 };

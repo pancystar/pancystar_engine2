@@ -47,6 +47,7 @@ public:
 	ID3D11DeviceContext *get_d3d11_contex() { return contex_pancy; };
 	engine_basic::engine_fail_reason set_render_target(ID3D11RenderTargetView  *render_target, ID3D11DepthStencilView *depthstencil_target);
 	engine_basic::engine_fail_reason set_render_target(ID3D11RenderTargetView  *render_target);
+	engine_basic::engine_fail_reason set_render_target(ID3D11RenderTargetView  **render_target,int size);
 	engine_basic::engine_fail_reason restore_render_target();
 	engine_basic::engine_fail_reason clear_basicrender_target();
 	engine_basic::engine_fail_reason end_draw();

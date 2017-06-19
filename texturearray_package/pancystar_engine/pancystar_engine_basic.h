@@ -72,6 +72,7 @@ namespace engine_basic
 		void get_FrustumFarCorner(DirectX::XMFLOAT4 *FrustumFarCorner_out);
 		void get_FrustumNearCorner(DirectX::XMFLOAT4 *FrustumNearCorner_out);
 		DirectX::XMFLOAT4X4 get_proj_matrix();
+		DirectX::XMFLOAT4X4 get_proj_shadow_matrix();
 		void reset_perpective_message(int wind_width_need,int wind_height_need,float near_plane,float far_plane,float angle);
 		void BuildFrustumNearFarCorners(float fovy, float farZ);
 		void update_windowsize(int wind_width_need, int wind_height_need);

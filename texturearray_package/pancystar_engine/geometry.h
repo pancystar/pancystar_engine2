@@ -73,6 +73,7 @@ public:
 	void get_point_num(int &vertex_number, int &index_number) { vertex_number = all_vertex; index_number = all_index; };
 	void get_teque(ID3DX11EffectTechnique *teque_need);
 	virtual void show_mesh();
+	virtual void show_mesh_pass(int pass);
 	virtual void show_mesh_adj();
 	virtual void show_mesh_instance(int copy_num);
 	void release();
@@ -282,6 +283,8 @@ public:
 private:
 	engine_basic::engine_fail_reason find_point(point_ssao *vertex, UINT *index, int &num_vertex, int &num_index);
 };
+
+
 template<typename T>
 class mesh_model : public Geometry<T> 
 {

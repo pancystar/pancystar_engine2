@@ -110,6 +110,7 @@ geometry_resource_view::geometry_resource_view(model_reader_pancymesh *model_dat
 	ID_instance_index = 0;
 	resource_view_ID = ID_need;
 	model_data = model_data_in;
+	if_cull_front = false;
 }
 std::vector<XMFLOAT4X4> geometry_resource_view::get_matrix_list()
 {

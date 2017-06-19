@@ -102,6 +102,24 @@ PixelOut PS(VertexOut pin) :SV_TARGET
 	ans_pix.reflect_message = material_need.reflect;
 	return ans_pix;
 }
+PixelOut PS_withputao(VertexOut pin) :SV_TARGET
+{
+	pin.pos_ssao /= pin.pos_ssao.w;
+	float texID_data_diffuse = pin.texid.x;
+	float4 tex_color = texture_pack_array.Sample(samTex_liner, float3(pin.tex1.xy, texID_data_diffuse));
+	//float4 tex_color = texture_diffuse.Sample(samTex_liner, pin.tex);
+	clip(tex_color.a - 0.6f);
+	float4 ambient = 0.4f*float4(1.0f, 1.0f, 1.0f, 0.0f);
+	float4 diffuse = material_need.diffuse * texture_light_diffuse.Sample(samTex_liner, pin.pos_ssao.xy, 0.0f);      //漫反射光
+	float4 spec = material_need.specular * texture_light_specular.Sample(samTex_liner, pin.pos_ssao.xy, 0.0f);       //镜面反射光
+	float4 final_color = tex_color *(ambient + diffuse) + spec;
+	final_color.a = tex_color.a;
+
+	PixelOut ans_pix;
+	ans_pix.final_color = final_color;
+	ans_pix.reflect_message = material_need.reflect;
+	return ans_pix;
+}
 technique11 LightTech
 {
 	pass P0
@@ -118,5 +136,23 @@ technique11 LightTech_instance
 		SetVertexShader(CompileShader(vs_5_0, VS_instance()));
 		SetGeometryShader(NULL);
 		SetPixelShader(CompileShader(ps_5_0, PS()));
+	}
+}
+technique11 LightTech_withoutao
+{
+	pass P0
+	{
+		SetVertexShader(CompileShader(vs_5_0, VS()));
+		SetGeometryShader(NULL);
+		SetPixelShader(CompileShader(ps_5_0, PS_withputao()));
+	}
+}
+technique11 LightTech_instance_withoutao
+{
+	pass P0
+	{
+		SetVertexShader(CompileShader(vs_5_0, VS_instance()));
+		SetGeometryShader(NULL);
+		SetPixelShader(CompileShader(ps_5_0, PS_withputao()));
 	}
 }

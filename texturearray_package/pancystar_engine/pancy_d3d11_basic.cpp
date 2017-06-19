@@ -214,6 +214,17 @@ engine_basic::engine_fail_reason d3d_pancy_basic_singleton::set_render_target(ID
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
+engine_basic::engine_fail_reason d3d_pancy_basic_singleton::set_render_target(ID3D11RenderTargetView  **render_target, int size)
+{
+	if (render_target == NULL)
+	{
+		engine_basic::engine_fail_reason failed_reason("set rendertarget error RTV is empty & DSV is default");
+		return failed_reason;
+	}
+	contex_pancy->OMSetRenderTargets(size, render_target, DSV_gbuffer);
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
 engine_basic::engine_fail_reason d3d_pancy_basic_singleton::restore_render_target()
 {
 	contex_pancy->OMSetRenderTargets(1, &RTV_back_buffer, DSV_gbuffer);

@@ -104,6 +104,13 @@ DirectX::XMFLOAT4X4 perspective_message::get_proj_matrix()
 	DirectX::XMStoreFloat4x4(&mat_out,perspective_matrix);
 	return mat_out;
 }
+DirectX::XMFLOAT4X4 perspective_message::get_proj_shadow_matrix()
+{
+	DirectX::XMMATRIX perspective_matrix = DirectX::XMMatrixPerspectiveFovLH(perspective_angle, 1.0f, perspective_near_plane, perspective_far_plane);
+	DirectX::XMFLOAT4X4 mat_out;
+	DirectX::XMStoreFloat4x4(&mat_out, perspective_matrix);
+	return mat_out;
+}
 void perspective_message::reset_perpective_message(int wind_width_need, int wind_height_need, float near_plane, float far_plane, float angle) 
 {
 	width_project = static_cast<float>(wind_width_need);

@@ -20,7 +20,7 @@ engine_basic::engine_fail_reason basic_shadow_map::set_renderstate_spot(XMFLOAT3
 	XMMATRIX viewmat = DirectX::XMMatrixLookToLH(lightPos, light_dir_vec, up);
 	//透视投影
 	//XMMATRIX proj = DirectX::XMMatrixPerspectiveFovLH(XM_PI*0.25f, shadowmap_width*1.0f / shadowmap_height*1.0f, 0.1f, 300.0f);
-	XMMATRIX proj = XMLoadFloat4x4(&engine_basic::perspective_message::get_instance()->get_proj_matrix());
+	XMMATRIX proj = XMLoadFloat4x4(&engine_basic::perspective_message::get_instance()->get_proj_shadow_matrix());
 	//正投影矩阵
 	XMMATRIX final_matrix = viewmat * proj;
 	XMStoreFloat4x4(&shadow_build, final_matrix);
@@ -185,8 +185,8 @@ basic_point_lighting::basic_point_lighting(light_type type_need_light, shadow_ty
 void basic_point_lighting::init_comman_dirlight(shadow_type type_need_shadow)
 {
 	XMFLOAT4 rec_ambient(0.0f, 0.0f, 0.0f, 1.0f);
-	XMFLOAT4 rec_diffuse(0.3f, 0.3f, 0.3f, 1.0f);
-	XMFLOAT4 rec_specular(0.3f, 0.3f, 0.3f, 1.0f);
+	XMFLOAT4 rec_diffuse(0.6f, 0.6f, 0.6f, 1.0f);
+	XMFLOAT4 rec_specular(0.6f, 0.6f, 0.6f, 1.0f);
 	XMFLOAT3 rec_dir(-1.0f, -1.0f, 0.0f);
 	light_data.ambient = rec_ambient;
 	light_data.diffuse = rec_diffuse;
@@ -201,7 +201,7 @@ void basic_point_lighting::init_comman_pointlight(shadow_type type_need_shadow)
 	XMFLOAT4 rec_ambient1(0.3f, 0.3f, 0.3f, 1.0f);
 	XMFLOAT4 rec_diffuse1(1.0f, 1.0f, 1.0f, 1.0f);
 	XMFLOAT4 rec_specular1(1.0f, 1.0f, 1.0f, 1.0f);
-	XMFLOAT3 rec_decay(0.0f, 0.6f, 0.0f);
+	XMFLOAT3 rec_decay(1.0f, 0.6f, 0.0f);
 
 	light_data.ambient = rec_ambient1;
 	light_data.diffuse = rec_diffuse1;
@@ -218,7 +218,7 @@ void basic_point_lighting::init_comman_spotlight(shadow_type type_need_shadow)
 	XMFLOAT4 rec_diffuse1(1.0f, 1.0f, 1.0f, 1.0f);
 	XMFLOAT4 rec_specular1(1.0f, 1.0f, 1.0f, 1.0f);
 
-	XMFLOAT3 rec_decay1(0.0f, 0.3f, 0.0f);
+	XMFLOAT3 rec_decay1(1.0f, 0.3f, 0.0f);
 
 	light_data.ambient = rec_ambient1;
 	light_data.diffuse = rec_diffuse1;
@@ -415,7 +415,7 @@ void sunlight_with_shadowmap::divide_view_frustum(float lamda_log, int divide_nu
 		float now_percent = static_cast<float>(i) / static_cast<float>(divide_num);
 		C_log = engine_basic::perspective_message::get_instance()->get_perspective_near_plane() * pow((300 / engine_basic::perspective_message::get_instance()->get_perspective_near_plane()), now_percent);
 		C_uni = engine_basic::perspective_message::get_instance()->get_perspective_near_plane() + (300 - engine_basic::perspective_message::get_instance()->get_perspective_near_plane()) * now_percent;
-		sunlight_pssm_depthdevide[i] = C_log * lamda_log + (1.0f - lamda_log) * C_uni;
+		sunlight_pssm_depthdevide[i] = C_log * lamda_log + (1.0f - lamda_log) * C_uni - 25;
 		if (i > 0)
 		{
 			mat_sunlight_pssm[i - 1] = build_matrix_sunlight(sunlight_pssm_depthdevide[0], sunlight_pssm_depthdevide[i], light_data.dir);
@@ -632,6 +632,8 @@ light_control_singleton::light_control_singleton(int max_shadow_num_need, int co
 	max_shadow_num = max_shadow_num_need;
 	common_shadow_width = common_shadow_width_need;
 	common_shadow_height = common_shadow_height_need;
+	sunlight_use = 0;
+	sunlight_IDcount = 0;
 }
 void light_control_singleton::add_light_without_shadow(light_type type_need_light)
 {
@@ -645,15 +647,23 @@ void light_control_singleton::add_spotlight_with_shadow_map()
 	spotlight_with_shadowmap *new_spotlight = new spotlight_with_shadowmap(common_shadow_width, common_shadow_height);
 	shadowmap_light_list.push_back(*new_spotlight);
 }
-engine_basic::engine_fail_reason light_control_singleton::add_sunlight_with_shadow_map(int width_shadow, int height_shadow, int shadow_num)
+engine_basic::engine_fail_reason light_control_singleton::add_sunlight_with_shadow_map(int width_shadow, int height_shadow, int shadow_num, int &sunlight_ID)
 {
 	sunlight_with_shadowmap *light_need = new sunlight_with_shadowmap(width_shadow, height_shadow, shadow_num);
 	engine_basic::engine_fail_reason check_error = light_need->create();
+	sunlight_ID = -1;
 	if (!check_error.check_if_failed())
 	{
 		return check_error;
 	}
-	sun_pssmshadow_light.push_back(*light_need);
+	std::pair<int, sunlight_with_shadowmap> data_need(sunlight_IDcount, *light_need);
+	auto check_iferror = sun_pssmshadow_light.insert(data_need);
+	if (!check_iferror.second)
+	{
+		engine_basic::engine_fail_reason error_message("a same sunlight has already in");
+		return error_message;
+	}
+	sunlight_ID = sunlight_IDcount++;
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
@@ -704,9 +714,10 @@ void light_control_singleton::draw_shadow()
 		rec_shadow_light._Ptr->reset_texture(ShadowTextureArray, count_light++);
 		rec_shadow_light._Ptr->draw_shadow();
 	}
-	for (auto rec_shadow_sunlight = sun_pssmshadow_light.begin(); rec_shadow_sunlight != sun_pssmshadow_light.end(); ++rec_shadow_sunlight)
+	auto data_now = sun_pssmshadow_light.find(sunlight_use);
+	if (data_now != sun_pssmshadow_light.end())
 	{
-		rec_shadow_sunlight._Ptr->draw_shadow();
+		data_now->second.draw_shadow();
 	}
 	update_and_setlight();
 }
@@ -720,7 +731,7 @@ void light_control_singleton::release()
 	}
 	for (auto rec_shadow_sun = sun_pssmshadow_light.begin(); rec_shadow_sun != sun_pssmshadow_light.end(); ++rec_shadow_sun)
 	{
-		rec_shadow_sun._Ptr->release();
+		rec_shadow_sun->second.release();
 	}
 	nonshadow_light_list.clear();
 	shadowmap_light_list.clear();

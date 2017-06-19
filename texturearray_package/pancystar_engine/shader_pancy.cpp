@@ -388,7 +388,8 @@ void shader_pretreat_gbuffer::init_handle()
 	project_matrix_handle = fx_need->GetVariableByName("final_matrix")->AsMatrix();
 	texture_packarray_handle = fx_need->GetVariableByName("texture_pack_array")->AsShaderResource();
 	world_matrix_array_handle = fx_need->GetVariableByName("world_matrix_array")->AsMatrix();//世界变换组矩阵
-	viewproj_matrix_handle = fx_need->GetVariableByName("view_proj_matrix")->AsMatrix();   //取景*投影变换矩阵
+	normal_matrix_array_handle = fx_need->GetVariableByName("normal_matrix_array")->AsMatrix();//法线变换组矩阵
+	proj_matrix_handle = fx_need->GetVariableByName("proj_matrix")->AsMatrix();   //取景*投影变换矩阵
 }
 engine_basic::engine_fail_reason shader_pretreat_gbuffer::set_trans_world(XMFLOAT4X4 *mat_world, XMFLOAT4X4 *mat_view)
 {
@@ -426,9 +427,9 @@ engine_basic::engine_fail_reason shader_pretreat_gbuffer::set_trans_all(XMFLOAT4
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
-engine_basic::engine_fail_reason shader_pretreat_gbuffer::set_trans_viewproj(XMFLOAT4X4 *mat_need)
+engine_basic::engine_fail_reason shader_pretreat_gbuffer::set_trans_proj(XMFLOAT4X4 *mat_need)
 {
-	engine_basic::engine_fail_reason check_error = set_matrix(viewproj_matrix_handle, mat_need);;
+	engine_basic::engine_fail_reason check_error = set_matrix(proj_matrix_handle, mat_need);;
 	if (!check_error.check_if_failed())
 	{
 		return check_error;
@@ -448,12 +449,35 @@ engine_basic::engine_fail_reason shader_pretreat_gbuffer::set_texturepack_array(
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
-engine_basic::engine_fail_reason shader_pretreat_gbuffer::set_world_matrix_array(const XMFLOAT4X4* M, int cnt)
+engine_basic::engine_fail_reason shader_pretreat_gbuffer::set_world_matrix_array(const XMFLOAT4X4* M, XMFLOAT4X4 mat_view,int cnt)
 {
-	HRESULT hr = world_matrix_array_handle->SetMatrixArray(reinterpret_cast<const float*>(M), 0, cnt);
+	XMFLOAT4X4 *world_mat = new XMFLOAT4X4[cnt];
+	XMFLOAT4X4 *normal_mat = new XMFLOAT4X4[cnt];
+	for (int i = 0; i < cnt; ++i) 
+	{
+		XMVECTOR x_delta;
+		XMMATRIX world_need = XMLoadFloat4x4(&M[i]);
+		XMMATRIX view_need = XMLoadFloat4x4(&mat_view);
+		XMMATRIX normal_need = DirectX::XMMatrixTranspose(DirectX::XMMatrixInverse(&x_delta, world_need));
+		normal_need.r[0].m128_f32[3] = 0;
+		normal_need.r[1].m128_f32[3] = 0;
+		normal_need.r[2].m128_f32[3] = 0;
+		normal_need.r[3].m128_f32[3] = 1;
+
+		XMStoreFloat4x4(&world_mat[i], world_need * view_need);
+		XMStoreFloat4x4(&normal_mat[i], normal_need * view_need);
+	}
+	
+	HRESULT hr = world_matrix_array_handle->SetMatrixArray(reinterpret_cast<const float*>(world_mat), 0, cnt);
 	if (FAILED(hr))
 	{
 		engine_basic::engine_fail_reason error_message(hr, "set world_matrix_array error in gbuffer depthnormal part");
+		return error_message;
+	}
+	hr = normal_matrix_array_handle->SetMatrixArray(reinterpret_cast<const float*>(normal_mat), 0, cnt);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set normal_matrix_array error in gbuffer depthnormal part");
 		return error_message;
 	}
 	engine_basic::engine_fail_reason succeed;
@@ -892,6 +916,17 @@ engine_basic::engine_fail_reason light_defered_lightbuffer::set_FrustumCorners(c
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
+engine_basic::engine_fail_reason light_defered_lightbuffer::set_projmessage(XMFLOAT3 proj_message)
+{
+	HRESULT hr = projmessage_handle->SetRawValue((void*)&proj_message, 0, sizeof(proj_message));
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set set_projmessage error in lightbuffer shadere");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
 engine_basic::engine_fail_reason light_defered_lightbuffer::set_shadow_matrix(const XMFLOAT4X4* M, int cnt)
 {
 	HRESULT hr = shadow_matrix_handle->SetMatrixArray(reinterpret_cast<const float*>(M), 0, cnt);
@@ -999,7 +1034,8 @@ void light_defered_lightbuffer::init_handle()
 	light_num_handle = fx_need->GetVariableByName("light_num");                       //光源数量句柄
 	shadow_num_handle = fx_need->GetVariableByName("shadow_num");                     //阴影数量句柄
 	FrustumCorners = fx_need->GetVariableByName("gFrustumCorners")->AsVector();       //3D还原角点句柄
-
+																					  //几何变换信息句柄
+	projmessage_handle = fx_need->GetVariableByName("proj_desc");
 	NormalspecMap = fx_need->GetVariableByName("gNormalspecMap")->AsShaderResource();  //shader中的纹理资源句柄
 	DepthMap = fx_need->GetVariableByName("gdepth_map")->AsShaderResource();  //shader中的纹理资源句柄
 	texture_shadow = fx_need->GetVariableByName("texture_shadow")->AsShaderResource();  //shader中的纹理资源句柄
@@ -1141,8 +1177,6 @@ engine_basic::engine_fail_reason light_defered_draw::set_specular_light_tex(ID3D
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
-
-
 void light_defered_draw::release()
 {
 	release_basic();
@@ -1180,6 +1214,501 @@ void light_defered_draw::init_handle()
 	world_matrix_array_handle = fx_need->GetVariableByName("world_matrix_array")->AsMatrix();//世界变换组矩阵
 	viewproj_matrix_handle = fx_need->GetVariableByName("view_proj_matrix")->AsMatrix();   //取景*投影变换矩阵
 	material_need = fx_need->GetVariableByName("material_need");
+}
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~记录cubemap方向到alpha像素~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+shader_reflect_save_depth::shader_reflect_save_depth(LPCWSTR filename) :shader_basic(filename)
+{
+}
+engine_basic::engine_fail_reason shader_reflect_save_depth::set_depthtex_input(ID3D11ShaderResourceView *tex_in)
+{
+	HRESULT hr = depth_input->SetResource(tex_in);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set cube depth error in reflect depth cube save shader");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+void shader_reflect_save_depth::release()
+{
+	release_basic();
+}
+void shader_reflect_save_depth::init_handle()
+{
+	//纹理信息句柄
+	depth_input = fx_need->GetVariableByName("depth_input")->AsShaderResource();
+	cube_count_handle = fx_need->GetVariableByName("cube_count");
+}
+engine_basic::engine_fail_reason shader_reflect_save_depth::set_cube_count(XMFLOAT3 cube_count)
+{
+	HRESULT hr = cube_count_handle->SetRawValue((void*)&cube_count, 0, sizeof(cube_count));
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set cube count error in reflect depth cube save shader");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+void shader_reflect_save_depth::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member)
+{
+	//设置顶点声明
+	D3D11_INPUT_ELEMENT_DESC rec[] =
+	{
+		//语义名    语义索引      数据格式          输入槽 起始地址     输入槽的格式 
+		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+		{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+	};
+	*num_member = sizeof(rec) / sizeof(D3D11_INPUT_ELEMENT_DESC);
+	for (UINT i = 0; i < *num_member; ++i)
+	{
+		member_point[i] = rec[i];
+	}
+}
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~实时全局反射~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+rtgr_reflect::rtgr_reflect(LPCWSTR filename) :shader_basic(filename)
+{
+}
+void rtgr_reflect::init_handle()
+{
+	view_pos_handle = fx_need->GetVariableByName("view_position");
+	view_matrix_handle = fx_need->GetVariableByName("view_matrix")->AsMatrix();       //取景变换句柄	
+	ViewToTexSpace = fx_need->GetVariableByName("gViewToTexSpace")->AsMatrix();
+	FrustumCorners = fx_need->GetVariableByName("gFrustumCorners")->AsVector();
+	invview_matrix_handle = fx_need->GetVariableByName("invview_matrix")->AsMatrix(); //取景变换逆变换句柄
+	cubeview_matrix_handle = fx_need->GetVariableByName("view_matrix_cube")->AsMatrix();
+	NormalDepthMap = fx_need->GetVariableByName("gNormalDepthMap")->AsShaderResource();
+	DepthMap = fx_need->GetVariableByName("gdepth_map")->AsShaderResource();
+	texture_diffuse_handle = fx_need->GetVariableByName("gcolorMap")->AsShaderResource();
+	texture_cube_handle = fx_need->GetVariableByName("texture_cube")->AsShaderResource();
+	//texture_depthcube_handle = fx_need->GetVariableByName("depth_cube")->AsShaderResource();
+	texture_stencilcube_handle = fx_need->GetVariableByName("stencil_cube")->AsShaderResource();
+	texture_color_mask = fx_need->GetVariableByName("mask_input")->AsShaderResource();;
+	texture_color_ssr = fx_need->GetVariableByName("ssrcolor_input")->AsShaderResource();;
+	camera_positions = fx_need->GetVariableByName("center_position")->AsVector();
+}
+void rtgr_reflect::release()
+{
+	release_basic();
+}
+engine_basic::engine_fail_reason rtgr_reflect::set_ViewToTexSpace(XMFLOAT4X4 *mat)
+{
+	auto check_error = set_matrix(ViewToTexSpace, mat);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason rtgr_reflect::set_view_matrix(XMFLOAT4X4 *mat_need)
+{
+	auto check_error = set_matrix(view_matrix_handle, mat_need);;
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason rtgr_reflect::set_view_pos(XMFLOAT3 eye_pos)
+{
+	HRESULT hr = view_pos_handle->SetRawValue((void*)&eye_pos, 0, sizeof(eye_pos));
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason error_message(hr, "rtgr reflect error when setting view position");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason rtgr_reflect::set_FrustumCorners(const XMFLOAT4 v[4])
+{
+	HRESULT hr = FrustumCorners->SetFloatVectorArray(reinterpret_cast<const float*>(v), 0, 4);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "rtgr reflect error when setting FrustumCorners");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason rtgr_reflect::set_camera_positions(XMFLOAT3 v)
+{
+	HRESULT hr = camera_positions->SetRawValue((void*)&v, 0, sizeof(v));
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason error_message(hr, "rtgr reflect error when setting view position");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason rtgr_reflect::set_NormalDepthtex(ID3D11ShaderResourceView* srv)
+{
+	HRESULT hr = NormalDepthMap->SetResource(srv);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "rtgr reflect error when setting NormalDepthtex");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason rtgr_reflect::set_Depthtex(ID3D11ShaderResourceView* srv)
+{
+	HRESULT hr = DepthMap->SetResource(srv);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "rtgr reflect error when setting Depthtex");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason rtgr_reflect::set_diffusetex(ID3D11ShaderResourceView *tex_in)
+{
+	HRESULT hr = texture_diffuse_handle->SetResource(tex_in);
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason error_message(hr, "rtgr reflect error when setting diffuse texture");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason rtgr_reflect::set_enviroment_tex(ID3D11ShaderResourceView* srv)
+{
+	HRESULT hr = texture_cube_handle->SetResource(srv);
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason error_message(hr, "rtgr reflect error when setting cube texture");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason rtgr_reflect::set_color_mask_tex(ID3D11ShaderResourceView* srv)
+{
+	HRESULT hr = texture_color_mask->SetResource(srv);
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason error_message(hr, "rtgr reflect error when setting color_mask_tex");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason rtgr_reflect::set_color_ssr_tex(ID3D11ShaderResourceView* srv)
+{
+	HRESULT hr = texture_color_ssr->SetResource(srv);
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason error_message(hr, "rtgr reflect error when setting color_ssr_tex");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason rtgr_reflect::set_enviroment_stencil(ID3D11ShaderResourceView* srv)
+{
+	HRESULT hr = texture_stencilcube_handle->SetResource(srv);
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason error_message(hr, "rtgr reflect error when setting enviroment_stencil tex");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason rtgr_reflect::set_invview_matrix(XMFLOAT4X4 *mat_need)
+{
+	auto check_error = set_matrix(invview_matrix_handle, mat_need);;
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason rtgr_reflect::set_cubeview_matrix(const XMFLOAT4X4* M, int cnt)
+{
+	HRESULT hr = cubeview_matrix_handle->SetMatrixArray(reinterpret_cast<const float*>(M), 0, cnt);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "rtgr reflect error when setting cubeview_matrix");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+void rtgr_reflect::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member)
+{
+	//设置顶点声明
+	D3D11_INPUT_ELEMENT_DESC rec[] =
+	{
+		//语义名    语义索引      数据格式          输入槽 起始地址     输入槽的格式 
+		{ "POSITION",0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,0  ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "NORMAL"  ,0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,12 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TEXCOORD",0  ,DXGI_FORMAT_R32G32_FLOAT      ,0    ,24 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 }
+	};
+	*num_member = sizeof(rec) / sizeof(D3D11_INPUT_ELEMENT_DESC);
+	for (UINT i = 0; i < *num_member; ++i)
+	{
+		member_point[i] = rec[i];
+	}
+}
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~反射效果模糊~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+rtgr_reflect_blur::rtgr_reflect_blur(LPCWSTR filename) : shader_basic(filename)
+{
+}
+engine_basic::engine_fail_reason rtgr_reflect_blur::set_tex_resource(ID3D11ShaderResourceView *buffer_input)
+{
+	HRESULT hr;
+	hr = tex_input->SetResource(buffer_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set reflect blur texture error in globel reflect blur shader");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason rtgr_reflect_blur::set_image_size(XMFLOAT4 range)
+{
+	HRESULT hr;
+	hr = Texelrange->SetRawValue((void*)&range, 0, sizeof(range));
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set image_size error in globel reflect blur shader");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+void rtgr_reflect_blur::release()
+{
+	release_basic();
+}
+void rtgr_reflect_blur::init_handle()
+{
+	Texelrange = fx_need->GetVariableByName("tex_range_color_normal");
+	tex_input = fx_need->GetVariableByName("gInputImage")->AsShaderResource();
+	tex_normal_input = fx_need->GetVariableByName("normal_tex")->AsShaderResource();
+	tex_depth_input = fx_need->GetVariableByName("depth_tex")->AsShaderResource();
+	tex_mask_input = fx_need->GetVariableByName("gInputMask")->AsShaderResource();
+}
+void rtgr_reflect_blur::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member)
+{
+	//设置顶点声明
+	D3D11_INPUT_ELEMENT_DESC rec[] =
+	{
+		//语义名    语义索引      数据格式          输入槽 起始地址     输入槽的格式 
+		{ "POSITION",0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,0  ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "NORMAL"  ,0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,12 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TEXCOORD",0  ,DXGI_FORMAT_R32G32_FLOAT      ,0    ,24 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 }
+	};
+	*num_member = sizeof(rec) / sizeof(D3D11_INPUT_ELEMENT_DESC);
+	for (UINT i = 0; i < *num_member; ++i)
+	{
+		member_point[i] = rec[i];
+	}
+}
+engine_basic::engine_fail_reason rtgr_reflect_blur::set_tex_normal_resource(ID3D11ShaderResourceView *buffer_input)
+{
+	HRESULT hr;
+	hr = tex_normal_input->SetResource(buffer_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set tex_normal_resource error in globel reflect blur shader");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason rtgr_reflect_blur::set_tex_depth_resource(ID3D11ShaderResourceView *buffer_input)
+{
+	HRESULT hr;
+	hr = tex_depth_input->SetResource(buffer_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set tex_depth_resource error in globel reflect blur shader");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason rtgr_reflect_blur::set_tex_mask_resource(ID3D11ShaderResourceView *buffer_input)
+{
+	HRESULT hr;
+	hr = tex_mask_input->SetResource(buffer_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set tex_mask error in globel reflect blur shader");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~最终反射叠加~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+rtgr_reflect_final::rtgr_reflect_final(LPCWSTR filename) : shader_basic(filename)
+{
+}
+void rtgr_reflect_final::release()
+{
+	release_basic();
+}
+void rtgr_reflect_final::init_handle()
+{
+	Texelrange = fx_need->GetVariableByName("tex_range_color_normal");
+	tex_color_input = fx_need->GetVariableByName("gInputImage")->AsShaderResource();
+	tex_reflect_input = fx_need->GetVariableByName("gInputReflect")->AsShaderResource();
+}
+void rtgr_reflect_final::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member)
+{
+	//设置顶点声明
+	D3D11_INPUT_ELEMENT_DESC rec[] =
+	{
+		//语义名    语义索引      数据格式          输入槽 起始地址     输入槽的格式 
+		{ "POSITION",0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,0  ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "NORMAL"  ,0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,12 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TEXCOORD",0  ,DXGI_FORMAT_R32G32_FLOAT      ,0    ,24 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 }
+	};
+	*num_member = sizeof(rec) / sizeof(D3D11_INPUT_ELEMENT_DESC);
+	for (UINT i = 0; i < *num_member; ++i)
+	{
+		member_point[i] = rec[i];
+	}
+}
+engine_basic::engine_fail_reason rtgr_reflect_final::set_tex_color_resource(ID3D11ShaderResourceView *buffer_input)
+{
+	HRESULT hr;
+	hr = tex_color_input->SetResource(buffer_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set color input error in globel reflect final shader");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason rtgr_reflect_final::set_tex_reflect_resource(ID3D11ShaderResourceView *buffer_input)
+{
+	HRESULT hr;
+	hr = tex_reflect_input->SetResource(buffer_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set tex_reflect_resource input error in globel reflect final shader");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason rtgr_reflect_final::set_image_size(XMFLOAT4 range)
+{
+	HRESULT hr;
+	hr = Texelrange->SetRawValue((void*)&range, 0, sizeof(range));
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set image_size input error in globel reflect final shader");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~天空球立方映射~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+shader_skycube::shader_skycube(LPCWSTR filename) : shader_basic(filename)
+{
+}
+engine_basic::engine_fail_reason shader_skycube::set_view_pos(XMFLOAT3 eye_pos)
+{
+	HRESULT hr = view_pos_handle->SetRawValue((void*)&eye_pos, 0, sizeof(eye_pos));
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason error_message(hr, "cubemap shader error when setting view position");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_skycube::set_trans_world(XMFLOAT4X4 *mat_need)
+{
+	XMMATRIX rec_mat = XMLoadFloat4x4(mat_need);
+	XMVECTOR x_delta;
+	XMMATRIX check = rec_mat;
+	//法线变换
+	XMMATRIX normal_need = DirectX::XMMatrixTranspose(DirectX::XMMatrixInverse(&x_delta, check));
+	normal_need.r[0].m128_f32[3] = 0.0f;
+	normal_need.r[1].m128_f32[3] = 0.0f;
+	normal_need.r[2].m128_f32[3] = 0.0f;
+	normal_need.r[3].m128_f32[3] = 1.0f;
+	auto check_error = set_matrix(world_matrix_handle, mat_need);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	HRESULT hr = normal_matrix_handle->SetMatrix(reinterpret_cast<float*>(&normal_need));
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason error_message(hr, "cubemap shader error when setting normal matrix");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_skycube::set_trans_all(XMFLOAT4X4 *mat_need)
+{
+	auto check_error = set_matrix(project_matrix_handle, mat_need);;
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_skycube::set_tex_resource(ID3D11ShaderResourceView* tex_cube)
+{
+	HRESULT hr;
+	hr = cubemap_texture->SetResource(tex_cube);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "cubemap shader error when setting cube texture");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+void shader_skycube::init_handle()
+{
+	project_matrix_handle = fx_need->GetVariableByName("final_matrix")->AsMatrix();         //全套几何变换句柄
+	world_matrix_handle = fx_need->GetVariableByName("world_matrix")->AsMatrix();           //世界变换句柄
+	normal_matrix_handle = fx_need->GetVariableByName("normal_matrix")->AsMatrix();         //法线变换句柄
+	view_pos_handle = fx_need->GetVariableByName("position_view");
+	cubemap_texture = fx_need->GetVariableByName("texture_cube")->AsShaderResource();  //shader中的纹理资源句柄
+}
+void shader_skycube::release()
+{
+	release_basic();
+}
+void shader_skycube::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member)
+{
+	//设置顶点声明
+	D3D11_INPUT_ELEMENT_DESC rec[] =
+	{
+		//语义名    语义索引      数据格式          输入槽 起始地址     输入槽的格式 
+		{ "POSITION"   ,0  ,DXGI_FORMAT_R32G32B32_FLOAT     ,0    ,0  ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "NORMAL"     ,0  ,DXGI_FORMAT_R32G32B32_FLOAT     ,0    ,12 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TANGENT"    ,0  ,DXGI_FORMAT_R32G32B32_FLOAT     ,0    ,24 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TEXINDICES" ,0  ,DXGI_FORMAT_R32G32B32A32_UINT   ,0    ,36 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TEXDIFFNORM",0  ,DXGI_FORMAT_R32G32B32A32_FLOAT  ,0    ,52 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TEXOTHER"   ,0  ,DXGI_FORMAT_R32G32B32A32_FLOAT  ,0    ,64 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 }
+	};
+	*num_member = sizeof(rec) / sizeof(D3D11_INPUT_ELEMENT_DESC);
+	for (UINT i = 0; i < *num_member; ++i)
+	{
+		member_point[i] = rec[i];
+	}
 }
 //shader管理器
 shader_control *shader_control::shadercontrol_pInstance = NULL;
@@ -1445,6 +1974,66 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 	{
 		return check_error;
 	}
+
+	std::shared_ptr<shader_reflect_save_depth> shader_reflect_depthsave = std::make_shared<shader_reflect_save_depth>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\save_cube_depthstencil.cso");
+	check_error = shader_reflect_depthsave->shder_create();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = add_a_new_shader(std::type_index(typeid(shader_reflect_save_depth)), shader_reflect_depthsave);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+
+	std::shared_ptr<rtgr_reflect> shader_rtgr_reflect = std::make_shared<rtgr_reflect>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\RTGR.cso");
+	check_error = shader_rtgr_reflect->shder_create();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = add_a_new_shader(std::type_index(typeid(rtgr_reflect)), shader_rtgr_reflect);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+
+	std::shared_ptr<rtgr_reflect_blur> shader_rtgr_reflect_blur = std::make_shared<rtgr_reflect_blur>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\reflect_blur.cso");
+	check_error = shader_rtgr_reflect_blur->shder_create();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = add_a_new_shader(std::type_index(typeid(rtgr_reflect_blur)), shader_rtgr_reflect_blur);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+
+	std::shared_ptr<rtgr_reflect_final> shader_rtgr_reflect_final = std::make_shared<rtgr_reflect_final>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\reflect_final.cso");
+	check_error = shader_rtgr_reflect_final->shder_create();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = add_a_new_shader(std::type_index(typeid(rtgr_reflect_final)), shader_rtgr_reflect_final);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+
+	std::shared_ptr<shader_skycube> shader_sky_draw = std::make_shared<shader_skycube>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\skycube.cso");
+	check_error = shader_sky_draw->shder_create();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = add_a_new_shader(std::type_index(typeid(shader_skycube)), shader_sky_draw);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
@@ -1569,6 +2158,61 @@ std::shared_ptr<light_defered_draw> shader_control::get_shader_lightdeffered(eng
 		return std::shared_ptr<light_defered_draw>();
 	}
 	auto out_pointer = std::dynamic_pointer_cast<light_defered_draw>(shader_vlight);
+	return out_pointer;
+}
+std::shared_ptr<shader_reflect_save_depth> shader_control::get_shader_reflect_savedepth(engine_basic::engine_fail_reason &if_succeed) 
+{
+	std::string name_need = std::type_index(typeid(shader_reflect_save_depth)).name();
+	auto shader_vlight = get_shader_by_type(std::type_index(typeid(shader_reflect_save_depth)).name(), if_succeed);
+	if (!if_succeed.check_if_failed())
+	{
+		return std::shared_ptr<shader_reflect_save_depth>();
+	}
+	auto out_pointer = std::dynamic_pointer_cast<shader_reflect_save_depth>(shader_vlight);
+	return out_pointer;
+}
+std::shared_ptr<rtgr_reflect> shader_control::get_shader_reflect_draw(engine_basic::engine_fail_reason &if_succeed) 
+{
+	std::string name_need = std::type_index(typeid(rtgr_reflect)).name();
+	auto shader_vlight = get_shader_by_type(std::type_index(typeid(rtgr_reflect)).name(), if_succeed);
+	if (!if_succeed.check_if_failed())
+	{
+		return std::shared_ptr<rtgr_reflect>();
+	}
+	auto out_pointer = std::dynamic_pointer_cast<rtgr_reflect>(shader_vlight);
+	return out_pointer;
+}
+std::shared_ptr<rtgr_reflect_blur> shader_control::get_shader_reflect_blur(engine_basic::engine_fail_reason &if_succeed)
+{
+	std::string name_need = std::type_index(typeid(rtgr_reflect_blur)).name();
+	auto shader_vlight = get_shader_by_type(std::type_index(typeid(rtgr_reflect_blur)).name(), if_succeed);
+	if (!if_succeed.check_if_failed())
+	{
+		return std::shared_ptr<rtgr_reflect_blur>();
+	}
+	auto out_pointer = std::dynamic_pointer_cast<rtgr_reflect_blur>(shader_vlight);
+	return out_pointer;
+}
+std::shared_ptr<rtgr_reflect_final> shader_control::get_shader_reflect_final(engine_basic::engine_fail_reason &if_succeed)
+{
+	std::string name_need = std::type_index(typeid(rtgr_reflect_final)).name();
+	auto shader_vlight = get_shader_by_type(std::type_index(typeid(rtgr_reflect_final)).name(), if_succeed);
+	if (!if_succeed.check_if_failed())
+	{
+		return std::shared_ptr<rtgr_reflect_final>();
+	}
+	auto out_pointer = std::dynamic_pointer_cast<rtgr_reflect_final>(shader_vlight);
+	return out_pointer;
+}
+std::shared_ptr<shader_skycube> shader_control::get_shader_sky_draw(engine_basic::engine_fail_reason &if_succeed)
+{
+	std::string name_need = std::type_index(typeid(shader_skycube)).name();
+	auto shader_vlight = get_shader_by_type(std::type_index(typeid(shader_skycube)).name(), if_succeed);
+	if (!if_succeed.check_if_failed())
+	{
+		return std::shared_ptr<shader_skycube>();
+	}
+	auto out_pointer = std::dynamic_pointer_cast<shader_skycube>(shader_vlight);
 	return out_pointer;
 }
 void shader_control::release() 

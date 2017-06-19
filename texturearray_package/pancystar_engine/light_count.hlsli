@@ -34,10 +34,11 @@ void compute_dirlight(
 	out float4 spec)
 {
 	ambient = mat.ambient * light_dir.ambient;         //环境光
-	float diffuse_angle = dot(-light_dir.dir, normal); //漫反射夹角
+	float3 light_dir_rec = normalize(light_dir.dir);
+	float diffuse_angle = dot(-light_dir_rec, normal); //漫反射夹角
 	if (diffuse_angle > 0.0f)
 	{
-		float3 v = reflect(light_dir.dir, normal);
+		float3 v = normalize(reflect(light_dir_rec, normal));
 		float spec_angle = pow(max(dot(v, direction_view), 0.0f), mat.specular.w);
 
 		diffuse = diffuse_angle * mat.diffuse * light_dir.diffuse;//漫反射光

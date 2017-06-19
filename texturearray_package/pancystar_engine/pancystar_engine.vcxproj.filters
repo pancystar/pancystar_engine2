@@ -48,6 +48,9 @@
     <ClInclude Include="pancy_lighting.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="pancy_posttreatment.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="geometry.cpp">
@@ -86,6 +89,9 @@
     <ClCompile Include="pancy_lighting.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="pancy_posttreatment.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="color_test.fx">
@@ -116,6 +122,21 @@
       <Filter>源文件</Filter>
     </FxCompile>
     <FxCompile Include="light_deffered.fx">
+      <Filter>源文件</Filter>
+    </FxCompile>
+    <FxCompile Include="save_cube_depthstencil.fx">
+      <Filter>源文件</Filter>
+    </FxCompile>
+    <FxCompile Include="RTGR.fx">
+      <Filter>源文件</Filter>
+    </FxCompile>
+    <FxCompile Include="reflect_blur.fx">
+      <Filter>源文件</Filter>
+    </FxCompile>
+    <FxCompile Include="reflect_final.fx">
+      <Filter>源文件</Filter>
+    </FxCompile>
+    <FxCompile Include="skycube.fx">
       <Filter>源文件</Filter>
     </FxCompile>
   </ItemGroup>

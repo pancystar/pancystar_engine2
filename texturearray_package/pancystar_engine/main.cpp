@@ -152,12 +152,12 @@ HRESULT engine_windows_main::game_loop()
 		{
 			TranslateMessage(&msg);//消息转换
 			DispatchMessage(&msg);//消息传递给窗口过程函数
-			scene_main->update(0.33);
+			scene_main->update(0.01);
 			scene_main->display();
 		}
 		else
 		{
-			scene_main->update(0.33);
+			scene_main->update(0.01);
 			scene_main->display();
 		}
 	}

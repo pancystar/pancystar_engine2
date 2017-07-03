@@ -1,11 +1,22 @@
 #include"assimp_import.h"
-assimp_basic::assimp_basic(char* pFile, char *texture_path)
+assimp_basic::assimp_basic(const char* pFile, const char *texture_path)
 {
 	filename = pFile;
 	strcpy(rec_texpath, texture_path);
 	model_need = NULL;
 	matlist_need = NULL;
 	mesh_need = NULL;
+}
+std::string assimp_basic::get_mesh_name_bypart(int mesh_id)
+{
+	if (mesh_id >= meshpart_name.size())
+	{
+		return "";
+	}
+	else 
+	{
+		return meshpart_name[mesh_id];
+	}
 }
 int assimp_basic::get_meshnum()
 {
@@ -70,7 +81,7 @@ engine_basic::engine_fail_reason assimp_basic::model_create(bool if_adj,int alph
 			strcpy(matlist_need[i].texture_diffuse, Path.data);
 			remove_texture_path(matlist_need[i].texture_diffuse);
 			change_texturedesc_2dds(matlist_need[i].texture_diffuse);
-			char rec_name[128];
+			char rec_name[512];
 			strcpy(rec_name, rec_texpath);
 			strcat(rec_name, matlist_need[i].texture_diffuse);
 			strcpy(matlist_need[i].texture_diffuse, rec_name);
@@ -80,7 +91,7 @@ engine_basic::engine_fail_reason assimp_basic::model_create(bool if_adj,int alph
 			strcpy(matlist_need[i].texture_normal, Path.data);
 			remove_texture_path(matlist_need[i].texture_normal);
 			change_texturedesc_2dds(matlist_need[i].texture_normal);
-			char rec_name[128];
+			char rec_name[512];
 			strcpy(rec_name, rec_texpath);
 			strcat(rec_name, matlist_need[i].texture_normal);
 			strcpy(matlist_need[i].texture_normal, rec_name);

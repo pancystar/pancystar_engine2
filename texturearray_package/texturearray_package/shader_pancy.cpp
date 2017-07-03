@@ -171,6 +171,7 @@ virtual_light_shader::virtual_light_shader(LPCWSTR filename) : shader_basic(file
 }
 void virtual_light_shader::init_handle()
 {
+	view_pos_handle = fx_need->GetVariableByName("position_view");
 	world_matrix_handle = fx_need->GetVariableByName("world_matrix")->AsMatrix();
 	normal_matrix_handle = fx_need->GetVariableByName("normal_matrix")->AsMatrix();
 	project_matrix_handle = fx_need->GetVariableByName("final_matrix")->AsMatrix();
@@ -178,8 +179,22 @@ void virtual_light_shader::init_handle()
 	texture_diffuse_handle = fx_need->GetVariableByName("texture_diffuse")->AsShaderResource();
 	texture_normal_handle = fx_need->GetVariableByName("texture_specular")->AsShaderResource();
 	texture_specular_handle = fx_need->GetVariableByName("texturet_normal")->AsShaderResource();
-
+	texture_metallic_handle = fx_need->GetVariableByName("texture_metallic")->AsShaderResource();
+	texture_roughness_handle = fx_need->GetVariableByName("texturet_roughness")->AsShaderResource();
+	texture_brdfluv_handle = fx_need->GetVariableByName("texture_rdfluv")->AsShaderResource();
+	cubemap_texture = fx_need->GetVariableByName("texture_environment")->AsShaderResource();
 	texture_diffusearray_handle = fx_need->GetVariableByName("texture_pack_diffuse")->AsShaderResource();
+}
+engine_basic::engine_fail_reason virtual_light_shader::set_view_pos(XMFLOAT3 eye_pos)
+{
+	HRESULT hr = view_pos_handle->SetRawValue((void*)&eye_pos, 0, sizeof(eye_pos));
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason failed_message(hr, "set eyeposition error in" + shader_file_string);
+		return failed_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
 }
 engine_basic::engine_fail_reason virtual_light_shader::set_tex_diffuse_array(ID3D11ShaderResourceView *tex_in)
 {
@@ -266,6 +281,52 @@ engine_basic::engine_fail_reason virtual_light_shader::set_tex_specular(ID3D11Sh
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
+engine_basic::engine_fail_reason virtual_light_shader::set_tex_metallic(ID3D11ShaderResourceView *tex_in)
+{
+	HRESULT hr = texture_metallic_handle->SetResource(tex_in);
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason failed_message(hr, "set metallic tex error in" + shader_file_string);
+		return failed_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason virtual_light_shader::set_tex_roughness(ID3D11ShaderResourceView *tex_in)
+{
+	HRESULT hr = texture_roughness_handle->SetResource(tex_in);
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason failed_message(hr, "set roughness tex error in" + shader_file_string);
+		return failed_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason virtual_light_shader::set_tex_brdfluv(ID3D11ShaderResourceView *tex_in)
+{
+	HRESULT hr = texture_brdfluv_handle->SetResource(tex_in);
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason failed_message(hr, "set brdf_luv tex error in" + shader_file_string);
+		return failed_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason virtual_light_shader::set_tex_environment(ID3D11ShaderResourceView* tex_cube)
+{
+	HRESULT hr;
+	hr = cubemap_texture->SetResource(tex_cube);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "cubemap shader error when setting virtual light");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+
 void virtual_light_shader::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member)
 {
 	//设置顶点声明
@@ -354,6 +415,123 @@ engine_basic::engine_fail_reason picture_show_shader::set_UI_position(XMFLOAT4 r
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~天空球立方映射~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+shader_skycube::shader_skycube(LPCWSTR filename) : shader_basic(filename)
+{
+}
+engine_basic::engine_fail_reason shader_skycube::set_view_pos(XMFLOAT3 eye_pos)
+{
+	HRESULT hr = view_pos_handle->SetRawValue((void*)&eye_pos, 0, sizeof(eye_pos));
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason error_message(hr, "cubemap shader error when setting view position");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_skycube::set_trans_world(XMFLOAT4X4 *mat_need)
+{
+	XMMATRIX rec_mat = XMLoadFloat4x4(mat_need);
+	XMVECTOR x_delta;
+	XMMATRIX check = rec_mat;
+	//法线变换
+	XMMATRIX normal_need = DirectX::XMMatrixTranspose(DirectX::XMMatrixInverse(&x_delta, check));
+	normal_need.r[0].m128_f32[3] = 0.0f;
+	normal_need.r[1].m128_f32[3] = 0.0f;
+	normal_need.r[2].m128_f32[3] = 0.0f;
+	normal_need.r[3].m128_f32[3] = 1.0f;
+	auto check_error = set_matrix(world_matrix_handle, mat_need);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	HRESULT hr = normal_matrix_handle->SetMatrix(reinterpret_cast<float*>(&normal_need));
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason error_message(hr, "cubemap shader error when setting normal matrix");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_skycube::set_trans_all(XMFLOAT4X4 *mat_need)
+{
+	auto check_error = set_matrix(project_matrix_handle, mat_need);;
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_skycube::set_tex_resource(ID3D11ShaderResourceView* tex_cube)
+{
+	HRESULT hr;
+	hr = cubemap_texture->SetResource(tex_cube);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "cubemap shader error when setting cube texture");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+void shader_skycube::init_handle()
+{
+	project_matrix_handle = fx_need->GetVariableByName("final_matrix")->AsMatrix();         //全套几何变换句柄
+	world_matrix_handle = fx_need->GetVariableByName("world_matrix")->AsMatrix();           //世界变换句柄
+	normal_matrix_handle = fx_need->GetVariableByName("normal_matrix")->AsMatrix();         //法线变换句柄
+	view_pos_handle = fx_need->GetVariableByName("position_view");
+	cubemap_texture = fx_need->GetVariableByName("texture_cube")->AsShaderResource();  //shader中的纹理资源句柄
+}
+void shader_skycube::release()
+{
+	release_basic();
+}
+void shader_skycube::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member)
+{
+	//设置顶点声明
+	D3D11_INPUT_ELEMENT_DESC rec[] =
+	{
+		//语义名    语义索引      数据格式          输入槽 起始地址     输入槽的格式 
+		{ "POSITION"   ,0  ,DXGI_FORMAT_R32G32B32_FLOAT     ,0    ,0  ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "NORMAL"     ,0  ,DXGI_FORMAT_R32G32B32_FLOAT     ,0    ,12 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TANGENT"    ,0  ,DXGI_FORMAT_R32G32B32_FLOAT     ,0    ,24 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TEXINDICES" ,0  ,DXGI_FORMAT_R32G32B32A32_UINT   ,0    ,36 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TEXDIFFNORM",0  ,DXGI_FORMAT_R32G32B32A32_FLOAT  ,0    ,52 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TEXOTHER"   ,0  ,DXGI_FORMAT_R32G32B32A32_FLOAT  ,0    ,64 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 }
+	};
+	*num_member = sizeof(rec) / sizeof(D3D11_INPUT_ELEMENT_DESC);
+	for (UINT i = 0; i < *num_member; ++i)
+	{
+		member_point[i] = rec[i];
+	}
+}
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~brdf反射强度预处理~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+brdf_envpre_shader::brdf_envpre_shader(LPCWSTR filename) : shader_basic(filename)
+{
+}
+void brdf_envpre_shader::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member)
+{
+	//设置顶点声明
+	D3D11_INPUT_ELEMENT_DESC rec[] =
+	{
+		//语义名    语义索引      数据格式          输入槽 起始地址     输入槽的格式 
+		{ "POSITION",0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,0  ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TEXCOORD",0  ,DXGI_FORMAT_R32G32_FLOAT      ,0    ,12 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 }
+	};
+	*num_member = sizeof(rec) / sizeof(D3D11_INPUT_ELEMENT_DESC);
+	for (UINT i = 0; i < *num_member; ++i)
+	{
+		member_point[i] = rec[i];
+	}
+}
+void brdf_envpre_shader::release()
+{
+	release_basic();
+}
 //shader管理器
 shader_control *shader_control::shadercontrol_pInstance = NULL;
 shader_control::shader_control() 
@@ -426,6 +604,29 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
+	std::shared_ptr<shader_skycube> shader_sky_draw = std::make_shared<shader_skycube>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\skycube.cso");
+	check_error = shader_sky_draw->shder_create();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = add_a_new_shader(std::type_index(typeid(shader_skycube)), shader_sky_draw);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+
+	std::shared_ptr<brdf_envpre_shader> shader_brdf_draw = std::make_shared<brdf_envpre_shader>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\render_brdf_list.cso");
+	check_error = shader_brdf_draw->shder_create();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = add_a_new_shader(std::type_index(typeid(brdf_envpre_shader)), shader_brdf_draw);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
 
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
@@ -461,6 +662,28 @@ std::shared_ptr<picture_show_shader> shader_control::get_shader_picture(engine_b
 		return std::shared_ptr<picture_show_shader>();
 	}
 	auto out_pointer = std::dynamic_pointer_cast<picture_show_shader>(shader_vlight);
+	return out_pointer;
+}
+std::shared_ptr<shader_skycube> shader_control::get_shader_sky_draw(engine_basic::engine_fail_reason &if_succeed)
+{
+	std::string name_need = std::type_index(typeid(shader_skycube)).name();
+	auto shader_vlight = get_shader_by_type(std::type_index(typeid(shader_skycube)).name(), if_succeed);
+	if (!if_succeed.check_if_failed())
+	{
+		return std::shared_ptr<shader_skycube>();
+	}
+	auto out_pointer = std::dynamic_pointer_cast<shader_skycube>(shader_vlight);
+	return out_pointer;
+}
+std::shared_ptr<brdf_envpre_shader> shader_control::get_shader_brdf_pre(engine_basic::engine_fail_reason &if_succeed)
+{
+	std::string name_need = std::type_index(typeid(brdf_envpre_shader)).name();
+	auto shader_vlight = get_shader_by_type(std::type_index(typeid(brdf_envpre_shader)).name(), if_succeed);
+	if (!if_succeed.check_if_failed())
+	{
+		return std::shared_ptr<brdf_envpre_shader>();
+	}
+	auto out_pointer = std::dynamic_pointer_cast<brdf_envpre_shader>(shader_vlight);
 	return out_pointer;
 }
 std::shared_ptr<shader_basic> shader_control::get_shader_by_type(std::string type_name, engine_basic::engine_fail_reason &if_succeed)

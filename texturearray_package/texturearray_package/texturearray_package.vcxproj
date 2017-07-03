@@ -164,7 +164,14 @@
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="color_test.fx" />
+    <FxCompile Include="render_brdf_list.fx">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Effect</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+    </FxCompile>
     <FxCompile Include="show_pic.fx" />
+    <FxCompile Include="skycube.fx" />
     <FxCompile Include="virtual_light.fx" />
   </ItemGroup>
   <ItemGroup>
@@ -179,6 +186,9 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="light_count.hlsli" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="tex_pack_a.dds" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

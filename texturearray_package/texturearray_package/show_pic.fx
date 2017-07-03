@@ -30,7 +30,23 @@ VertexOut VS(VertexIn vin)
 	vout.Tex = vin.tex1;
 	return vout;
 }
+VertexOut VS_movetex(VertexIn vin)
+{
+	VertexOut vout;
+	float3 now_pos;
+	now_pos = vin.pos;
+	vout.PosH = float4(now_pos, 1.0f);
+	vout.Tex.x = vin.tex1.x * UI_scal.x + UI_pos.x;
+	vout.Tex.y = vin.tex1.y * UI_scal.y + UI_pos.y;
+	return vout;
+}
 float4 PS(VertexOut pin) : SV_Target
+{
+	float2 tex_uv = pin.Tex;
+	float4 texcolor = texture_need.Sample(samTex_liner, tex_uv);
+	return texcolor;
+}
+float4 PS_alpha(VertexOut pin) : SV_Target
 {
 	float2 tex_uv = pin.Tex;
 	float4 texcolor = texture_need.Sample(samTex_liner, tex_uv);
@@ -43,5 +59,14 @@ technique11 draw_ui
 		SetVertexShader(CompileShader(vs_5_0, VS()));
 		SetGeometryShader(NULL);
 		SetPixelShader(CompileShader(ps_5_0, PS()));
+	}
+}
+technique11 draw_ui_move
+{
+	pass P0
+	{
+		SetVertexShader(CompileShader(vs_5_0, VS_movetex()));
+		SetGeometryShader(NULL);
+		SetPixelShader(CompileShader(ps_5_0, PS_alpha()));
 	}
 }

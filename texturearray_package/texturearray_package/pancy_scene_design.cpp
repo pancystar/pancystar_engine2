@@ -250,15 +250,30 @@ void texture_combine::releae()
 
 scene_test_square::scene_test_square()
 {
+	mesh_model_need = NULL;
+	now_show_part = 0;
+	model_out_test = NULL;
+	test_resource = NULL;
+	data_point_need = NULL;
+	data_index_need = NULL;
+	if_button_down = false;
+	if_click = false;
+	if_have_model = false;
 	picture_type_width = 1024;
 	picture_type_height = 1024;
 	rec = 0.0f;
+	ballmesh_need = new mesh_ball(false, 50, 50);
 	mesh_need = new mesh_cube(false);
 	picture_buf = new mesh_square(false);
-	mesh_model_need = new model_reader_assimp<point_common>("ball\\ball.obj", "ball\\");
+	//mesh_model_need = new model_reader_assimp<point_common>("ball\\ball.obj", "ball\\");
 }
 engine_basic::engine_fail_reason scene_test_square::read_texture_from_file(std::vector<string> file_name_list)
 {
+	if (test_resource != NULL)
+	{
+		test_resource->Release();
+		test_resource = NULL;
+	}
 	std::vector<ID3D11Texture2D*> srcTex(file_name_list.size());
 	for (int i = 0; i < file_name_list.size(); ++i)
 	{
@@ -333,22 +348,100 @@ engine_basic::engine_fail_reason scene_test_square::read_texture_from_file(std::
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
-engine_basic::engine_fail_reason scene_test_square::create()
+
+
+engine_basic::engine_fail_reason scene_test_square::load_model(string filename, string tex_path)
 {
-	engine_basic::engine_fail_reason check_error = mesh_need->create_object();
+	model_reader_assimp<point_common> *rec = new model_reader_assimp<point_common>(filename.c_str(), tex_path.c_str());
+	engine_basic::engine_fail_reason check_error = rec->model_create(false, 0, NULL);
 	if (!check_error.check_if_failed())
 	{
 		return check_error;
 	}
-	check_error = picture_buf->create_object();
-	if (!check_error.check_if_failed())
+	if (if_have_model == true)
 	{
-		return check_error;
+		mesh_model_need->release();
+		//texture_deal->releae();
+		//delete texture_deal;
+		//texture_deal = NULL;
+		rec_texture_packmap.clear();
+		picture_namelist.clear();
 	}
-	check_error = mesh_model_need->model_create(false, 0, NULL);
-	if (!check_error.check_if_failed())
+	mesh_model_need = rec;
+
+	for (auto mat_data = pbr_list.begin(); mat_data != pbr_list.end(); ++mat_data)
 	{
-		return check_error;
+		if (mat_data._Ptr->metallic_name != "basic_metallic") 
+		{
+			mat_data._Ptr->metallic->Release();
+		}
+		if (mat_data._Ptr->roughness_name != "basic_roughness")
+		{
+			mat_data._Ptr->roughness->Release();
+		}
+	}
+	pbr_list.clear();
+
+	for (int i = 0; i < rec->get_meshnum(); ++i)
+	{
+		//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~金属度~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+		string metallic_name = tex_path + rec->get_mesh_name_bypart(i) + "_metallic.dds";
+		//转换文件名为unicode
+		size_t len = strlen(metallic_name.c_str()) + 1;
+		size_t converted = 0;
+		wchar_t *texture_name;
+		texture_name = (wchar_t*)malloc(len*sizeof(wchar_t));
+		mbstowcs_s(&converted, texture_name, len, metallic_name.c_str(), _TRUNCATE);
+		pbr_material now_need;
+		auto hr_need = CreateDDSTextureFromFileEx(d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device(), d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex(), texture_name, 0, D3D11_USAGE_DEFAULT, D3D11_BIND_SHADER_RESOURCE, 0, 0, false, NULL, &now_need.metallic);
+		if (FAILED(hr_need))
+		{
+			now_need.metallic = mat_need_pbrbasic.metallic;
+			now_need.metallic_name = mat_need_pbrbasic.metallic_name;
+		}
+		else
+		{
+			now_need.metallic_name = metallic_name;
+		}
+		//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~粗糙度~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+		string roughness_name = tex_path + rec->get_mesh_name_bypart(i) + "_roughness.dds";
+		//转换文件名为unicode
+		len = strlen(roughness_name.c_str()) + 1;
+		texture_name = (wchar_t*)malloc(len*sizeof(wchar_t));
+		mbstowcs_s(&converted, texture_name, len, roughness_name.c_str(), _TRUNCATE);
+		hr_need = CreateDDSTextureFromFileEx(d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device(), d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex(), texture_name, 0, D3D11_USAGE_DEFAULT, D3D11_BIND_SHADER_RESOURCE, 0, 0, false, NULL, &now_need.roughness);
+		if (FAILED(hr_need))
+		{
+			now_need.roughness = mat_need_pbrbasic.roughness;
+			now_need.roughness_name = mat_need_pbrbasic.roughness_name;
+		}
+		else
+		{
+			now_need.roughness_name = roughness_name;
+		}
+		pbr_list.push_back(now_need);
+	}
+	if_have_model = true;
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason scene_test_square::export_model(string filepath, string filename)
+{
+	if (data_point_need != NULL)
+	{
+		delete[] data_point_need;
+		vertex_num = 0;
+	}
+	if (data_index_need != NULL)
+	{
+		delete[] data_index_need;
+		index_num = 0;
+	}
+	if (model_out_test != NULL)
+	{
+		model_out_test->release();
+		delete model_out_test;
+		model_out_test = NULL;
 	}
 
 	int width_list[1000], height_list[1000];
@@ -413,129 +506,380 @@ engine_basic::engine_fail_reason scene_test_square::create()
 		/*
 		新的贴图种类在这里填写
 		*/
-
 	}
-	texture_deal = new texture_combine(rec_texture_packmap.size(), width_list, height_list, 1024, 1024);
+	for (int i = 0; i < mesh_model_need->get_meshnum(); ++i) 
+	{
+		//金属度贴图
+		std::pair<string, ID3D11ShaderResourceView*> data_need_metallic(pbr_list[i].metallic_name, pbr_list[i].metallic);
+		auto check_iferror = rec_texture_packmap.insert(data_need_metallic);
+		if (!check_iferror.second)
+		{
+			continue;
+		}
+		picture_namelist.push_back(pbr_list[i].metallic_name);
+		ID3D11Texture2D *resource_rec;
+		pbr_list[i].metallic->GetResource((ID3D11Resource**)&resource_rec);
+		D3D11_TEXTURE2D_DESC desc_tex;
+		resource_rec->GetDesc(&desc_tex);
+		width_list[rec_texture_packmap.size() - 1] = desc_tex.Width;
+		height_list[rec_texture_packmap.size() - 1] = desc_tex.Height;
+		resource_rec->Release();
+		//粗糙度贴图
+		std::pair<string, ID3D11ShaderResourceView*> data_need_roughness(pbr_list[i].roughness_name, pbr_list[i].roughness);
+		check_iferror = rec_texture_packmap.insert(data_need_roughness);
+		if (!check_iferror.second)
+		{
+			continue;
+		}
+		picture_namelist.push_back(pbr_list[i].roughness_name);
+		pbr_list[i].roughness->GetResource((ID3D11Resource**)&resource_rec);
+		resource_rec->GetDesc(&desc_tex);
+		width_list[rec_texture_packmap.size() - 1] = desc_tex.Width;
+		height_list[rec_texture_packmap.size() - 1] = desc_tex.Height;
+		resource_rec->Release();
+	}
+	auto texture_deal = new texture_combine(rec_texture_packmap.size(), width_list, height_list, 1024, 1024);
 	engine_basic::engine_fail_reason error_message = texture_deal->create();
 	if (!error_message.check_if_failed())
 	{
 		return error_message;
 	}
 
-
-	/*
-	D3D11_SHADER_RESOURCE_VIEW_DESC desc_need;
-	material_list rec_need;
-	mesh_model->get_texture(&rec_need, 0);
-	rec_need.tex_diffuse_resource->GetDesc(&desc_need);
-	*/
-	/*
-	freopen("test.txt", "w", stdout);
-	for (int i = 0; i < rec_texture_packmap.size(); ++i)
-	{
-		printf("%d,", width_list[i]);
-	}
-	printf("\n");
-	for (int i = 0; i < rec_texture_packmap.size(); ++i)
-	{
-		printf("%d,", height_list[i]);
-	}
-	*/
-	point_common *data_point_need;
-	UINT *data_index_need;
-	int vertex_num, index_num;
+	//转换顶点数据
 	mesh_model_need->get_model_pack_num(vertex_num, index_num);
 	data_point_need = new point_common[vertex_num];
 	data_index_need = new UINT[index_num];
-
-	/*
-	ifstream in_stream;
-	in_stream.open("outmodel.pancymesh", ios::binary);
-	int vnum_rec, inum_rec, tnum_rec;
-	in_stream.read(reinterpret_cast<char*>(&vnum_rec), sizeof(vnum_rec));
-	in_stream.read(reinterpret_cast<char*>(&inum_rec), sizeof(inum_rec));
-	in_stream.read(reinterpret_cast<char*>(&tnum_rec), sizeof(tnum_rec));
-	in_stream.read(reinterpret_cast<char*>(data_point_need), vnum_rec * sizeof(data_point_need[0]));
-	in_stream.read(reinterpret_cast<char*>(data_index_need), inum_rec * sizeof(data_index_need[0]));
-	*/
-	
 	mesh_model_need->get_model_pack_data(data_point_need, data_index_need);
 	//ifstream in_stream;
-	out_stream.open("outmodel.pancymesh", ios::binary);
+	out_stream.open(filename + ".pancymesh", ios::binary);
 	out_stream.write((char *)&vertex_num, sizeof(vertex_num));
 	out_stream.write((char *)&index_num, sizeof(index_num));
 	int texture_num = texture_deal->get_texture_num();
 	out_stream.write((char *)&texture_num, sizeof(texture_num));
-	change_model_texcoord(data_point_need, vertex_num);
-	for (int i = 0; i < index_num; ++i) 
+	change_model_texcoord(texture_deal, data_point_need, vertex_num);
+	for (int i = 0; i < index_num; ++i)
 	{
 		out_stream.write((char *)&data_index_need[i], sizeof(data_index_need[i]));
 	}
 	out_stream.close();
-	
+
 	model_out_test = new mesh_model<point_common>(data_point_need, data_index_need, vertex_num, index_num, false);
 	error_message = model_out_test->create_object();
 	if (!error_message.check_if_failed())
 	{
 		return error_message;
 	}
-
-	show_square();
+	//存储纹理数据
+	show_square(texture_deal);
 	auto rendertarget = texture_deal->get_SRV_texarray();
 	ID3D11Resource *resource_rec;
 	rendertarget->GetResource(&resource_rec);
-	string data_tail[] = { "a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z" };
 	std::vector<string> file_name_saving;
-
-	/*
-	LPITEMIDLIST pil = NULL;
-	INITCOMMONCONTROLSEX InitCtrls = { 0 };
-	TCHAR szBuf[4096] = { 0 };
-	BROWSEINFO bi = { 0 };
-	bi.hwndOwner = NULL;
-	bi.iImage = 0;
-	bi.lParam = NULL;
-	bi.lpfn = NULL;
-	bi.lpszTitle = _T("请选择文件路径");
-	bi.pszDisplayName = szBuf;
-	bi.ulFlags = BIF_BROWSEINCLUDEFILES;
-
-	InitCommonControlsEx(&InitCtrls);//在调用函数SHBrowseForFolder之前需要调用该函数初始化相关环境  
-	pil = SHBrowseForFolder(&bi);
-	if (NULL != pil)//若函数执行成功，并且用户选择问件路径并点击确定  
-	{
-		SHGetPathFromIDList(pil, szBuf);//获取用户选择的文件路径  
-		wprintf_s(_T("%s"), szBuf);
-	}
-	*/
-
-	out_stream.open("outmodel.pancymat");
+	out_stream.open(filename + ".pancymat");
 	for (int i = 0; i < texture_deal->get_texture_num(); ++i)
 	{
-		string file_name_rec = "tex_pack_" + data_tail[i] + ".dds";
+		stringstream stream;
+		stream << i;
+		auto string_temp = stream.str();
+
+		string file_name_rec = filepath + "tex_pack_" + string_temp + ".dds";
 		file_name_saving.push_back(file_name_rec);
 		d3d_pancy_basic_singleton::GetInstance()->save_texture(resource_rec, file_name_rec, i);
 		out_stream.write(file_name_rec.c_str(), file_name_rec.size() * sizeof(char));
 		out_stream.write("\n", sizeof(char));
 	}
 	out_stream.close();
-	resource_rec->Release();
 
 	read_texture_from_file(file_name_saving);
 
+	resource_rec->Release();
 
-
-
+	texture_deal->releae();
+	delete texture_deal;
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
-void scene_test_square::change_model_texcoord(point_common *vertex_need, int point_num)
+
+engine_basic::engine_fail_reason scene_test_square::create()
+{
+	HRESULT hr;
+	D3D11_TEXTURE2D_DESC texDesc;
+	texDesc.Width = 1024;
+	texDesc.Height = 1024;
+	texDesc.MipLevels = 1;
+	texDesc.ArraySize = 1;
+	texDesc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+	texDesc.SampleDesc.Count = 1;
+	texDesc.SampleDesc.Quality = 0;
+	texDesc.Usage = D3D11_USAGE_DEFAULT;
+	texDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
+	texDesc.CPUAccessFlags = 0;
+	texDesc.MiscFlags = 0;
+	ID3D11Texture2D* ambientTex0 = 0;
+	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateTexture2D(&texDesc, 0, &ambientTex0);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message2(hr, "create brdf texture error");
+		return error_message2;
+	}
+	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateShaderResourceView(ambientTex0, 0, &brdf_pic);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message2(hr, "create brdf SRV error");
+		return error_message2;
+	}
+	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateRenderTargetView(ambientTex0, 0, &brdf_target);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message2(hr, "create brdf RTV error");
+		return error_message2;
+	}
+	ambientTex0->Release();
+
+
+	ZeroMemory(szPath, sizeof(szPath));
+	ZeroMemory(&ofn, sizeof(OPENFILENAME));
+	ofn.lStructSize = sizeof(OPENFILENAME);
+	ofn.hwndOwner = NULL;
+	ofn.lpstrFilter = TEXT("dds纹理\0*.dds");
+	ofn.lpstrFile = szPath;
+	ofn.nMaxFile = MAX_PATH;
+	ofn.lpstrInitialDir = NULL;
+	ofn.Flags = OFN_DONTADDTORECENT | OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_HIDEREADONLY | OFN_NONETWORKBUTTON | OFN_PATHMUSTEXIST;
+
+	ZeroMemory(szPath_file, sizeof(szPath_file));
+	ZeroMemory(&omodelfn, sizeof(OPENFILENAME));
+	omodelfn.lStructSize = sizeof(OPENFILENAME);
+	omodelfn.hwndOwner = NULL;
+	omodelfn.lpstrFilter = TEXT("obj模型(*.obj)\0*.obj\0fbx模型(*.fbx)\0*.fbx\0所有文件\0*.*\0\0");
+	omodelfn.lpstrFile = szPath_file;
+	omodelfn.nMaxFile = MAX_PATH;
+	omodelfn.lpstrInitialDir = NULL;
+	omodelfn.Flags = OFN_DONTADDTORECENT | OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_HIDEREADONLY | OFN_NONETWORKBUTTON | OFN_PATHMUSTEXIST;
+
+	memset(szPath_save, 0, 256);
+	memset(szPathcurrent_save, 0, 256);
+	memset(&ooutfn, 0, sizeof(ooutfn));
+	ooutfn.lStructSize = sizeof(ooutfn);
+	ooutfn.hwndOwner = NULL;
+	ooutfn.lpstrFilter = TEXT("pancystar engine模型(*.pancymesh)\0*.pancymesh");
+	ooutfn.lpstrFileTitle = szPath_save;
+	ooutfn.nMaxFileTitle = 256;
+	ooutfn.lpstrFile = szPathcurrent_save;
+	ooutfn.nMaxFile = 256;
+	ooutfn.lpstrTitle = L"Select a file to open...";
+	ooutfn.Flags = OFN_FILEMUSTEXIST | OFN_EXPLORER;
+
+
+
+	engine_basic::engine_fail_reason check_error = ballmesh_need->create_object();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = mesh_need->create_object();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = picture_buf->create_object();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+
+	HRESULT hr_need = CreateDDSTextureFromFileEx(d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device(), d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex(), L"floor.dds", 0, D3D11_USAGE_DEFAULT, D3D11_BIND_SHADER_RESOURCE, 0, 0, false, NULL, &tex_floor);
+	if (FAILED(hr_need))
+	{
+		engine_basic::engine_fail_reason error_message2(hr_need, "load model texture floor.dds error");
+		return error_message2;
+	}
+
+	hr_need = CreateDDSTextureFromFileEx(d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device(), d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex(), L"pbr_basic\\white.dds", 0, D3D11_USAGE_DEFAULT, D3D11_BIND_SHADER_RESOURCE, 0, 0, false, NULL, &mat_need_pbrbasic.metallic);
+	if (FAILED(hr_need))
+	{
+		engine_basic::engine_fail_reason error_message2(hr_need, "load model texture ball\\Sphere002_metallic.dds error");
+		return error_message2;
+	}
+	hr_need = CreateDDSTextureFromFileEx(d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device(), d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex(), L"pbr_basic\\white.dds", 0, D3D11_USAGE_DEFAULT, D3D11_BIND_SHADER_RESOURCE, 0, 0, false, NULL, &mat_need_pbrbasic.roughness);
+	if (FAILED(hr_need))
+	{
+		engine_basic::engine_fail_reason error_message2(hr_need, "load model texture ball\\Sphere002_roughness.dds error");
+		return error_message2;
+	}
+
+	hr_need = CreateDDSTextureFromFileEx(d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device(), d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex(), L"UI\\metallic.dds", 0, D3D11_USAGE_DEFAULT, D3D11_BIND_SHADER_RESOURCE, 0, 0, false, NULL, &metallic_choose_tex);
+	if (FAILED(hr_need))
+	{
+		engine_basic::engine_fail_reason error_message2(hr_need, "load model UI\\metallic.dds error");
+		return error_message2;
+	}
+	hr_need = CreateDDSTextureFromFileEx(d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device(), d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex(), L"UI\\roughness.dds", 0, D3D11_USAGE_DEFAULT, D3D11_BIND_SHADER_RESOURCE, 0, 0, false, NULL, &roughness_choose_tex);
+	if (FAILED(hr_need))
+	{
+		engine_basic::engine_fail_reason error_message2(hr_need, "load model UI\\roughness.dds error");
+		return error_message2;
+	}
+
+	hr_need = CreateDDSTextureFromFileEx(d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device(), d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex(), L"UI\\readmodel.dds", 0, D3D11_USAGE_DEFAULT, D3D11_BIND_SHADER_RESOURCE, 0, 0, false, NULL, &read_model_tex);
+	if (FAILED(hr_need))
+	{
+		engine_basic::engine_fail_reason error_message2(hr_need, "load model UI\\readmodel.dds error");
+		return error_message2;
+	}
+	hr_need = CreateDDSTextureFromFileEx(d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device(), d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex(), L"UI\\exportmodel.dds", 0, D3D11_USAGE_DEFAULT, D3D11_BIND_SHADER_RESOURCE, 0, 0, false, NULL, &export_model_tex);
+	if (FAILED(hr_need))
+	{
+		engine_basic::engine_fail_reason error_message2(hr_need, "load model UI\\exportmodel.dds error");
+		return error_message2;
+	}
+	hr_need = CreateDDSTextureFromFileEx(d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device(), d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex(), L"Cubemap.dds", 0, D3D11_USAGE_DEFAULT, D3D11_BIND_SHADER_RESOURCE, 0, 0, false, NULL, &cubemap_resource);
+	if (FAILED(hr_need))
+	{
+		engine_basic::engine_fail_reason error_message2(hr_need, "load cubemap resource error");
+		return error_message2;
+	}
+
+
+	ID3D11ShaderResourceView *read_model_tex;
+	ID3D11ShaderResourceView *load_model_tex;
+	//开启透明  
+	D3D11_BLEND_DESC transDesc;
+	//先创建一个混合状态的描述  
+	transDesc.AlphaToCoverageEnable = false;
+	transDesc.IndependentBlendEnable = false;
+	transDesc.RenderTarget[0].BlendEnable = true;
+	transDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
+	transDesc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+	transDesc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+	transDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+	transDesc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
+	transDesc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+	transDesc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+	hr_need = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateBlendState(&transDesc, &AlphaToCoverageBS);
+	if (FAILED(hr_need))
+	{
+		engine_basic::engine_fail_reason error_message2(hr_need, "create alpha to coverage state error");
+		return error_message2;
+	}
+
+	mat_need_pbrbasic.metallic_name = "basic_metallic";
+	mat_need_pbrbasic.roughness_name = "basic_roughness";
+	pbr_list.push_back(mat_need_pbrbasic);
+
+
+
+
+
+
+
+	draw_brdfdata();
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+void scene_test_square::show_cube()
+{
+	D3D11_VIEWPORT viewPort;
+	viewPort.Width = 800.0f;
+	viewPort.Height = 600.0f;
+	viewPort.MaxDepth = 1.0f;
+	viewPort.MinDepth = 0.0f;
+	viewPort.TopLeftX = 0.0f;
+	viewPort.TopLeftY = 200.0f;
+	if (if_have_model)
+	{
+		d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->RSSetViewports(1, &viewPort);
+	}
+	else
+	{
+		d3d_pancy_basic_singleton::GetInstance()->clear_basicrender_target(viewPort);
+	}
+	engine_basic::engine_fail_reason check_error;
+	auto shader_need = shader_control::GetInstance()->get_shader_virtual_light(check_error);
+	XMMATRIX trans_world;
+	XMMATRIX scal_world;
+	XMMATRIX rotation_world;
+	XMMATRIX rec_world;
+	XMFLOAT4X4 world_matrix;
+	XMFLOAT4X4 final_matrix;
+	rec += 0.001f;
+	trans_world = XMMatrixTranslation(0.0, -5.0, 0.0);
+	scal_world = XMMatrixScaling(1000, 2, 1000);
+	//XMMATRIX proj = DirectX::XMMatrixPerspectiveFovLH(XM_PI*0.25f, 800.0f / 600.0f, 0.1f, 1000.f);
+	XMFLOAT4X4 view_mat;
+	pancy_camera::get_instance()->count_view_matrix(&view_mat);
+	XMMATRIX proj = XMLoadFloat4x4(&engine_basic::perspective_message::get_instance()->get_proj_matrix());
+	rec_world = scal_world  *  trans_world * XMLoadFloat4x4(&view_mat) * proj;
+
+	XMStoreFloat4x4(&world_matrix, scal_world *  trans_world);
+	XMStoreFloat4x4(&final_matrix, rec_world);
+	shader_need->set_trans_world(&world_matrix);
+	shader_need->set_trans_all(&final_matrix);
+	shader_need->set_tex_diffuse(tex_floor);
+	ID3DX11EffectTechnique *teque_need;
+	shader_need->get_technique(&teque_need, "light_tech");
+	mesh_need->get_teque(teque_need);
+	mesh_need->show_mesh();
+}
+void scene_test_square::show_sky()
+{
+	D3D11_VIEWPORT viewPort;
+	viewPort.Width = 800.0f;
+	viewPort.Height = 600.0f;
+	viewPort.MaxDepth = 1.0f;
+	viewPort.MinDepth = 0.0f;
+	viewPort.TopLeftX = 0.0f;
+	viewPort.TopLeftY = 200.0f;
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->RSSetViewports(1, &viewPort);
+	engine_basic::engine_fail_reason check_error;
+	auto shader_need = shader_control::GetInstance()->get_shader_sky_draw(check_error);
+	XMMATRIX trans_world;
+	XMMATRIX scal_world;
+	XMMATRIX rotation_world;
+	XMMATRIX rec_world;
+	XMFLOAT4X4 world_matrix;
+	XMFLOAT4X4 final_matrix;
+	rec += 0.001f;
+	XMFLOAT3 view_pos;
+	pancy_camera::get_instance()->get_view_position(&view_pos);
+	trans_world = XMMatrixTranslation(view_pos.x, view_pos.y, view_pos.z);
+	scal_world = XMMatrixScaling(400, 400, 400);
+	//XMMATRIX proj = DirectX::XMMatrixPerspectiveFovLH(XM_PI*0.25f, 800.0f / 600.0f, 0.1f, 1000.f);
+	XMFLOAT4X4 view_mat;
+	pancy_camera::get_instance()->count_view_matrix(&view_mat);
+	XMMATRIX proj = XMLoadFloat4x4(&engine_basic::perspective_message::get_instance()->get_proj_matrix());
+	rec_world = scal_world  *  trans_world * XMLoadFloat4x4(&view_mat) * proj;
+
+	XMStoreFloat4x4(&world_matrix, scal_world *  trans_world);
+	XMStoreFloat4x4(&final_matrix, rec_world);
+
+
+
+
+	shader_need->set_trans_world(&world_matrix);
+	shader_need->set_trans_all(&final_matrix);
+	shader_need->set_tex_resource(cubemap_resource);
+
+	shader_need->set_view_pos(view_pos);
+	ID3DX11EffectTechnique *teque_need;
+	shader_need->get_technique(&teque_need, "draw_sky");
+	ballmesh_need->get_teque(teque_need);
+	ballmesh_need->show_mesh();
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->RSSetState(NULL);
+}
+void scene_test_square::change_model_texcoord(texture_combine *texture_deal, point_common *vertex_need, int point_num)
 {
 	string lastname;
 	texture_rebuild_data last_data;
 
 	string last_normal_name;
 	texture_rebuild_data last_normal_data;
+
+	string last_metallic_name;
+	texture_rebuild_data last_metallic_data;
+
+	string last_roughness_name;
+	texture_rebuild_data last_roughness_data;
 
 
 	texture_rebuild_data texture_message;
@@ -601,11 +945,11 @@ void scene_test_square::change_model_texcoord(point_common *vertex_need, int poi
 		auto texture_message1 = texture_message;
 		//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~更新法线贴图纹理坐标~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 		string name_normal = rec_need.texture_normal;
-		if (rec_need.texture_normal_resource == NULL) 
+		if (rec_need.texture_normal_resource == NULL)
 		{
 			vertex_need[i].tex_id.y = -1;
 		}
-		else 
+		else
 		{
 			if (name_normal == last_normal_name)
 			{
@@ -635,6 +979,64 @@ void scene_test_square::change_model_texcoord(point_common *vertex_need, int poi
 			vertex_need[i].tex.z += static_cast<float>(texture_message.place_data.x_st) / static_cast<float>(picture_type_width);
 			vertex_need[i].tex.w += static_cast<float>(texture_message.place_data.y_st) / static_cast<float>(picture_type_height);
 		}
+		//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~更新金属度贴图纹理坐标~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+		string name_metallic = pbr_list[id_pre_need].metallic_name;
+		if (name_metallic == last_roughness_name)
+		{
+			texture_message = last_metallic_data;
+		}
+		else
+		{
+			//查找该纹理名对应的纹理ID
+			int index_check;
+			for (int i = 0; i < picture_namelist.size(); ++i)
+			{
+				if (picture_namelist[i] == name_metallic)
+				{
+					index_check = i;
+					last_metallic_name = name_metallic;
+					break;
+				}
+			}
+			//寻找其位置及ID
+			texture_message = texture_deal->get_diffusetexture_data_byID(index_check);
+			last_metallic_data = texture_message;
+		}
+		vertex_need[i].tex_id.z = texture_message.now_index;
+		//更新纹理坐标位置
+		vertex_need[i].tex2.x = tex_coord_x_rec * static_cast<float>(texture_message.pic_width) / static_cast<float>(picture_type_width);
+		vertex_need[i].tex2.y = tex_coord_y_rec * static_cast<float>(texture_message.pic_height) / static_cast<float>(picture_type_height);
+		vertex_need[i].tex2.x += static_cast<float>(texture_message.place_data.x_st) / static_cast<float>(picture_type_width);
+		vertex_need[i].tex2.y += static_cast<float>(texture_message.place_data.y_st) / static_cast<float>(picture_type_height);
+		//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~更新粗糙度贴图纹理坐标~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+		string name_roughness = pbr_list[id_pre_need].roughness_name;
+		if (name_roughness == last_roughness_name)
+		{
+			texture_message = last_roughness_data;
+		}
+		else
+		{
+			//查找该纹理名对应的纹理ID
+			int index_check;
+			for (int i = 0; i < picture_namelist.size(); ++i)
+			{
+				if (picture_namelist[i] == name_roughness)
+				{
+					index_check = i;
+					last_roughness_name = name_roughness;
+					break;
+				}
+			}
+			//寻找其位置及ID
+			texture_message = texture_deal->get_diffusetexture_data_byID(index_check);
+			last_roughness_data = texture_message;
+		}
+		vertex_need[i].tex_id.w = texture_message.now_index;
+		//更新纹理坐标位置
+		vertex_need[i].tex2.z = tex_coord_x_rec * static_cast<float>(texture_message.pic_width) / static_cast<float>(picture_type_width);
+		vertex_need[i].tex2.w = tex_coord_y_rec * static_cast<float>(texture_message.pic_height) / static_cast<float>(picture_type_height);
+		vertex_need[i].tex2.z += static_cast<float>(texture_message.place_data.x_st) / static_cast<float>(picture_type_width);
+		vertex_need[i].tex2.w += static_cast<float>(texture_message.place_data.y_st) / static_cast<float>(picture_type_height);
 
 
 		out_stream.write((char *)&vertex_need[i], sizeof(vertex_need[i]));
@@ -678,12 +1080,54 @@ void scene_test_square::change_model_texcoord(point_common *vertex_need, int poi
 }
 void scene_test_square::display()
 {
-
-	//show_model();
-	show_model_single();
+	//draw_brdfdata();
+	if (if_have_model)
+	{
+		show_model();
+	}
+	show_cube();
+	show_sky();
+	show_pbr_metallic(pbr_list[now_show_part]);
+	show_pbr_roughness(pbr_list[now_show_part]);
+	show_metallic_choose();
+	show_roughness_choose();
+	show_read_mdoel();
+	show_write_mdoel();
+	//show_square();
+	//show_model_single();
+}
+void scene_test_square::draw_brdfdata()
+{
+	d3d_pancy_basic_singleton::GetInstance()->set_render_target(brdf_target, NULL);
+	D3D11_VIEWPORT viewPort;
+	viewPort.Width = 1024.0f;
+	viewPort.Height = 1024.0f;
+	viewPort.MaxDepth = 1.0f;
+	viewPort.MinDepth = 0.0f;
+	viewPort.TopLeftX = 0.0f;
+	viewPort.TopLeftY = 0.0f;
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->RSSetViewports(1, &viewPort);
+	engine_basic::engine_fail_reason check_error;
+	auto shader_brdf = shader_control::GetInstance()->get_shader_brdf_pre(check_error);
+	ID3DX11EffectTechnique *teque_need;
+	shader_brdf->get_technique(&teque_need, "draw_brdf_pre");
+	picture_buf->get_teque(teque_need);
+	picture_buf->show_mesh();
+	d3d_pancy_basic_singleton::GetInstance()->restore_render_target();
 }
 void scene_test_square::show_model()
 {
+
+	D3D11_VIEWPORT viewPort;
+	viewPort.Width = 800.0f;
+	viewPort.Height = 600.0f;
+	viewPort.MaxDepth = 1.0f;
+	viewPort.MinDepth = 0.0f;
+	viewPort.TopLeftX = 0.0f;
+	viewPort.TopLeftY = 200.0f;
+	//d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->RSSetViewports(1, &viewPort);
+
+	d3d_pancy_basic_singleton::GetInstance()->clear_basicrender_target(viewPort);
 	engine_basic::engine_fail_reason check_error;
 	auto shader_need = shader_control::GetInstance()->get_shader_virtual_light(check_error);
 	XMMATRIX trans_world;
@@ -693,7 +1137,7 @@ void scene_test_square::show_model()
 	XMFLOAT4X4 world_matrix;
 	XMFLOAT4X4 final_matrix;
 	rec += 0.001f;
-	trans_world = XMMatrixTranslation(0.0, -5.0, 0.0);
+	trans_world = XMMatrixTranslation(0.0, 10.0, 0.0);
 	scal_world = XMMatrixScaling(1, 1, 1);
 	//XMMATRIX proj = DirectX::XMMatrixPerspectiveFovLH(XM_PI*0.25f, 800.0f / 600.0f, 0.1f, 1000.f);
 	XMFLOAT4X4 view_mat;
@@ -706,13 +1150,21 @@ void scene_test_square::show_model()
 	shader_need->set_trans_world(&world_matrix);
 	shader_need->set_trans_all(&final_matrix);
 	ID3DX11EffectTechnique *teque_need;
-	shader_need->get_technique(&teque_need, "light_tech");
-	mesh_model_need->get_technique(teque_need);
+	XMFLOAT3 view_pos;
+	pancy_camera::get_instance()->get_view_position(&view_pos);
+	shader_need->set_view_pos(view_pos);
+	shader_need->set_tex_environment(cubemap_resource);
+	shader_need->set_tex_brdfluv(brdf_pic);
 	for (int i = 0; i < mesh_model_need->get_meshnum(); ++i)
 	{
 		material_list rec_need;
 		mesh_model_need->get_texture(&rec_need, i);
 		shader_need->set_tex_diffuse(rec_need.tex_diffuse_resource);
+		shader_need->set_tex_metallic(pbr_list[i].metallic);
+		shader_need->set_tex_roughness(pbr_list[i].roughness);
+
+		shader_need->get_technique(&teque_need, "light_tech_pbr");
+		mesh_model_need->get_technique(teque_need);
 		mesh_model_need->draw_part(i);
 	}
 }
@@ -749,7 +1201,7 @@ void scene_test_square::show_model_single()
 	shader_need->set_tex_diffuse_array(test_resource);
 	model_out_test->show_mesh();
 }
-void scene_test_square::show_square()
+void scene_test_square::show_square(texture_combine *texture_deal)
 {
 	engine_basic::engine_fail_reason check_error;
 	auto shader_picture = shader_control::GetInstance()->get_shader_picture(check_error);
@@ -858,6 +1310,27 @@ void scene_test_square::update(float delta_time)
 		scene_camera->rotation_up(user_input->MouseMove_X() * 0.001f);
 		scene_camera->rotation_right(user_input->MouseMove_Y() * 0.001f);
 	}
+	if (user_input->check_mouseDown(0))
+	{
+		if_button_down = true;
+		if_click = false;
+	}
+	else if (if_button_down)
+	{
+		if_button_down = false;
+		if_click = true;
+	}
+	else
+	{
+		if_click = false;
+	}
+
+
+
+
+
+
+
 }
 void scene_test_square::release()
 {
@@ -873,11 +1346,330 @@ void scene_test_square::release()
 	{
 		picture_buf->release();
 	}
-	model_out_test->release();
-	texture_deal->releae();
-	test_resource->Release();
+	mat_need_pbrbasic.metallic->Release();
+	mat_need_pbrbasic.roughness->Release();
+	for (auto data = pbr_list.begin(); data != pbr_list.end(); ++data)
+	{
+		if(data._Ptr->metallic_name != "basic_metallic")
+		{
+			data._Ptr->metallic->Release();
+		}
+		if (data._Ptr->roughness_name != "basic_roughness")
+		{
+			data._Ptr->roughness->Release();
+		}
+	}
+	tex_floor->Release();
+	if (model_out_test != NULL)
+	{
+		model_out_test->release();
+	}
+	//	if (texture_deal != NULL) 
+	//	{
+	//		texture_deal->releae();
+	//	}
+	if (test_resource != NULL)
+	{
+		test_resource->Release();
+	}
+	metallic_choose_tex->Release();
+	roughness_choose_tex->Release();
+	cubemap_resource->Release();
+	ballmesh_need->release();
+	AlphaToCoverageBS->Release();
+	read_model_tex->Release();
+	export_model_tex->Release();
+	brdf_pic->Release();
+	brdf_target->Release();
+
+}
+void scene_test_square::show_pbr_metallic(pbr_material mat_in)
+{
+	//修改视口大小
+	D3D11_VIEWPORT viewPort;
+	viewPort.Width = 250;
+	viewPort.Height = 250;
+	viewPort.MaxDepth = 1.0f;
+	viewPort.MinDepth = 0.0f;
+	viewPort.TopLeftX = 850.0f;
+	viewPort.TopLeftY = 120.0f;
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->RSSetViewports(1, &viewPort);
+	engine_basic::engine_fail_reason check_error;
+	auto shader_picture = shader_control::GetInstance()->get_shader_picture(check_error);
+	shader_picture->set_UI_position(XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f));
+	shader_picture->set_UI_scal(XMFLOAT4(1.0f, 1.0f, 0.0f, 0.0f));
+	shader_picture->set_tex_color_resource(mat_in.metallic);
+	ID3DX11EffectTechnique *teque_need;
+	shader_picture->get_technique(&teque_need, "draw_ui");
+	picture_buf->get_teque(teque_need);
+	picture_buf->show_mesh();
+}
+void scene_test_square::show_pbr_roughness(pbr_material mat_in)
+{
+	//修改视口大小
+	D3D11_VIEWPORT viewPort;
+	viewPort.Width = 250;
+	viewPort.Height = 250;
+	viewPort.MaxDepth = 1.0f;
+	viewPort.MinDepth = 0.0f;
+	viewPort.TopLeftX = 850.0f;
+	viewPort.TopLeftY = 480.0f;
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->RSSetViewports(1, &viewPort);
+	engine_basic::engine_fail_reason check_error;
+	auto shader_picture = shader_control::GetInstance()->get_shader_picture(check_error);
+	shader_picture->set_UI_position(XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f));
+	shader_picture->set_UI_scal(XMFLOAT4(1.0f, 1.0f, 0.0f, 0.0f));
+	shader_picture->set_tex_color_resource(mat_in.roughness);
+	ID3DX11EffectTechnique *teque_need;
+	shader_picture->get_technique(&teque_need, "draw_ui");
+	picture_buf->get_teque(teque_need);
+	picture_buf->show_mesh();
 }
 
+
+void scene_test_square::show_metallic_choose()
+{
+	//设置渲染模式
+	float blendFactor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetBlendState(AlphaToCoverageBS, blendFactor, 0xffffffff);
+	//修改视口大小
+	D3D11_VIEWPORT viewPort;
+	viewPort.Width = 150;
+	viewPort.Height = 50;
+	viewPort.MaxDepth = 1.0f;
+	viewPort.MinDepth = 0.0f;
+	viewPort.TopLeftX = 900.0f;
+	viewPort.TopLeftY = 50.0f;
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->RSSetViewports(1, &viewPort);
+	engine_basic::engine_fail_reason check_error;
+	auto shader_picture = shader_control::GetInstance()->get_shader_picture(check_error);
+	auto point = d3d_pancy_basic_singleton::GetInstance()->update_mouse();
+	if (point.x > viewPort.TopLeftX && point.x < viewPort.TopLeftX + viewPort.Width && point.y > viewPort.TopLeftY && point.y < viewPort.TopLeftY + viewPort.Height)
+	{
+		shader_picture->set_UI_position(XMFLOAT4(0.0f, 0.5f, 0.0f, 0.0f));
+		if (if_click)
+		{
+			//保存当前路径
+			DWORD length_currentdir;
+			TCHAR current_dir_path[MAX_PATH];
+			ZeroMemory(current_dir_path, sizeof(current_dir_path));
+			GetCurrentDirectory(MAX_PATH, current_dir_path);
+			//打开文件
+			GetOpenFileName(&ofn);
+			ID3D11ShaderResourceView *RSV_check;
+			auto hr_need = CreateDDSTextureFromFileEx(d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device(), d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex(), szPath, 0, D3D11_USAGE_DEFAULT, D3D11_BIND_SHADER_RESOURCE, 0, 0, false, NULL, &RSV_check);
+			if (FAILED(hr_need))
+			{
+				MessageBox(0, L"load tex error", L"error", MB_OK);
+			}
+			else
+			{
+				pbr_list[now_show_part].metallic->Release();
+				pbr_list[now_show_part].metallic = RSV_check;
+			}
+			//还原当前路径
+			SetCurrentDirectory(current_dir_path);
+		}
+	}
+	else
+	{
+		shader_picture->set_UI_position(XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f));
+	}
+	shader_picture->set_UI_scal(XMFLOAT4(1.0f, 0.5f, 0.0f, 0.0f));
+	shader_picture->set_tex_color_resource(metallic_choose_tex);
+	ID3DX11EffectTechnique *teque_need;
+	shader_picture->get_technique(&teque_need, "draw_ui_move");
+	picture_buf->get_teque(teque_need);
+	picture_buf->show_mesh();
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetBlendState(NULL, blendFactor, 0xffffffff);
+}
+void scene_test_square::show_roughness_choose()
+{
+	//设置渲染模式
+	float blendFactor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetBlendState(AlphaToCoverageBS, blendFactor, 0xffffffff);
+	//修改视口大小
+	D3D11_VIEWPORT viewPort;
+	viewPort.Width = 150;
+	viewPort.Height = 50;
+	viewPort.MaxDepth = 1.0f;
+	viewPort.MinDepth = 0.0f;
+	viewPort.TopLeftX = 900.0f;
+	viewPort.TopLeftY = 400.0f;
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->RSSetViewports(1, &viewPort);
+	engine_basic::engine_fail_reason check_error;
+	auto shader_picture = shader_control::GetInstance()->get_shader_picture(check_error);
+	auto point = d3d_pancy_basic_singleton::GetInstance()->update_mouse();
+	if (point.x > viewPort.TopLeftX && point.x < viewPort.TopLeftX + viewPort.Width && point.y > viewPort.TopLeftY && point.y < viewPort.TopLeftY + viewPort.Height)
+	{
+		shader_picture->set_UI_position(XMFLOAT4(0.0f, 0.5f, 0.0f, 0.0f));
+		if (if_click)
+		{
+			//保存当前路径
+			DWORD length_currentdir;
+			TCHAR current_dir_path[MAX_PATH];
+			ZeroMemory(current_dir_path, sizeof(current_dir_path));
+			GetCurrentDirectory(MAX_PATH, current_dir_path);
+			//打开文件
+			GetOpenFileName(&ofn);
+			ID3D11ShaderResourceView *RSV_check;
+			auto hr_need = CreateDDSTextureFromFileEx(d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device(), d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex(), szPath, 0, D3D11_USAGE_DEFAULT, D3D11_BIND_SHADER_RESOURCE, 0, 0, false, NULL, &RSV_check);
+			if (FAILED(hr_need))
+			{
+				MessageBox(0, L"load tex error", L"error", MB_OK);
+			}
+			else
+			{
+				pbr_list[now_show_part].roughness->Release();
+				pbr_list[now_show_part].roughness = RSV_check;
+			}
+			//还原当前路径
+			SetCurrentDirectory(current_dir_path);
+		}
+	}
+	else
+	{
+		shader_picture->set_UI_position(XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f));
+	}
+	shader_picture->set_UI_scal(XMFLOAT4(1.0f, 0.5f, 0.0f, 0.0f));
+	shader_picture->set_tex_color_resource(roughness_choose_tex);
+	ID3DX11EffectTechnique *teque_need;
+	shader_picture->get_technique(&teque_need, "draw_ui_move");
+	picture_buf->get_teque(teque_need);
+	picture_buf->show_mesh();
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetBlendState(NULL, blendFactor, 0xffffffff);
+}
+string get_file_path(string filename)
+{
+	int end = -1;
+	string out;
+	for (int i = filename.size() - 1; i >= 0; --i)
+	{
+		if (filename[i] == '\\')
+		{
+			end = i;
+			break;
+		}
+	}
+	for (int i = 0; i <= end; ++i)
+	{
+		out += filename[i];
+	}
+	return out;
+}
+void scene_test_square::show_read_mdoel()
+{
+	//设置渲染模式
+	float blendFactor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetBlendState(AlphaToCoverageBS, blendFactor, 0xffffffff);
+	//修改视口大小
+	D3D11_VIEWPORT viewPort;
+	viewPort.Width = 150;
+	viewPort.Height = 50;
+	viewPort.MaxDepth = 1.0f;
+	viewPort.MinDepth = 0.0f;
+	viewPort.TopLeftX = 100.0f;
+	viewPort.TopLeftY = 50.0f;
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->RSSetViewports(1, &viewPort);
+	engine_basic::engine_fail_reason check_error;
+	auto shader_picture = shader_control::GetInstance()->get_shader_picture(check_error);
+	auto point = d3d_pancy_basic_singleton::GetInstance()->update_mouse();
+	if (point.x > viewPort.TopLeftX && point.x < viewPort.TopLeftX + viewPort.Width && point.y > viewPort.TopLeftY && point.y < viewPort.TopLeftY + viewPort.Height)
+	{
+		shader_picture->set_UI_position(XMFLOAT4(0.0f, 0.5f, 0.0f, 0.0f));
+		if (if_click)
+		{
+			//保存当前路径
+			DWORD length_currentdir;
+			TCHAR current_dir_path[MAX_PATH];
+			ZeroMemory(current_dir_path, sizeof(current_dir_path));
+			GetCurrentDirectory(MAX_PATH, current_dir_path);
+			//打开文件
+			GetOpenFileName(&omodelfn);
+			DWORD dwMinSize = 0;
+			LPSTR lpszStr = NULL;
+			dwMinSize = WideCharToMultiByte(CP_OEMCP, NULL, szPath_file, -1, NULL, 0, NULL, FALSE);
+
+			lpszStr = new char[dwMinSize];
+			WideCharToMultiByte(CP_OEMCP, NULL, szPath_file, -1, lpszStr, dwMinSize, NULL, FALSE);
+
+			string filename_str = lpszStr;
+			auto path = get_file_path(filename_str);
+			load_model(filename_str, path);
+			//还原当前路径
+			SetCurrentDirectory(current_dir_path);
+		}
+	}
+	else
+	{
+		shader_picture->set_UI_position(XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f));
+	}
+	shader_picture->set_UI_scal(XMFLOAT4(1.0f, 0.5f, 0.0f, 0.0f));
+	shader_picture->set_tex_color_resource(read_model_tex);
+	ID3DX11EffectTechnique *teque_need;
+	shader_picture->get_technique(&teque_need, "draw_ui_move");
+	picture_buf->get_teque(teque_need);
+	picture_buf->show_mesh();
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetBlendState(NULL, blendFactor, 0xffffffff);
+}
+void scene_test_square::show_write_mdoel()
+{
+	//设置渲染模式
+	float blendFactor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetBlendState(AlphaToCoverageBS, blendFactor, 0xffffffff);
+	//修改视口大小
+	D3D11_VIEWPORT viewPort;
+	viewPort.Width = 150;
+	viewPort.Height = 50;
+	viewPort.MaxDepth = 1.0f;
+	viewPort.MinDepth = 0.0f;
+	viewPort.TopLeftX = 400.0f;
+	viewPort.TopLeftY = 50.0f;
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->RSSetViewports(1, &viewPort);
+	engine_basic::engine_fail_reason check_error;
+	auto shader_picture = shader_control::GetInstance()->get_shader_picture(check_error);
+	auto point = d3d_pancy_basic_singleton::GetInstance()->update_mouse();
+	if (point.x > viewPort.TopLeftX && point.x < viewPort.TopLeftX + viewPort.Width && point.y > viewPort.TopLeftY && point.y < viewPort.TopLeftY + viewPort.Height)
+	{
+		shader_picture->set_UI_position(XMFLOAT4(0.0f, 0.5f, 0.0f, 0.0f));
+		if (if_click)
+		{
+			//保存当前路径
+			DWORD length_currentdir;
+			TCHAR current_dir_path[MAX_PATH];
+			ZeroMemory(current_dir_path, sizeof(current_dir_path));
+			GetCurrentDirectory(MAX_PATH, current_dir_path);
+			//保存文件
+			GetSaveFileName(&ooutfn);
+			DWORD dwMinSize = 0;
+			LPSTR lpszStr = NULL;
+			dwMinSize = WideCharToMultiByte(CP_OEMCP, NULL, szPathcurrent_save, -1, NULL, 0, NULL, FALSE);
+
+			lpszStr = new char[dwMinSize];
+			WideCharToMultiByte(CP_OEMCP, NULL, szPathcurrent_save, -1, lpszStr, dwMinSize, NULL, FALSE);
+
+			string filename_str = lpszStr;
+			if (filename_str != "")
+			{
+				auto path = get_file_path(filename_str);
+				export_model(path, filename_str);
+			}
+			//还原当前路径
+			SetCurrentDirectory(current_dir_path);
+		}
+	}
+	else
+	{
+		shader_picture->set_UI_position(XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f));
+	}
+	shader_picture->set_UI_scal(XMFLOAT4(1.0f, 0.5f, 0.0f, 0.0f));
+	shader_picture->set_tex_color_resource(export_model_tex);
+	ID3DX11EffectTechnique *teque_need;
+	shader_picture->get_technique(&teque_need, "draw_ui_move");
+	picture_buf->get_teque(teque_need);
+	picture_buf->show_mesh();
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetBlendState(NULL, blendFactor, 0xffffffff);
+}
 
 pancy_scene_control::pancy_scene_control()
 {

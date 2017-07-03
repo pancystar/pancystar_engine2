@@ -111,6 +111,11 @@ engine_basic::engine_fail_reason mesh_cube::find_point(point_common *vertex,UINT
 		{ XMFLOAT3(1.0, -1.0, -1.0), XMFLOAT3(0.0, -1.0, 0.0), XMFLOAT3(1.0, 0.0, 0.0),XMUINT4(0,0,0,0), XMFLOAT4(1.0, 0.0,0,0),XMFLOAT4(0.0f,0.0f,0.0f,0.0f) },
 		{ XMFLOAT3(1.0, -1.0, 1.0), XMFLOAT3(0.0, -1.0, 0.0), XMFLOAT3(1.0, 0.0, 0.0),XMUINT4(0,0,0,0), XMFLOAT4(1.0, 1.0,0,0),XMFLOAT4(0.0f,0.0f,0.0f,0.0f) }
 	};
+	for (int i = 0; i < 24; ++i) 
+	{
+		square_test[i].tex.x *= 100.0f;
+		square_test[i].tex.y *= 100.0f;
+	}
 	//创建索引数组。
 	num_vertex = sizeof(square_test) / sizeof(point_common);
 	for (int i = 0; i < num_vertex; ++i)
@@ -156,6 +161,101 @@ engine_basic::engine_fail_reason mesh_square::find_point(point_2D *vertex, UINT 
 	for (int i = 0; i < num_index; ++i)
 	{
 		index[i] = indices[i];
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+
+//球面
+mesh_ball::mesh_ball(bool if_adj, int circle_num_need, int vertex_percircle_need) :Geometry<point_common>(if_adj)
+{
+	circle_num = circle_num_need;
+	vertex_percircle = vertex_percircle_need;
+	all_vertex = circle_num_need*vertex_percircle_need + 2;
+	all_index = circle_num_need*vertex_percircle_need * 6;
+}
+engine_basic::engine_fail_reason mesh_ball::find_point(point_common *vertex, UINT *index, int &num_vertex, int &num_index)
+{
+	num_vertex = 0;
+	num_index = 0;
+	float radius = 1.0;
+	//填充顶点的位置信息
+	for (int i = 0; i < circle_num; ++i)
+	{
+		float phy = XM_PI * static_cast<float>(i + 1) / static_cast<float>(circle_num + 1); //球面角
+		float tmpRadius = radius * sin(phy);//球面每个平面所截的圆半径
+		for (int j = 0; j < vertex_percircle; ++j)
+		{
+			float theta = 2 * XM_PI * static_cast<float>(j) / static_cast<float>(vertex_percircle);//圆面角  
+
+			float x = tmpRadius*cos(theta);
+			float y = radius*cos(phy);
+			float z = tmpRadius*sin(theta);
+			//位置坐标
+			vertex[num_vertex].position = XMFLOAT3(x, y, z);
+			XMVECTOR N = XMVectorSet(x, y, z, 0.f);
+			XMStoreFloat3(&vertex[num_vertex++].normal, XMVector3Normalize(N));
+		}
+	}
+	//填充顶点的索引信息
+	for (int i = 0; i < circle_num - 1; ++i)
+	{
+		for (int j = 0; j < vertex_percircle; ++j)
+		{
+			if (j == vertex_percircle - 1)
+			{
+				index[num_index++] = i * vertex_percircle + j;
+				index[num_index++] = (i + 1) * vertex_percircle;
+				index[num_index++] = (i + 1) * vertex_percircle + j;
+				index[num_index++] = i * vertex_percircle + j;
+				index[num_index++] = i * vertex_percircle;
+				index[num_index++] = (i + 1) * vertex_percircle;
+			}
+			else
+			{
+				index[num_index++] = i * vertex_percircle + j;
+				index[num_index++] = (i + 1) * vertex_percircle + j + 1;
+				index[num_index++] = (i + 1) * vertex_percircle + j;
+				index[num_index++] = i * vertex_percircle + j;
+				index[num_index++] = i * vertex_percircle + j + 1;
+				index[num_index++] = (i + 1) * vertex_percircle + j + 1;
+			}
+		}
+	}
+	//加上上下盖信息
+	vertex[num_vertex].position = XMFLOAT3(0, radius, 0);
+	vertex[num_vertex++].normal = XMFLOAT3(0, 1, 0);
+	for (int j = 0; j < vertex_percircle; ++j)
+	{
+		if (j == vertex_percircle - 1)
+		{
+			index[num_index++] = num_vertex - 1;
+			index[num_index++] = 0;
+			index[num_index++] = j;
+		}
+		else
+		{
+			index[num_index++] = num_vertex - 1;
+			index[num_index++] = j + 1;
+			index[num_index++] = j;
+		}
+	}
+	vertex[num_vertex].position = XMFLOAT3(0, -radius, 0);
+	vertex[num_vertex++].normal = XMFLOAT3(0, -1, 0);
+	for (int j = 0; j < vertex_percircle; ++j)
+	{
+		if (j == vertex_percircle - 1)
+		{
+			index[num_index++] = num_vertex - 1;
+			index[num_index++] = (circle_num - 1) * vertex_percircle + j;
+			index[num_index++] = (circle_num - 1) * vertex_percircle;
+		}
+		else
+		{
+			index[num_index++] = num_vertex - 1;
+			index[num_index++] = (circle_num - 1) * vertex_percircle + j;
+			index[num_index++] = (circle_num - 1) * vertex_percircle + j + 1;
+		}
 	}
 	engine_basic::engine_fail_reason succeed;
 	return succeed;

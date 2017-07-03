@@ -53,6 +53,12 @@
     <FxCompile Include="show_pic.fx">
       <Filter>源文件</Filter>
     </FxCompile>
+    <FxCompile Include="skycube.fx">
+      <Filter>源文件</Filter>
+    </FxCompile>
+    <FxCompile Include="render_brdf_list.fx">
+      <Filter>源文件</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="geometry.h">
@@ -84,5 +90,10 @@
     <None Include="light_count.hlsli">
       <Filter>源文件</Filter>
     </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="tex_pack_a.dds">
+      <Filter>源文件</Filter>
+    </Image>
   </ItemGroup>
 </Project>

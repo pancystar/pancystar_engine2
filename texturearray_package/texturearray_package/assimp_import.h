@@ -12,9 +12,9 @@
 
 struct material_list
 {
-	char                       texture_diffuse[128];       //漫反射纹理地址
-	char                       texture_normal[128];        //法线贴图纹理地址
-	char                       texture_specular[128];      //法线贴图纹理地址
+	char                       texture_diffuse[512];       //漫反射纹理地址
+	char                       texture_normal[512];        //法线贴图纹理地址
+	char                       texture_specular[512];      //法线贴图纹理地址
 	ID3D11ShaderResourceView   *tex_diffuse_resource;      //漫反射纹理
 	ID3D11ShaderResourceView   *texture_normal_resource;   //法线贴图纹理
 	ID3D11ShaderResourceView   *texture_specular_resource; //高光贴图纹理
@@ -50,8 +50,9 @@ protected:
 	material_list *matlist_need; //材质表
 	int material_optimization;
 	int mesh_optimization;
+	std::vector<std::string> meshpart_name;
 public:
-	assimp_basic(char* filename, char* texture_path);
+	assimp_basic(const char* filename, const char* texture_path);
 	engine_basic::engine_fail_reason model_create(bool if_adj,int alpha_partnum, int* alpha_part);
 	int get_meshnum();
 	int get_texnum() { return material_optimization; };
@@ -60,6 +61,7 @@ public:
 
 	virtual void release();
 	virtual void draw_part(int i);
+	std::string get_mesh_name_bypart(int mesh_id);
 	HRESULT get_technique(ID3DX11EffectTechnique *teque_need);
 protected:
 	virtual engine_basic::engine_fail_reason init_mesh(bool if_adj) = 0;
@@ -76,14 +78,14 @@ class model_reader_assimp : public assimp_basic
 	int vertex_final_num;
 	int index_pack_num;
 public:
-	model_reader_assimp(char* filename, char* texture_path);
+	model_reader_assimp(const char* filename, const char* texture_path);
 	void get_model_pack_num(int &vertex_num,int &index_num);
 	void get_model_pack_data(T *point_data, UINT *index_data);
 protected:
 	virtual engine_basic::engine_fail_reason init_mesh(bool if_adj);
 };
 template<typename T>
-model_reader_assimp<T>::model_reader_assimp(char* pFile, char *texture_path) : assimp_basic(pFile, texture_path)
+model_reader_assimp<T>::model_reader_assimp(const char* pFile, const char *texture_path) : assimp_basic(pFile, texture_path)
 {
 	point_pack_list = NULL;
 	index_pack_list = NULL;
@@ -98,6 +100,21 @@ engine_basic::engine_fail_reason model_reader_assimp<T>::init_mesh(bool if_adj)
 	{
 		//获取模型的第i个模块
 		const aiMesh* paiMesh = model_need->mMeshes[i];
+		std::string data_name = paiMesh->mName.C_Str();
+		int count = 0;
+		for (int i = 0; i < data_name.size(); ++i) 
+		{
+			if (data_name[i] == ' ') 
+			{
+				count = i+1;
+			}
+		}
+		std::string final_name;
+		for (int i = count; i < data_name.size(); ++i)
+		{
+			final_name += data_name[i];
+		}
+		meshpart_name.push_back(final_name);
 		vertex_final_num += paiMesh->mNumVertices;
 		index_pack_num += paiMesh->mNumFaces * 3;
 	}

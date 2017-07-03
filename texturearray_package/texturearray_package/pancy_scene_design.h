@@ -43,6 +43,13 @@ struct int_list
 	int data_num;
 	save_picture_place data[100];
 };
+struct pbr_material 
+{
+	string metallic_name;
+	ID3D11ShaderResourceView *metallic;
+	string roughness_name;
+	ID3D11ShaderResourceView *roughness;
+};
 class texture_combine
 {
 	int picture_type_width;
@@ -54,6 +61,7 @@ class texture_combine
 	std::vector<int_list> picture_combine_list;
 	ID3D11ShaderResourceView *SRV_array;
 	std::vector<ID3D11RenderTargetView *> SRV_list;
+
 public:
 	texture_combine(int input_pic_num, int *input_width_list, int *input_height_list, int out_pic_width, int out_pic_height);
 	engine_basic::engine_fail_reason create();
@@ -71,18 +79,48 @@ private:
 
 class scene_test_square : public scene_root 
 {
+	pbr_material mat_need_pbrbasic;
+	int now_show_part;
+	ID3D11ShaderResourceView *brdf_pic;
+	ID3D11RenderTargetView *brdf_target;
+	point_common *data_point_need;
+	UINT *data_index_need;
+	int vertex_num, index_num;
+
+	bool if_have_model;
+	bool if_button_down;
+	bool if_click;
+	OPENFILENAME ofn;
+	TCHAR szPath[MAX_PATH];
+
+	OPENFILENAME omodelfn;
+	TCHAR szPath_file[MAX_PATH];
+
+	OPENFILENAME ooutfn;
+	TCHAR szPath_save[MAX_PATH];
+	TCHAR szPathcurrent_save[MAX_PATH];
+
+	ID3D11BlendState       *AlphaToCoverageBS;
 	ofstream out_stream;
 	int picture_type_width;
 	int picture_type_height;
 	float rec;
+	mesh_ball *ballmesh_need;
 	mesh_cube *mesh_need;
 	mesh_square *picture_buf;
 	mesh_model<point_common> *model_out_test;
-	texture_combine *texture_deal;
+	//texture_combine *texture_deal;
 	model_reader_assimp<point_common> *mesh_model_need;
-
+	ID3D11ShaderResourceView *tex_floor;
 	std::map<std::string, ID3D11ShaderResourceView*> rec_texture_packmap;
+	std::vector<pbr_material> pbr_list;
 	std::vector<string> picture_namelist;
+
+	ID3D11ShaderResourceView *metallic_choose_tex;
+	ID3D11ShaderResourceView *roughness_choose_tex;
+	ID3D11ShaderResourceView *read_model_tex;
+	ID3D11ShaderResourceView *export_model_tex;
+	ID3D11ShaderResourceView *cubemap_resource;
 
 	ID3D11ShaderResourceView *test_resource;
 public:
@@ -93,11 +131,28 @@ public:
 	void update(float delta_time);
 	void release();
 private:
+	void draw_brdfdata();
 	void show_model();
 	void show_model_single();
-	void show_square();
+	void show_square(texture_combine *texture_deal);
+	void show_cube();
+	void show_pbr_metallic(pbr_material mat_in);
+	void show_pbr_roughness(pbr_material mat_in);
+
+	void show_metallic_choose();
+	void show_roughness_choose();
+
+	void show_read_mdoel();
+	void show_write_mdoel();
+
+	void show_sky();
+
+	
+
+	engine_basic::engine_fail_reason load_model(string filename,string tex_path);
+	engine_basic::engine_fail_reason export_model(string filepath,string filename);
 	engine_basic::engine_fail_reason read_texture_from_file(std::vector<string> file_name_list);
-	void change_model_texcoord(point_common *vertex_need, int point_num);
+	void change_model_texcoord(texture_combine *texture_deal,point_common *vertex_need, int point_num);
 };
 
 

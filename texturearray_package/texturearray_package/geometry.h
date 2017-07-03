@@ -269,7 +269,15 @@ public:
 private:
 	engine_basic::engine_fail_reason find_point(point_2D *vertex, UINT *index, int &num_vertex, int &num_index);
 };
-
+class mesh_ball : public Geometry<point_common>
+{
+	int circle_num;
+	int vertex_percircle;
+public:
+	mesh_ball(bool if_adj,int circle_num_need, int vertex_percircle_need);
+private:
+	engine_basic::engine_fail_reason find_point(point_common *vertex, UINT *index, int &num_vertex, int &num_index);
+};
 template<typename T>
 class mesh_model : public Geometry<T> 
 {

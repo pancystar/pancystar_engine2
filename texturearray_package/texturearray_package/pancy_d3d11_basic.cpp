@@ -190,7 +190,12 @@ engine_basic::engine_fail_reason d3d_pancy_basic_singleton::change_size(int widt
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
-
+POINT d3d_pancy_basic_singleton::update_mouse()
+{
+	GetCursorPos(&point);            // 获取鼠标指针位置（屏幕坐标）
+	ScreenToClient(wind_hwnd, &point);    // 将鼠标指针位置转换为窗口坐标
+	return point;
+}
 engine_basic::engine_fail_reason d3d_pancy_basic_singleton::set_render_target(ID3D11RenderTargetView  *render_target, ID3D11DepthStencilView *depthstencil_target)
 {
 	if (render_target == NULL && depthstencil_target == NULL) 
@@ -222,6 +227,16 @@ engine_basic::engine_fail_reason d3d_pancy_basic_singleton::restore_render_targe
 }
 engine_basic::engine_fail_reason d3d_pancy_basic_singleton::clear_basicrender_target() 
 {
+	//初始化
+	XMVECTORF32 color = { 1.0f,1.0f,1.0f,1.0f };
+	contex_pancy->ClearRenderTargetView(RTV_back_buffer, reinterpret_cast<float*>(&color));
+	contex_pancy->ClearDepthStencilView(DSV_gbuffer, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.f, 0);
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason d3d_pancy_basic_singleton::clear_basicrender_target(D3D11_VIEWPORT viewPort_in)
+{
+	contex_pancy->RSSetViewports(1, &viewPort_in);
 	//初始化
 	XMVECTORF32 color = { 0.0f,0.0f,0.0f,1.0f };
 	contex_pancy->ClearRenderTargetView(RTV_back_buffer, reinterpret_cast<float*>(&color));

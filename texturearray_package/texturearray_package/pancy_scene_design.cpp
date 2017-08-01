@@ -348,7 +348,65 @@ engine_basic::engine_fail_reason scene_test_square::read_texture_from_file(std::
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
+engine_basic::engine_fail_reason scene_test_square::init_clip_texture()
+{
+	D3D11_TEXTURE2D_DESC dsDesc;
+	dsDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	dsDesc.Width = d3d_pancy_basic_singleton::GetInstance()->get_wind_width();
+	dsDesc.Height = d3d_pancy_basic_singleton::GetInstance()->get_wind_height();
+	dsDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+	dsDesc.MipLevels = 1;
+	dsDesc.ArraySize = 1;
+	dsDesc.CPUAccessFlags = 0;
+	dsDesc.MiscFlags = 0;
+	dsDesc.Usage = D3D11_USAGE_DEFAULT;
+	dsDesc.SampleDesc.Count = 1;
+	dsDesc.SampleDesc.Quality = 0;
+	ID3D11Texture2D* depthStencilBuffer;
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateTexture2D(&dsDesc, 0, &depthStencilBuffer);
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateDepthStencilView(depthStencilBuffer, 0, &clip_DSV);
+	depthStencilBuffer->Release();
+	//clip纹理
+	D3D11_TEXTURE2D_DESC texDesc;
+	texDesc.MipLevels = 1;
+	texDesc.ArraySize = 1;
+	texDesc.SampleDesc.Count = 1;
+	texDesc.SampleDesc.Quality = 0;
+	texDesc.Usage = D3D11_USAGE_DEFAULT;
+	texDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
+	texDesc.CPUAccessFlags = 0;
+	texDesc.MiscFlags = 0;
+	texDesc.Width = d3d_pancy_basic_singleton::GetInstance()->get_wind_width();
+	texDesc.Height = d3d_pancy_basic_singleton::GetInstance()->get_wind_height();
+	texDesc.Format = DXGI_FORMAT_R32_UINT;
 
+	HRESULT hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateTexture2D(&texDesc, 0, &clipTex0);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create clip map texture1 error");
+		return error_message;
+	}
+	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateShaderResourceView(clipTex0, 0, &clip_SRV);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create clip map SRV error");
+		return error_message;
+	}
+	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateRenderTargetView(clipTex0, 0, &clip_RTV);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create clip map RTV error");
+		return error_message;
+	}
+	hr = CreateCPUaccessBuf(texDesc, &CPU_read_buffer);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create clip map CPUread tex error");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
 
 engine_basic::engine_fail_reason scene_test_square::load_model(string filename, string tex_path)
 {
@@ -371,7 +429,7 @@ engine_basic::engine_fail_reason scene_test_square::load_model(string filename, 
 
 	for (auto mat_data = pbr_list.begin(); mat_data != pbr_list.end(); ++mat_data)
 	{
-		if (mat_data._Ptr->metallic_name != "basic_metallic") 
+		if (mat_data._Ptr->metallic_name != "basic_metallic")
 		{
 			mat_data._Ptr->metallic->Release();
 		}
@@ -443,7 +501,8 @@ engine_basic::engine_fail_reason scene_test_square::export_model(string filepath
 		delete model_out_test;
 		model_out_test = NULL;
 	}
-
+	picture_namelist.clear();
+	rec_texture_packmap.clear();
 	int width_list[1000], height_list[1000];
 	for (int i = 0; i < mesh_model_need->get_texnum(); ++i)
 	{
@@ -454,89 +513,90 @@ engine_basic::engine_fail_reason scene_test_square::export_model(string filepath
 		{
 			std::pair<string, ID3D11ShaderResourceView*> data_need(rec_need.texture_diffuse, rec_need.tex_diffuse_resource);
 			auto check_iferror = rec_texture_packmap.insert(data_need);
-			if (!check_iferror.second)
+			if (check_iferror.second)
 			{
-				continue;
+				picture_namelist.push_back(rec_need.texture_diffuse);
+				ID3D11Texture2D *resource_rec;
+				rec_need.tex_diffuse_resource->GetResource((ID3D11Resource**)&resource_rec);
+				D3D11_TEXTURE2D_DESC desc_tex;
+				resource_rec->GetDesc(&desc_tex);
+				width_list[rec_texture_packmap.size() - 1] = desc_tex.Width;
+				height_list[rec_texture_packmap.size() - 1] = desc_tex.Height;
+				resource_rec->Release();
 			}
-			picture_namelist.push_back(rec_need.texture_diffuse);
-			ID3D11Texture2D *resource_rec;
-			rec_need.tex_diffuse_resource->GetResource((ID3D11Resource**)&resource_rec);
-			D3D11_TEXTURE2D_DESC desc_tex;
-			resource_rec->GetDesc(&desc_tex);
-			width_list[rec_texture_packmap.size() - 1] = desc_tex.Width;
-			height_list[rec_texture_packmap.size() - 1] = desc_tex.Height;
-			resource_rec->Release();
+
 		}
 		//法线贴图
 		if (rec_need.texture_normal_resource != NULL)
 		{
 			std::pair<string, ID3D11ShaderResourceView*> data_need(rec_need.texture_normal, rec_need.texture_normal_resource);
 			auto check_iferror = rec_texture_packmap.insert(data_need);
-			if (!check_iferror.second)
+			if (check_iferror.second)
 			{
-				continue;
+				picture_namelist.push_back(rec_need.texture_normal);
+				ID3D11Texture2D *resource_rec;
+				rec_need.texture_normal_resource->GetResource((ID3D11Resource**)&resource_rec);
+				D3D11_TEXTURE2D_DESC desc_tex;
+				resource_rec->GetDesc(&desc_tex);
+				width_list[rec_texture_packmap.size() - 1] = desc_tex.Width;
+				height_list[rec_texture_packmap.size() - 1] = desc_tex.Height;
+				resource_rec->Release();
 			}
-			picture_namelist.push_back(rec_need.texture_normal);
-			ID3D11Texture2D *resource_rec;
-			rec_need.texture_normal_resource->GetResource((ID3D11Resource**)&resource_rec);
-			D3D11_TEXTURE2D_DESC desc_tex;
-			resource_rec->GetDesc(&desc_tex);
-			width_list[rec_texture_packmap.size() - 1] = desc_tex.Width;
-			height_list[rec_texture_packmap.size() - 1] = desc_tex.Height;
-			resource_rec->Release();
 		}
 		//高光贴图
 		if (rec_need.texture_specular_resource != NULL)
 		{
 			std::pair<string, ID3D11ShaderResourceView*> data_need(rec_need.texture_specular, rec_need.texture_specular_resource);
 			auto check_iferror = rec_texture_packmap.insert(data_need);
-			if (!check_iferror.second)
+			if (check_iferror.second)
 			{
-				continue;
+				picture_namelist.push_back(rec_need.texture_specular);
+				ID3D11Texture2D *resource_rec;
+				rec_need.texture_specular_resource->GetResource((ID3D11Resource**)&resource_rec);
+				D3D11_TEXTURE2D_DESC desc_tex;
+				resource_rec->GetDesc(&desc_tex);
+				width_list[rec_texture_packmap.size() - 1] = desc_tex.Width;
+				height_list[rec_texture_packmap.size() - 1] = desc_tex.Height;
+				resource_rec->Release();
 			}
-			picture_namelist.push_back(rec_need.texture_specular);
+
+		}
+		/*
+		新的贴图种类在这里填写
+		*/
+	}
+	for (int i = 0; i < mesh_model_need->get_meshnum(); ++i)
+	{
+		//金属度贴图
+		std::pair<string, ID3D11ShaderResourceView*> data_need_metallic(pbr_list[i].metallic_name, pbr_list[i].metallic);
+		auto check_iferror = rec_texture_packmap.insert(data_need_metallic);
+		if (check_iferror.second)
+		{
+			picture_namelist.push_back(pbr_list[i].metallic_name);
 			ID3D11Texture2D *resource_rec;
-			rec_need.texture_specular_resource->GetResource((ID3D11Resource**)&resource_rec);
+			pbr_list[i].metallic->GetResource((ID3D11Resource**)&resource_rec);
 			D3D11_TEXTURE2D_DESC desc_tex;
 			resource_rec->GetDesc(&desc_tex);
 			width_list[rec_texture_packmap.size() - 1] = desc_tex.Width;
 			height_list[rec_texture_packmap.size() - 1] = desc_tex.Height;
 			resource_rec->Release();
 		}
-		/*
-		新的贴图种类在这里填写
-		*/
-	}
-	for (int i = 0; i < mesh_model_need->get_meshnum(); ++i) 
-	{
-		//金属度贴图
-		std::pair<string, ID3D11ShaderResourceView*> data_need_metallic(pbr_list[i].metallic_name, pbr_list[i].metallic);
-		auto check_iferror = rec_texture_packmap.insert(data_need_metallic);
-		if (!check_iferror.second)
-		{
-			continue;
-		}
-		picture_namelist.push_back(pbr_list[i].metallic_name);
-		ID3D11Texture2D *resource_rec;
-		pbr_list[i].metallic->GetResource((ID3D11Resource**)&resource_rec);
-		D3D11_TEXTURE2D_DESC desc_tex;
-		resource_rec->GetDesc(&desc_tex);
-		width_list[rec_texture_packmap.size() - 1] = desc_tex.Width;
-		height_list[rec_texture_packmap.size() - 1] = desc_tex.Height;
-		resource_rec->Release();
+		
 		//粗糙度贴图
 		std::pair<string, ID3D11ShaderResourceView*> data_need_roughness(pbr_list[i].roughness_name, pbr_list[i].roughness);
 		check_iferror = rec_texture_packmap.insert(data_need_roughness);
-		if (!check_iferror.second)
+		if (check_iferror.second)
 		{
-			continue;
+			picture_namelist.push_back(pbr_list[i].roughness_name);
+			ID3D11Texture2D *resource_rec;
+			pbr_list[i].roughness->GetResource((ID3D11Resource**)&resource_rec);
+			D3D11_TEXTURE2D_DESC desc_tex;
+			resource_rec->GetDesc(&desc_tex);
+			width_list[rec_texture_packmap.size() - 1] = desc_tex.Width;
+			height_list[rec_texture_packmap.size() - 1] = desc_tex.Height;
+			resource_rec->Release();
 		}
-		picture_namelist.push_back(pbr_list[i].roughness_name);
-		pbr_list[i].roughness->GetResource((ID3D11Resource**)&resource_rec);
-		resource_rec->GetDesc(&desc_tex);
-		width_list[rec_texture_packmap.size() - 1] = desc_tex.Width;
-		height_list[rec_texture_packmap.size() - 1] = desc_tex.Height;
-		resource_rec->Release();
+		
 	}
 	auto texture_deal = new texture_combine(rec_texture_packmap.size(), width_list, height_list, 1024, 1024);
 	engine_basic::engine_fail_reason error_message = texture_deal->create();
@@ -635,7 +695,11 @@ engine_basic::engine_fail_reason scene_test_square::create()
 		return error_message2;
 	}
 	ambientTex0->Release();
-
+	auto check_error = init_clip_texture();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
 
 	ZeroMemory(szPath, sizeof(szPath));
 	ZeroMemory(&ofn, sizeof(OPENFILENAME));
@@ -672,7 +736,7 @@ engine_basic::engine_fail_reason scene_test_square::create()
 
 
 
-	engine_basic::engine_fail_reason check_error = ballmesh_need->create_object();
+	check_error = ballmesh_need->create_object();
 	if (!check_error.check_if_failed())
 	{
 		return check_error;
@@ -695,7 +759,7 @@ engine_basic::engine_fail_reason scene_test_square::create()
 		return error_message2;
 	}
 
-	hr_need = CreateDDSTextureFromFileEx(d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device(), d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex(), L"pbr_basic\\white.dds", 0, D3D11_USAGE_DEFAULT, D3D11_BIND_SHADER_RESOURCE, 0, 0, false, NULL, &mat_need_pbrbasic.metallic);
+	hr_need = CreateDDSTextureFromFileEx(d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device(), d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex(), L"pbr_basic\\black.dds", 0, D3D11_USAGE_DEFAULT, D3D11_BIND_SHADER_RESOURCE, 0, 0, false, NULL, &mat_need_pbrbasic.metallic);
 	if (FAILED(hr_need))
 	{
 		engine_basic::engine_fail_reason error_message2(hr_need, "load model texture ball\\Sphere002_metallic.dds error");
@@ -981,7 +1045,7 @@ void scene_test_square::change_model_texcoord(texture_combine *texture_deal, poi
 		}
 		//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~更新金属度贴图纹理坐标~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 		string name_metallic = pbr_list[id_pre_need].metallic_name;
-		if (name_metallic == last_roughness_name)
+		if (name_metallic == last_metallic_name)
 		{
 			texture_message = last_metallic_data;
 		}
@@ -1083,12 +1147,16 @@ void scene_test_square::display()
 	//draw_brdfdata();
 	if (if_have_model)
 	{
+		find_model_clip();
 		show_model();
 	}
 	show_cube();
 	show_sky();
-	show_pbr_metallic(pbr_list[now_show_part]);
-	show_pbr_roughness(pbr_list[now_show_part]);
+	if (now_show_part != 99999)
+	{
+		show_pbr_metallic(pbr_list[now_show_part]);
+		show_pbr_roughness(pbr_list[now_show_part]);
+	}
 	show_metallic_choose();
 	show_roughness_choose();
 	show_read_mdoel();
@@ -1200,6 +1268,74 @@ void scene_test_square::show_model_single()
 	//shader_need->set_tex_diffuse(rec_need.tex_diffuse_resource);
 	shader_need->set_tex_diffuse_array(test_resource);
 	model_out_test->show_mesh();
+}
+void scene_test_square::find_model_clip()
+{
+	D3D11_VIEWPORT viewPort;
+	viewPort.Width = 800.0f;
+	viewPort.Height = 600.0f;
+	viewPort.MaxDepth = 1.0f;
+	viewPort.MinDepth = 0.0f;
+	viewPort.TopLeftX = 0.0f;
+	viewPort.TopLeftY = 200.0f;
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->RSSetViewports(1, &viewPort);
+	auto point = d3d_pancy_basic_singleton::GetInstance()->update_mouse();
+	if (if_click)
+	{
+		if (point.x > viewPort.TopLeftX && point.x < viewPort.TopLeftX + viewPort.Width && point.y > viewPort.TopLeftY && point.y < viewPort.TopLeftY + viewPort.Height)
+		{
+			ID3D11RenderTargetView* renderTargets[1] = { clip_RTV };
+			float clearColor[] = { 99999.0f, 0.0f, 0.0f, 1.0f };
+			d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetRenderTargets(1, renderTargets, clip_DSV);
+			d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearRenderTargetView(clip_RTV, clearColor);
+			d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearDepthStencilView(clip_DSV, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+			//contex_pancy->RSSetViewports(1, &viewPort);
+			engine_basic::engine_fail_reason check_error;
+			auto shader_need = shader_control::GetInstance()->get_shader_find_clip(check_error);
+			XMMATRIX trans_world;
+			XMMATRIX scal_world;
+			XMMATRIX rotation_world;
+			XMMATRIX rec_world;
+			XMFLOAT4X4 world_matrix;
+			XMFLOAT4X4 final_matrix;
+			rec += 0.001f;
+			trans_world = XMMatrixTranslation(0.0, 10.0, 0.0);
+			scal_world = XMMatrixScaling(1, 1, 1);
+			//XMMATRIX proj = DirectX::XMMatrixPerspectiveFovLH(XM_PI*0.25f, 800.0f / 600.0f, 0.1f, 1000.f);
+			XMFLOAT4X4 view_mat;
+			pancy_camera::get_instance()->count_view_matrix(&view_mat);
+			XMMATRIX proj = XMLoadFloat4x4(&engine_basic::perspective_message::get_instance()->get_proj_matrix());
+			rec_world = scal_world  *  trans_world * XMLoadFloat4x4(&view_mat) * proj;
+			XMStoreFloat4x4(&final_matrix, rec_world);
+			shader_need->set_trans_all(&final_matrix);
+			ID3DX11EffectTechnique *teque_need;
+			for (int i = 0; i < mesh_model_need->get_meshnum(); ++i)
+			{
+				shader_need->set_part_ID(XMUINT4(i, 0, 0, 0));
+				shader_need->get_technique(&teque_need, "draw_clipmap");
+				mesh_model_need->get_technique(teque_need);
+				mesh_model_need->draw_part(i);
+			}
+			d3d_pancy_basic_singleton::GetInstance()->restore_render_target();
+
+			CreateAndCopyToDebugBuf(CPU_read_buffer, clipTex0);
+			D3D11_TEXTURE2D_DESC texElementDesc;
+			CPU_read_buffer->GetDesc(&texElementDesc);
+
+			unsigned int rec_answer;
+			for (UINT mipLevel = 0; mipLevel < texElementDesc.MipLevels; ++mipLevel)
+			{
+				D3D11_MAPPED_SUBRESOURCE mappedTex2D;
+				HRESULT hr;
+				hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->Map(CPU_read_buffer, mipLevel, D3D11_MAP_READ, 0, &mappedTex2D);
+				unsigned int* rec = static_cast<unsigned int*>(mappedTex2D.pData) + (mappedTex2D.RowPitch / 4) * point.y;
+				rec_answer = rec[point.x];
+				//contex_pancy->UpdateSubresource(texArray, D3D11CalcSubresource(mipLevel, texElement, texElementDesc.MipLevels), 0, mappedTex2D.pData, mappedTex2D.RowPitch, mappedTex2D.DepthPitch);
+				d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->Unmap(CPU_read_buffer, mipLevel);
+			}
+			now_show_part = rec_answer;
+		}
+	}
 }
 void scene_test_square::show_square(texture_combine *texture_deal)
 {
@@ -1350,7 +1486,7 @@ void scene_test_square::release()
 	mat_need_pbrbasic.roughness->Release();
 	for (auto data = pbr_list.begin(); data != pbr_list.end(); ++data)
 	{
-		if(data._Ptr->metallic_name != "basic_metallic")
+		if (data._Ptr->metallic_name != "basic_metallic")
 		{
 			data._Ptr->metallic->Release();
 		}
@@ -1381,7 +1517,11 @@ void scene_test_square::release()
 	export_model_tex->Release();
 	brdf_pic->Release();
 	brdf_target->Release();
-
+	clipTex0->Release();
+	CPU_read_buffer->Release();
+	clip_SRV->Release();
+	clip_RTV->Release();
+	clip_DSV->Release();
 }
 void scene_test_square::show_pbr_metallic(pbr_material mat_in)
 {
@@ -1447,7 +1587,7 @@ void scene_test_square::show_metallic_choose()
 	if (point.x > viewPort.TopLeftX && point.x < viewPort.TopLeftX + viewPort.Width && point.y > viewPort.TopLeftY && point.y < viewPort.TopLeftY + viewPort.Height)
 	{
 		shader_picture->set_UI_position(XMFLOAT4(0.0f, 0.5f, 0.0f, 0.0f));
-		if (if_click)
+		if (if_click && now_show_part != 99999)
 		{
 			//保存当前路径
 			DWORD length_currentdir;
@@ -1464,8 +1604,19 @@ void scene_test_square::show_metallic_choose()
 			}
 			else
 			{
-				pbr_list[now_show_part].metallic->Release();
+				if (pbr_list[now_show_part].metallic_name != "basic_metallic")
+				{
+					pbr_list[now_show_part].metallic->Release();
+				}
+				DWORD dwMinSize = 0;
+				LPSTR lpszStr = NULL;
+				dwMinSize = WideCharToMultiByte(CP_OEMCP, NULL, szPath, -1, NULL, 0, NULL, FALSE);
+				lpszStr = new char[dwMinSize];
+				WideCharToMultiByte(CP_OEMCP, NULL, szPath, -1, lpszStr, dwMinSize, NULL, FALSE);
+				string filename_str = lpszStr;
+				pbr_list[now_show_part].metallic_name = filename_str;
 				pbr_list[now_show_part].metallic = RSV_check;
+
 			}
 			//还原当前路径
 			SetCurrentDirectory(current_dir_path);
@@ -1503,7 +1654,7 @@ void scene_test_square::show_roughness_choose()
 	if (point.x > viewPort.TopLeftX && point.x < viewPort.TopLeftX + viewPort.Width && point.y > viewPort.TopLeftY && point.y < viewPort.TopLeftY + viewPort.Height)
 	{
 		shader_picture->set_UI_position(XMFLOAT4(0.0f, 0.5f, 0.0f, 0.0f));
-		if (if_click)
+		if (if_click && now_show_part != 99999)
 		{
 			//保存当前路径
 			DWORD length_currentdir;
@@ -1520,7 +1671,17 @@ void scene_test_square::show_roughness_choose()
 			}
 			else
 			{
-				pbr_list[now_show_part].roughness->Release();
+				if (pbr_list[now_show_part].roughness_name != "basic_roughness")
+				{
+					pbr_list[now_show_part].roughness->Release();
+				}
+				DWORD dwMinSize = 0;
+				LPSTR lpszStr = NULL;
+				dwMinSize = WideCharToMultiByte(CP_OEMCP, NULL, szPath, -1, NULL, 0, NULL, FALSE);
+				lpszStr = new char[dwMinSize];
+				WideCharToMultiByte(CP_OEMCP, NULL, szPath, -1, lpszStr, dwMinSize, NULL, FALSE);
+				string filename_str = lpszStr;
+				pbr_list[now_show_part].roughness_name = filename_str;
 				pbr_list[now_show_part].roughness = RSV_check;
 			}
 			//还原当前路径
@@ -1670,6 +1831,25 @@ void scene_test_square::show_write_mdoel()
 	picture_buf->show_mesh();
 	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetBlendState(NULL, blendFactor, 0xffffffff);
 }
+void scene_test_square::CreateAndCopyToDebugBuf(ID3D11Resource *dest_res, ID3D11Resource *source_res)
+{
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->CopyResource(dest_res, source_res);
+}
+HRESULT scene_test_square::CreateCPUaccessBuf(D3D11_TEXTURE2D_DESC texDesc, ID3D11Texture2D **resource_out)
+{
+	texDesc.Usage = D3D11_USAGE_STAGING;
+	texDesc.BindFlags = 0;
+	texDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+	texDesc.MiscFlags = 0;
+	HRESULT hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateTexture2D(&texDesc, NULL, resource_out);
+	if (FAILED(hr))
+	{
+		return hr;
+	}
+	return S_OK;
+}
+
+
 
 pancy_scene_control::pancy_scene_control()
 {

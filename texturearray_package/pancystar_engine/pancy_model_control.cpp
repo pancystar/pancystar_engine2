@@ -105,12 +105,13 @@ void geometry_instance_view::update(XMFLOAT4X4 mat_in, float delta_time)
 
 
 
-geometry_resource_view::geometry_resource_view(model_reader_pancymesh *model_data_in, int ID_need)
+geometry_resource_view::geometry_resource_view(model_reader_pancymesh *model_data_in, int ID_need,bool if_dynamic_in)
 {
 	ID_instance_index = 0;
 	resource_view_ID = ID_need;
 	model_data = model_data_in;
 	if_cull_front = false;
+	if_dynamic = if_dynamic_in;
 }
 std::vector<XMFLOAT4X4> geometry_resource_view::get_matrix_list()
 {
@@ -202,11 +203,16 @@ engine_basic::engine_fail_reason geometry_resource_view::update(int instance_ID,
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
-void geometry_resource_view::draw()
+void geometry_resource_view::draw(bool if_static)
 {
 	//查看模型访问器中的实例数量
 	if (world_matrix_array.size() > 0)
 	{
+		if (if_static == true && if_dynamic == true) 
+		{
+			//当前的渲染pass只渲染静态物体，并且当前物体是动态的则跳过该次渲染
+			return;
+		}
 		if (world_matrix_array.size() > 1)
 		{
 			//实例数量大于一则调用多遍绘制drawcall
@@ -229,7 +235,7 @@ pancy_geometry_control_singleton::pancy_geometry_control_singleton()
 {
 	model_view_list = new geometry_ResourceView_list<geometry_resource_view>();
 }
-engine_basic::engine_fail_reason pancy_geometry_control_singleton::load_a_model_type(string file_name_mesh, string file_name_mat, int &model_type_ID)
+engine_basic::engine_fail_reason pancy_geometry_control_singleton::load_a_model_type(string file_name_mesh, string file_name_mat, bool if_dynamic, int &model_type_ID)
 {
 	//从文件中导入模型资源
 	model_reader_pancymesh *model_common = new model_reader_pancymesh_build<point_common>(file_name_mesh, file_name_mat);
@@ -240,7 +246,7 @@ engine_basic::engine_fail_reason pancy_geometry_control_singleton::load_a_model_
 		return error_check;
 	}
 	//根据模型资源创建访问器
-	geometry_resource_view *GRV_model = new geometry_resource_view(model_common, model_view_list->get_now_index());
+	geometry_resource_view *GRV_model = new geometry_resource_view(model_common, model_view_list->get_now_index(), if_dynamic);
 	//添加到模型管理表中
 	model_type_ID = model_view_list->add_new_geometry(*GRV_model);
 	if (model_type_ID < 0)

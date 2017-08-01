@@ -180,6 +180,20 @@ private:
 	void init_handle() {};                 //注册全局变量句柄
 	void set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member);
 };
+class find_clip : public shader_basic
+{
+	ID3DX11EffectVariable                 *partid_handle;            //物体ID
+	ID3DX11EffectMatrixVariable           *project_matrix_handle;      //全套几何变换句柄
+public:
+	find_clip(LPCWSTR filename);
+	engine_basic::engine_fail_reason set_trans_all(XMFLOAT4X4 *mat_need);//设置总变换
+	engine_basic::engine_fail_reason set_part_ID(XMUINT4 part_ID);
+	void release();
+private:
+	void init_handle();                 //注册全局变量句柄
+	void set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member);
+};
+
 class shader_control
 {
 private:
@@ -212,6 +226,7 @@ public:
 	std::shared_ptr<picture_show_shader> get_shader_picture(engine_basic::engine_fail_reason &if_succeed);
 	std::shared_ptr<shader_skycube> get_shader_sky_draw(engine_basic::engine_fail_reason &if_succeed);
 	std::shared_ptr<brdf_envpre_shader> get_shader_brdf_pre(engine_basic::engine_fail_reason &if_succeed);
+	std::shared_ptr<find_clip> get_shader_find_clip(engine_basic::engine_fail_reason &if_succeed);
 	engine_basic::engine_fail_reason add_a_new_shader(std::type_index class_name, std::shared_ptr<shader_basic> shader_in);
 	void release();
 private:

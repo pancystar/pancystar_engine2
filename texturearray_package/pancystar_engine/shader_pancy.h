@@ -257,6 +257,7 @@ class light_defered_lightbuffer : public shader_basic
 	ID3DX11EffectMatrixVariable           *invview_matrix_handle;      //取景变换逆变换句柄
 	ID3DX11EffectVectorVariable           *FrustumCorners;             //3D还原角点
 	ID3DX11EffectShaderResourceVariable   *NormalspecMap;             //法线镜面光纹理资源句柄
+	ID3DX11EffectShaderResourceVariable   *SpecRoughnessMap;           //镜面光粗糙度纹理资源句柄
 	ID3DX11EffectShaderResourceVariable   *DepthMap;                   //深度纹理资源句柄
 	ID3DX11EffectShaderResourceVariable   *texture_shadow;             //阴影纹理资源句柄
 public:
@@ -277,6 +278,7 @@ public:
 	engine_basic::engine_fail_reason set_invview_matrix(XMFLOAT4X4 *mat_need);                  //设置取景变换
 
 	engine_basic::engine_fail_reason set_Normalspec_tex(ID3D11ShaderResourceView *tex_in);	//设置法线镜面光纹理
+	engine_basic::engine_fail_reason set_SpecRoughness_tex(ID3D11ShaderResourceView *tex_in);	//设置镜面光粗糙度纹理
 	engine_basic::engine_fail_reason set_DepthMap_tex(ID3D11ShaderResourceView *tex_in);		//设置深度纹理
 	engine_basic::engine_fail_reason set_shadow_tex(ID3D11ShaderResourceView *tex_in);		//设置阴影纹理
 	engine_basic::engine_fail_reason set_projmessage(XMFLOAT3 proj_message);
@@ -290,6 +292,8 @@ class light_defered_draw : public shader_basic
 	ID3DX11EffectVariable                 *material_need;            //材质
 	ID3DX11EffectVariable                 *view_pos_handle;          //视点位置
 	ID3DX11EffectMatrixVariable           *world_matrix_handle;      //世界变换句柄
+	ID3DX11EffectMatrixVariable           *view_matrix_handle;       //取景变换句柄
+	ID3DX11EffectMatrixVariable           *invview_matrix_handle;    //取景变换逆变换句柄
 	ID3DX11EffectMatrixVariable           *final_matrix_handle;      //全套几何变换句柄
 	ID3DX11EffectMatrixVariable           *ssao_matrix_handle;       //ssao矩阵变换句柄
 	ID3DX11EffectMatrixVariable           *world_matrix_array_handle;//世界变换组矩阵
@@ -298,20 +302,29 @@ class light_defered_draw : public shader_basic
 	ID3DX11EffectShaderResourceVariable   *tex_light_specular_handle;//镜面光纹理资源句柄
 	ID3DX11EffectShaderResourceVariable   *texture_ssao_handle;      //环境光纹理资源句柄
 	ID3DX11EffectShaderResourceVariable   *texture_diffuse_handle;   //漫反射纹理资源句柄
-
+	ID3DX11EffectShaderResourceVariable   *texture_normal_handle;    //法线纹理资源句柄
+	ID3DX11EffectShaderResourceVariable   *texture_ibl_handle;       //环境光纹理资源句柄
+	ID3DX11EffectShaderResourceVariable   *tex_specroughness;        //镜面光&粗糙度
+	ID3DX11EffectShaderResourceVariable   *tex_brdf_list;            //brdf表
 public:
 	light_defered_draw(LPCWSTR filename);
 	engine_basic::engine_fail_reason set_view_pos(XMFLOAT3 eye_pos);
-	engine_basic::engine_fail_reason set_trans_ssao(XMFLOAT4X4 *mat_need);                   //设置环境光变换
-	engine_basic::engine_fail_reason set_trans_world(XMFLOAT4X4 *mat_need);                  //设置世界变换
-	engine_basic::engine_fail_reason set_trans_all(XMFLOAT4X4 *mat_need);                    //设置总变换
-	engine_basic::engine_fail_reason set_trans_viewproj(XMFLOAT4X4 *mat_need);               //设置取景*投影变换
-	engine_basic::engine_fail_reason set_material(pancy_material material_in);				//设置材质
-	engine_basic::engine_fail_reason set_ssaotex(ID3D11ShaderResourceView *tex_in);			//设置ssaomap
-	engine_basic::engine_fail_reason set_tex_diffuse_array(ID3D11ShaderResourceView *tex_in);		//设置漫反射纹理
-	engine_basic::engine_fail_reason set_diffuse_light_tex(ID3D11ShaderResourceView *tex_in);//设置漫反射光纹理
-	engine_basic::engine_fail_reason set_specular_light_tex(ID3D11ShaderResourceView *tex_in);//设置镜面反射光纹理
-	engine_basic::engine_fail_reason set_world_matrix_array(const XMFLOAT4X4* M, int cnt);	 //设置世界变换组矩阵
+	engine_basic::engine_fail_reason set_trans_ssao(XMFLOAT4X4 *mat_need);                                   //设置环境光变换
+	engine_basic::engine_fail_reason set_trans_world(XMFLOAT4X4 *mat_need);                                  //设置世界变换
+	engine_basic::engine_fail_reason set_trans_view(XMFLOAT4X4 *mat_need);                                   //设置取景变换
+	engine_basic::engine_fail_reason set_trans_invview(XMFLOAT4X4 *mat_need);                                //设置取景变换逆变换
+	engine_basic::engine_fail_reason set_trans_all(XMFLOAT4X4 *mat_need);                                    //设置总变换
+	engine_basic::engine_fail_reason set_trans_viewproj(XMFLOAT4X4 *mat_need);                               //设置取景*投影变换
+	engine_basic::engine_fail_reason set_material(pancy_material material_in);				                 //设置材质
+	engine_basic::engine_fail_reason set_ssaotex(ID3D11ShaderResourceView *tex_in);			                 //设置ssaomap
+	engine_basic::engine_fail_reason set_tex_diffuse_array(ID3D11ShaderResourceView *tex_in);	             //设置漫反射纹理
+	engine_basic::engine_fail_reason set_diffuse_light_tex(ID3D11ShaderResourceView *tex_in);                //设置漫反射光纹理
+	engine_basic::engine_fail_reason set_specular_light_tex(ID3D11ShaderResourceView *tex_in);               //设置镜面反射光纹理
+	engine_basic::engine_fail_reason set_normal_tex(ID3D11ShaderResourceView *tex_in);                       //设置法线纹理
+	engine_basic::engine_fail_reason set_IBL_tex(ID3D11ShaderResourceView *tex_in);                          //设置环境光纹理
+	engine_basic::engine_fail_reason set_tex_specroughness_resource(ID3D11ShaderResourceView *buffer_input); //设置镜面光&粗糙度纹理
+	engine_basic::engine_fail_reason set_tex_brdflist_resource(ID3D11ShaderResourceView *buffer_input);      //设置brdf查找表
+	engine_basic::engine_fail_reason set_world_matrix_array(const XMFLOAT4X4* M, int cnt);	                 //设置世界变换组矩阵
 	void release();
 private:
 	void init_handle();                 //注册全局变量句柄
@@ -333,7 +346,7 @@ private:
 class rtgr_reflect : public shader_basic
 {
 	ID3DX11EffectVariable*       view_pos_handle;            //视点位置
-	
+	ID3DX11EffectVariable        *projmessage_handle;        //投影参数
 	ID3DX11EffectMatrixVariable* ViewToTexSpace;
 	ID3DX11EffectMatrixVariable* view_matrix_handle;         //取景变换句柄
 	ID3DX11EffectMatrixVariable* invview_matrix_handle;      //取景变换逆变换句柄
@@ -349,6 +362,7 @@ class rtgr_reflect : public shader_basic
 	ID3DX11EffectShaderResourceVariable* texture_color_ssr;
 public:
 	rtgr_reflect(LPCWSTR filename);
+	engine_basic::engine_fail_reason set_projmessage(XMFLOAT3 proj_message);
 	engine_basic::engine_fail_reason set_ViewToTexSpace(XMFLOAT4X4 *mat);
 	engine_basic::engine_fail_reason set_FrustumCorners(const XMFLOAT4 v[4]);
 	engine_basic::engine_fail_reason set_camera_positions(XMFLOAT3 v);
@@ -373,18 +387,21 @@ private:
 class rtgr_reflect_blur : public shader_basic
 {
 	ID3DX11EffectVariable*             Texelrange;
+	ID3DX11EffectVariable*             sample_level_handle;
 	ID3DX11EffectShaderResourceVariable      *tex_input;      //shader中的纹理资源句柄
+	ID3DX11EffectShaderResourceVariable      *tex_input_array;      //shader中的纹理资源句柄
 	ID3DX11EffectShaderResourceVariable      *tex_normal_input;      //shader中的纹理资源句柄
 	ID3DX11EffectShaderResourceVariable      *tex_depth_input;      //shader中的纹理资源句柄
 	ID3DX11EffectShaderResourceVariable      *tex_mask_input;      //shader中的纹理资源句柄
 public:
 	rtgr_reflect_blur(LPCWSTR filename);
 	engine_basic::engine_fail_reason set_tex_resource(ID3D11ShaderResourceView *buffer_input);
+	engine_basic::engine_fail_reason set_tex_resource_array(ID3D11ShaderResourceView *buffer_input);
 	engine_basic::engine_fail_reason set_tex_normal_resource(ID3D11ShaderResourceView *buffer_input);
 	engine_basic::engine_fail_reason set_tex_depth_resource(ID3D11ShaderResourceView *buffer_input);
 	engine_basic::engine_fail_reason set_tex_mask_resource(ID3D11ShaderResourceView *buffer_input);
 	engine_basic::engine_fail_reason set_image_size(XMFLOAT4 texel_range);
-
+	engine_basic::engine_fail_reason set_sample_level(XMUINT4 sample_level);
 	void release();
 private:
 	void init_handle();//注册shader中所有全局变量的句柄
@@ -393,12 +410,25 @@ private:
 class rtgr_reflect_final : public shader_basic
 {
 	ID3DX11EffectVariable                    *Texelrange;
-	ID3DX11EffectShaderResourceVariable      *tex_color_input;      //shader中的纹理资源句柄
-	ID3DX11EffectShaderResourceVariable      *tex_reflect_input;      //shader中的纹理资源句柄
+	ID3DX11EffectShaderResourceVariable      *tex_color_input;      //直接光照下的颜色
+	ID3DX11EffectShaderResourceVariable      *tex_reflect_input;    //环境光的颜色
+
+	ID3DX11EffectShaderResourceVariable      *tex_color_ao;      //环境光遮蔽颜色
+	ID3DX11EffectShaderResourceVariable      *tex_metallic;      //金属度
+	ID3DX11EffectShaderResourceVariable      *tex_specroughness; //镜面光&粗糙度
+	ID3DX11EffectShaderResourceVariable      *tex_brdf_list;     //brdf表
+	ID3DX11EffectShaderResourceVariable      *tex_albedo_nov;    //albedo颜色&法线视线点积
 public:
 	rtgr_reflect_final(LPCWSTR filename);
 	engine_basic::engine_fail_reason set_tex_color_resource(ID3D11ShaderResourceView *buffer_input);
 	engine_basic::engine_fail_reason set_tex_reflect_resource(ID3D11ShaderResourceView *buffer_input);
+
+	engine_basic::engine_fail_reason set_tex_ao_resource(ID3D11ShaderResourceView *buffer_input);
+	engine_basic::engine_fail_reason set_tex_metallic_resource(ID3D11ShaderResourceView *buffer_input);
+	engine_basic::engine_fail_reason set_tex_specroughness_resource(ID3D11ShaderResourceView *buffer_input);
+	engine_basic::engine_fail_reason set_tex_brdflist_resource(ID3D11ShaderResourceView *buffer_input);
+	engine_basic::engine_fail_reason set_tex_tex_albedonov_resource(ID3D11ShaderResourceView *buffer_input);
+
 	engine_basic::engine_fail_reason set_image_size(XMFLOAT4 texel_range);
 	void release();
 private:
@@ -423,7 +453,154 @@ private:
 	void init_handle();//注册shader中所有全局变量的句柄
 	void set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member);
 };
+class brdf_envpre_shader : public shader_basic
+{
+public:
+	brdf_envpre_shader(LPCWSTR filename);
+	void release();
+private:
+	void init_handle() {};                 //注册全局变量句柄
+	void set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member);
+};
+class compute_averagelight : public shader_basic
+{
+	ID3DX11EffectShaderResourceVariable      *texture_input;      //shader中的纹理资源句柄
+	ID3DX11EffectUnorderedAccessViewVariable *buffer_input;       //shader中的纹理资源句柄
+	ID3DX11EffectUnorderedAccessViewVariable *buffer_output;	  //compute_shader计算完毕纹理资源
+	ID3DX11EffectVariable                    *texture_range;      //输入纹理大小
+public:
+	compute_averagelight(LPCWSTR filename);
+	engine_basic::engine_fail_reason set_compute_tex(ID3D11ShaderResourceView *tex_input);
+	engine_basic::engine_fail_reason set_piccturerange(int width_need, int height_need, int buffer_num, int bytewidth);
+	engine_basic::engine_fail_reason set_compute_buffer(ID3D11UnorderedAccessView *buffer_input_need, ID3D11UnorderedAccessView *buffer_output_need);
 
+	void release();
+	void dispatch(int width_need, int height_need, int final_need, int map_need);
+private:
+	void init_handle();//注册shader中所有全局变量的句柄
+	void set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member);
+};
+class shader_HDRpreblur : public shader_basic
+{
+	ID3DX11EffectShaderResourceVariable      *tex_input;       //shader中的纹理资源句柄
+	ID3DX11EffectShaderResourceVariable      *buffer_input;    //shader中的纹理资源句柄
+	ID3DX11EffectVariable                    *lum_message;     //亮度信息及参数
+	ID3DX11EffectVariable                    *texture_range;   //输入纹理大小
+	ID3DX11EffectMatrixVariable              *matrix_YUV2RGB;  //YUV2RGB变换句柄
+	ID3DX11EffectMatrixVariable              *matrix_RGB2YUV;  //RGB2YUV变换句柄
+public:
+	shader_HDRpreblur(LPCWSTR filename);
+	engine_basic::engine_fail_reason set_buffer_input(ID3D11ShaderResourceView *buffer_need, ID3D11ShaderResourceView *tex_need);
+	//亮度信息(平均亮度，高光分界点，高光最大值，tonemapping参数)
+	engine_basic::engine_fail_reason set_lum_message(float average_lum, float HighLight_divide, float HightLight_max, float key_tonemapping);
+	engine_basic::engine_fail_reason set_piccturerange(int width_need, int height_need, int buffer_num, int bytewidth);
+	void release();
+private:
+	void init_handle();//注册shader中所有全局变量的句柄
+	void set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member);
+};
+class shader_HDRblur : public shader_basic
+{
+	ID3DX11EffectScalarVariable*             TexelWidth;
+	ID3DX11EffectScalarVariable*             TexelHeight;
+	ID3DX11EffectShaderResourceVariable      *tex_input;      //shader中的纹理资源句柄
+public:
+	shader_HDRblur(LPCWSTR filename);
+	engine_basic::engine_fail_reason set_tex_resource(ID3D11ShaderResourceView *buffer_input);
+	engine_basic::engine_fail_reason set_image_size(float width, float height);
+	void release();
+private:
+	void init_handle();//注册shader中所有全局变量的句柄
+	void set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member);
+};
+class shader_HDRfinal : public shader_basic
+{
+	ID3DX11EffectVariable                    *lum_message;    //亮度信息及参数
+	ID3DX11EffectShaderResourceVariable      *tex_input;      //原始图像
+	ID3DX11EffectShaderResourceVariable      *tex_bloom;      //高亮曝光图形
+	ID3DX11EffectShaderResourceVariable      *buffer_input;   //平均亮度buffer
+	ID3DX11EffectVariable                    *texture_range;   //输入纹理大小
+	ID3DX11EffectMatrixVariable              *matrix_YUV2RGB; //YUV2RGB变换句柄
+	ID3DX11EffectMatrixVariable              *matrix_RGB2YUV; //RGB2YUV变换句柄
+public:
+	shader_HDRfinal(LPCWSTR filename);
+	engine_basic::engine_fail_reason set_tex_resource(ID3D11ShaderResourceView *tex_input, ID3D11ShaderResourceView *tex_bloom, ID3D11ShaderResourceView *buffer_need);
+	//亮度信息(平均亮度，高光分界点，高光最大值，tonemapping参数)
+	engine_basic::engine_fail_reason set_lum_message(float average_lum, float HighLight_divide, float HightLight_max, float key_tonemapping);
+	engine_basic::engine_fail_reason set_piccturerange(int width_need, int height_need, int buffer_num, int bytewidth);
+	void release();
+private:
+	void init_handle();//注册shader中所有全局变量的句柄
+	void set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member);
+};
+class shader_atmosphere_pretreat : public shader_basic 
+{
+	ID3DX11EffectVariable                    *scattering_order;                        //散射层
+	ID3DX11EffectVariable                    *layer;                                   //3d纹理层
+	ID3DX11EffectMatrixVariable              *luminance_from_radiance;                 //球光照
+
+	ID3DX11EffectShaderResourceVariable      *transmittance_texture;                   //透射率纹理
+	ID3DX11EffectShaderResourceVariable      *single_rayleigh_scattering_texture;      //单层瑞利散射
+	ID3DX11EffectShaderResourceVariable      *single_mie_scattering_texture;           //单层米氏散射
+	ID3DX11EffectShaderResourceVariable      *multiple_scattering_texture;             //多层散射
+	ID3DX11EffectShaderResourceVariable      *irradiance_texture;                      //亮度纹理
+	ID3DX11EffectShaderResourceVariable      *scattering_density_texture;              //最终散射目标
+public:
+	shader_atmosphere_pretreat(LPCWSTR filename);
+	engine_basic::engine_fail_reason set_tex_transmittance(ID3D11ShaderResourceView *tex_input);
+	engine_basic::engine_fail_reason set_tex_single_rayleigh_scattering(ID3D11ShaderResourceView *tex_input);
+	engine_basic::engine_fail_reason set_tex_single_mie_scattering(ID3D11ShaderResourceView *tex_input);
+	engine_basic::engine_fail_reason set_tex_multiple_scattering(ID3D11ShaderResourceView *tex_input);
+	engine_basic::engine_fail_reason set_tex_irradiance(ID3D11ShaderResourceView *tex_input);
+	engine_basic::engine_fail_reason set_tex_scattering_density(ID3D11ShaderResourceView *tex_input);
+	//层级信息
+	engine_basic::engine_fail_reason set_scattering_order(unsigned int scattering_order_in);
+	engine_basic::engine_fail_reason set_layer(unsigned int layer_in);
+	engine_basic::engine_fail_reason set_luminance_from_radiance(XMFLOAT4X4 luminance_from_radiance_in);
+	void release();
+private:
+	void init_handle();//注册shader中所有全局变量的句柄
+	void set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member);
+};
+class shader_atmosphere_render : public shader_basic 
+{
+	//预计算贴图
+	ID3DX11EffectShaderResourceVariable      *transmittance_texture;                   //透射率纹理
+	ID3DX11EffectShaderResourceVariable      *scattering_texture;                      //散射
+	ID3DX11EffectShaderResourceVariable      *single_mie_scattering_texture;           //单层米氏散射
+	ID3DX11EffectShaderResourceVariable      *irradiance_texture;                      //亮度纹理
+	//一次设置参数
+	ID3DX11EffectVariable                    *white_point;
+	ID3DX11EffectVariable                    *earth_center;
+	ID3DX11EffectVariable                    *sun_size;
+	ID3DX11EffectMatrixVariable              *view_from_clip;
+	//逐帧设置参数
+	ID3DX11EffectVariable                    *camera;
+	ID3DX11EffectVariable                    *exposure;
+	ID3DX11EffectVariable                    *sun_direction;
+	ID3DX11EffectMatrixVariable              *model_from_view;
+public:
+	shader_atmosphere_render(LPCWSTR filename);
+	//纹理设置
+	engine_basic::engine_fail_reason set_tex_transmittance(ID3D11ShaderResourceView *tex_input);
+	engine_basic::engine_fail_reason set_tex_scattering(ID3D11ShaderResourceView *tex_input);
+	engine_basic::engine_fail_reason set_tex_single_mie_scattering(ID3D11ShaderResourceView *tex_input);
+	engine_basic::engine_fail_reason set_tex_irradiance(ID3D11ShaderResourceView *tex_input);
+	//矩阵设置
+	engine_basic::engine_fail_reason set_view_from_clip(XMFLOAT4X4 view_from_clip_in);
+	engine_basic::engine_fail_reason set_model_from_view(XMFLOAT4X4 view_model_from_view);
+	//其他变量设置
+	engine_basic::engine_fail_reason set_white_point(XMFLOAT3 white_point_in);
+	engine_basic::engine_fail_reason set_earth_center(XMFLOAT3 earth_center_in);
+	engine_basic::engine_fail_reason set_sun_size(XMFLOAT2 sun_size_in);
+	engine_basic::engine_fail_reason set_camera(XMFLOAT3 camera_in);
+	engine_basic::engine_fail_reason set_exposure(float exposure_in);
+	engine_basic::engine_fail_reason set_sun_direction(XMFLOAT3 sun_direction_in);
+	void release();
+private:
+	void init_handle();//注册shader中所有全局变量的句柄
+	void set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member);
+};
 
 class shader_control
 {
@@ -451,7 +628,10 @@ public:
 		return shadercontrol_pInstance;
 	}
 	engine_basic::engine_fail_reason init();
+	//shader的添加与获取
 	std::shared_ptr<shader_basic> get_shader_by_type(std::string type_name, engine_basic::engine_fail_reason &if_succeed);
+	engine_basic::engine_fail_reason add_a_new_shader(std::type_index class_name, std::shared_ptr<shader_basic> shader_in);
+	//引擎基本shader的获取
 	std::shared_ptr<color_shader> get_shader_color(engine_basic::engine_fail_reason &if_succeed);
 	std::shared_ptr<virtual_light_shader> get_shader_virtual_light(engine_basic::engine_fail_reason &if_succeed);
 	std::shared_ptr<picture_show_shader> get_shader_picture(engine_basic::engine_fail_reason &if_succeed);
@@ -467,7 +647,13 @@ public:
 	std::shared_ptr<rtgr_reflect_blur> get_shader_reflect_blur(engine_basic::engine_fail_reason &if_succeed);
 	std::shared_ptr<rtgr_reflect_final> get_shader_reflect_final(engine_basic::engine_fail_reason &if_succeed);
 	std::shared_ptr<shader_skycube> get_shader_sky_draw(engine_basic::engine_fail_reason &if_succeed);
-	engine_basic::engine_fail_reason add_a_new_shader(std::type_index class_name, std::shared_ptr<shader_basic> shader_in);
+	std::shared_ptr<brdf_envpre_shader> get_shader_brdf_pre(engine_basic::engine_fail_reason &if_succeed);
+	std::shared_ptr<compute_averagelight> get_shader_hdr_averagelight (engine_basic::engine_fail_reason &if_succeed);
+	std::shared_ptr<shader_HDRpreblur> get_shader_hdr_preblur(engine_basic::engine_fail_reason &if_succeed);
+	std::shared_ptr<shader_HDRblur> get_shader_hdr_blur(engine_basic::engine_fail_reason &if_succeed);
+	std::shared_ptr<shader_HDRfinal> get_shader_hdr_final(engine_basic::engine_fail_reason &if_succeed);
+	std::shared_ptr<shader_atmosphere_pretreat> get_shader_atmosphere_pretreat(engine_basic::engine_fail_reason &if_succeed);
+	std::shared_ptr<shader_atmosphere_render> get_shader_atmosphere_render(engine_basic::engine_fail_reason &if_succeed);
 	void release();
 private:
 	engine_basic::engine_fail_reason init_basic();

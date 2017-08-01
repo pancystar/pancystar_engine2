@@ -175,6 +175,39 @@ engine_basic::engine_fail_reason Pretreatment_gbuffer::init_reflect_texture()
 		return error_message;
 	}
 	safe_release(normalspec_buf);
+	//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~创建反射贴图的镜面反射粗糙度纹理~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	texDesc.Width = static_cast<int>(1024.0f * quality_reflect);
+	texDesc.Height = static_cast<int>(1024.0f * quality_reflect);
+	texDesc.MipLevels = 1;
+	texDesc.ArraySize = 1;
+	texDesc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+	texDesc.SampleDesc.Count = 1;
+	texDesc.SampleDesc.Quality = 0;
+	texDesc.Usage = D3D11_USAGE_DEFAULT;
+	texDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+	texDesc.CPUAccessFlags = 0;
+	texDesc.MiscFlags = 0;
+	ID3D11Texture2D* specroughness_buf = 0;
+	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateTexture2D(&texDesc, 0, &specroughness_buf);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create reflect specroughness_buf texture error when create gbuffer");
+		return error_message;
+	}
+	//根据纹理资源创建访问资源以及渲染目标
+	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateRenderTargetView(specroughness_buf, 0, &reflect_cubeSpecRough_RTV);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create reflect specroughness_buf rendertargetview error when create gbuffer");
+		return error_message;
+	}
+	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateShaderResourceView(specroughness_buf, 0, &reflect_cubeSpecRough_SRV);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create reflect specroughness_buf shaderresourceview error when create gbuffer");
+		return error_message;
+	}
+	safe_release(specroughness_buf);
 	//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~光照信息存储纹理~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	ID3D11Texture2D *diffuse_buf = 0, *specular_buf = 0;
 	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateTexture2D(&texDesc, 0, &diffuse_buf);
@@ -398,6 +431,55 @@ engine_basic::engine_fail_reason Pretreatment_gbuffer::init_texture()
 	}
 	safe_release(normalspec_singlebuf);
 
+	//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~镜面光&粗糙度纹理~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	//4xMSAA抗锯齿纹理格式并创建纹理资源~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	texDesc.Width = map_width;
+	texDesc.Height = map_height;
+	texDesc.MipLevels = 1;
+	texDesc.ArraySize = 1;
+	texDesc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+	texDesc.SampleDesc.Count = 4;
+	texDesc.SampleDesc.Quality = 0;
+	texDesc.Usage = D3D11_USAGE_DEFAULT;
+	texDesc.BindFlags = D3D11_BIND_RENDER_TARGET;
+	texDesc.CPUAccessFlags = 0;
+	texDesc.MiscFlags = 0;
+	ID3D11Texture2D* specrough_buf = 0;
+	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateTexture2D(&texDesc, 0, &specrough_buf);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create 4xMSAA specrough_buf texture error when create gbuffer");
+		return error_message;
+	}
+	//根据纹理资源创建访问资源以及渲染目标
+	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateRenderTargetView(specrough_buf, 0, &specroughness_target);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create 4xMSAA specrough_buf rendertargetview error when create gbuffer");
+		return error_message;
+	}
+	safe_release(specrough_buf);
+	//非抗锯齿镜面光&粗糙度纹理~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	texDesc.SampleDesc.Count = 1;
+	texDesc.SampleDesc.Quality = 0;
+	texDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+	ID3D11Texture2D* specrough_buf_singlebuf = 0;
+	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateTexture2D(&texDesc, 0, &specrough_buf_singlebuf);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create noMSAA specrough_buf texture error when create gbuffer");
+		return error_message;
+	}
+	texDesc.SampleDesc.Count = 1;
+	texDesc.SampleDesc.Quality = 0;
+	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateShaderResourceView(specrough_buf_singlebuf, 0, &specroughness_tex);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create noMSAA specrough_buf shaderresourceview error when create gbuffer");
+		return error_message;
+	}
+	safe_release(specrough_buf_singlebuf);
+
 	//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~光照信息存储纹理~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	texDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
 	ID3D11Texture2D *diffuse_buf = 0, *specular_buf = 0;
@@ -535,16 +617,27 @@ engine_basic::engine_fail_reason Pretreatment_gbuffer::init_texture()
 }
 void Pretreatment_gbuffer::set_normalspecdepth_target()
 {
-	d3d_pancy_basic_singleton::GetInstance()->set_render_target(normalspec_target, depthmap_target);
+	ID3D11RenderTargetView* renderTargets[2] = { normalspec_target,specroughness_target };
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetRenderTargets(2, renderTargets, depthmap_target);
+	//d3d_pancy_basic_singleton::GetInstance()->set_render_target(normalspec_target, depthmap_target);
 	float clearColor[] = { 0.0f, 0.0f, -1.0f, 1e5f };
 	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearRenderTargetView(normalspec_target, clearColor);
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearRenderTargetView(specroughness_target, clearColor);
 	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearDepthStencilView(depthmap_target, D3D11_CLEAR_DEPTH, 1.0f, 0);
 }
 void Pretreatment_gbuffer::set_reflect_normaldepth_target()
 {
+	/*
 	d3d_pancy_basic_singleton::GetInstance()->set_render_target(reflect_cubenormal_RTV, reflect_DSV);
 	float clearColor[] = { 0.0f, 0.0f, -1.0f, 1e5f };
 	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearRenderTargetView(reflect_cubenormal_RTV, clearColor);
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearDepthStencilView(reflect_DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
+	*/
+	ID3D11RenderTargetView* renderTargets[2] = { reflect_cubenormal_RTV,reflect_cubeSpecRough_RTV };
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetRenderTargets(2, renderTargets, reflect_DSV);
+	float clearColor[] = { 0.0f, 0.0f, -1.0f, 1e5f };
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearRenderTargetView(reflect_cubenormal_RTV, clearColor);
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearRenderTargetView(reflect_cubeSpecRough_RTV, clearColor);
 	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearDepthStencilView(reflect_DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
 }
 void Pretreatment_gbuffer::set_reflect_savedepth_target(int count)
@@ -575,8 +668,9 @@ void Pretreatment_gbuffer::set_posttreat_input_target()
 	d3d_pancy_basic_singleton::GetInstance()->set_render_target(renderTargets,2);
 	//d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetRenderTargets(2, renderTargets, NULL);
 	float clearColor[] = { 0.0f, 0.0f, 0.0f, 1.0f };
+	float mask_clearColor[] = { 1.0f, 0.0f, 0.0f, 1.0f };
 	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearRenderTargetView(posttreatment_RTV, clearColor);
-	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearRenderTargetView(reflectmask_RTV, clearColor);
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearRenderTargetView(reflectmask_RTV, mask_clearColor);
 }
 void Pretreatment_gbuffer::set_resolvdepth_target()
 {
@@ -590,6 +684,8 @@ void Pretreatment_gbuffer::release_texture()
 	safe_release(depthmap_target);
 	safe_release(normalspec_target);
 	safe_release(normalspec_tex);
+	safe_release(specroughness_target);
+	safe_release(specroughness_tex);
 	safe_release(gbuffer_diffuse_target);
 	safe_release(gbuffer_diffuse_tex);
 	safe_release(gbuffer_specular_target);
@@ -620,7 +716,7 @@ void Pretreatment_gbuffer::render_gbuffer()
 	//绘制gbuffer
 	XMFLOAT4X4 view_mat;
 	pancy_camera::get_instance()->count_view_matrix(&view_mat);
-	pancy_geometry_control_singleton::get_instance()->render_gbuffer(view_mat, engine_basic::perspective_message::get_instance()->get_proj_matrix());
+	pancy_geometry_control_singleton::get_instance()->render_gbuffer(view_mat, engine_basic::perspective_message::get_instance()->get_proj_matrix(),false);
 	//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~存储法线镜面反射光纹理~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	ID3D11Resource * normalDepthTex = 0;
 	ID3D11Resource * normalDepthTex_singlesample = 0;
@@ -633,6 +729,19 @@ void Pretreatment_gbuffer::render_gbuffer()
 	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateShaderResourceView(normalDepthTex_singlesample, 0, &normalspec_tex);
 	normalDepthTex->Release();
 	normalDepthTex_singlesample->Release();
+
+	//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~存储镜面反射粗糙度纹理~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	ID3D11Resource * specroughnessTex = 0;
+	ID3D11Resource * specroughnessTex_singlesample = 0;
+	specroughness_target->GetResource(&specroughnessTex);
+	specroughness_tex->GetResource(&specroughnessTex_singlesample);
+	//将多重采样纹理转换至非多重纹理
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ResolveSubresource(specroughnessTex_singlesample, D3D11CalcSubresource(0, 0, 1), specroughnessTex, D3D11CalcSubresource(0, 0, 1), DXGI_FORMAT_R16G16B16A16_FLOAT);
+	specroughness_tex->Release();
+	specroughness_tex = NULL;
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateShaderResourceView(specroughnessTex_singlesample, 0, &specroughness_tex);
+	specroughnessTex->Release();
+	specroughnessTex_singlesample->Release();
 	//msaa-shader重采样
 	set_resolvdepth_target();
 	engine_basic::engine_fail_reason check_error;
@@ -675,7 +784,7 @@ void Pretreatment_gbuffer::render_gbuffer()
 		look_vec = look_cube_reflect[now_reflect_render_face / 2];
 		up_vec = up_cube_reflect[now_reflect_render_face / 2];
 		pancy_camera::get_instance()->count_view_matrix(look_vec, up_vec, environment_map_place, &view_matrix_reflect);
-		pancy_geometry_control_singleton::get_instance()->render_gbuffer(view_matrix_reflect, Proj_mat_reflect);
+		pancy_geometry_control_singleton::get_instance()->render_gbuffer(view_matrix_reflect, Proj_mat_reflect,true);
 		//渲染深度到立方模板纹理贴图
 		auto shader_save_depth = shader_control::GetInstance()->get_shader_reflect_savedepth(check_error);
 		shader_save_depth->set_cube_count(XMFLOAT3(now_reflect_render_face / 2,0.0f,0.0f));
@@ -702,6 +811,7 @@ void Pretreatment_gbuffer::render_lbuffer(XMFLOAT4X4 view_matrix, XMFLOAT4X4 inv
 	auto lbuffer_shader = shader_control::GetInstance()->get_shader_lightbuffer(check_error);
 	lbuffer_shader->set_DepthMap_tex(depthmap_single_tex);
 	lbuffer_shader->set_Normalspec_tex(normalspec_tex);
+	lbuffer_shader->set_SpecRoughness_tex(specroughness_tex);
 	XMFLOAT4 farcorner[4];
 	engine_basic::perspective_message::get_instance()->get_FrustumFarCorner(farcorner);
 	lbuffer_shader->set_FrustumCorners(farcorner);
@@ -715,11 +825,11 @@ void Pretreatment_gbuffer::render_lbuffer(XMFLOAT4X4 view_matrix, XMFLOAT4X4 inv
 	ID3DX11EffectTechnique *tech_need;
 	if (if_shadow == true)
 	{
-		lbuffer_shader->get_technique(&tech_need, "draw_common");
+		lbuffer_shader->get_technique(&tech_need, "draw_common_pbr");
 	}
 	else
 	{
-		lbuffer_shader->get_technique(&tech_need, "draw_withoutshadow");
+		lbuffer_shader->get_technique(&tech_need, "draw_pbr_withoutshadow");
 	}
 	light_buffer_render(tech_need);
 
@@ -751,6 +861,7 @@ void Pretreatment_gbuffer::render_lbuffer(XMFLOAT4X4 view_matrix, XMFLOAT4X4 inv
 		lbuffer_shader->set_projmessage(rec_proj_vec);
 		lbuffer_shader->set_DepthMap_tex(reflect_depthcube_SRV);
 		lbuffer_shader->set_Normalspec_tex(reflect_cubenormal_SRV);
+		lbuffer_shader->set_SpecRoughness_tex(reflect_cubeSpecRough_SRV);
 		lbuffer_shader->set_FrustumCorners(reflectcube_FarCorner);
 		//计算取景变换
 		XMFLOAT3 look_vec, up_vec;
@@ -764,11 +875,11 @@ void Pretreatment_gbuffer::render_lbuffer(XMFLOAT4X4 view_matrix, XMFLOAT4X4 inv
 		
 		if (if_shadow == true)
 		{
-			lbuffer_shader->get_technique(&tech_need, "draw_withoutMSAA");
+			lbuffer_shader->get_technique(&tech_need, "draw_pbr_withoutMSAA");
 		}
 		else
 		{
-			lbuffer_shader->get_technique(&tech_need, "draw_withoutshadowMSAA");
+			lbuffer_shader->get_technique(&tech_need, "draw_pbr_withoutshadowMSAA");
 		}
 	
 		light_buffer_render(tech_need);
@@ -803,15 +914,21 @@ void Pretreatment_gbuffer::display_lbuffer(bool if_shadow)
 	auto shader_deffered = shader_control::GetInstance()->get_shader_lightdeffered(check_error);
 	shader_deffered->set_diffuse_light_tex(gbuffer_diffuse_tex);
 	shader_deffered->set_specular_light_tex(gbuffer_specular_tex);
+	shader_deffered->set_normal_tex(normalspec_tex);
+	shader_deffered->set_tex_specroughness_resource(specroughness_tex);
 }
 void Pretreatment_gbuffer::release()
 {
 	fullscreen_Lbuffer->release();
 	fullscreen_buffer->release();
 	safe_release(reflect_cubenormal_SRV);
+	safe_release(reflect_cubenormal_RTV);
+	
+	safe_release(reflect_cubeSpecRough_SRV);
+	safe_release(reflect_cubeSpecRough_RTV);
+
 	safe_release(reflect_depthcube_SRV);
 	safe_release(reflect_DSV);
-	safe_release(reflect_cubenormal_RTV);
 
 	safe_release(reflect_diffuse_target);
 	safe_release(reflect_diffuse_tex);

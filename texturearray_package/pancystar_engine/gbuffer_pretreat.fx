@@ -72,6 +72,11 @@ VertexOut VS_instance(Vertex_IN_instance vin)
 	vout.tex2 = vin.tex2;
 	return vout;
 }
+struct PixelOut_pbr
+{
+	float4 normalmetallic     : SV_TARGET0;
+	float4 specroughness      : SV_TARGET1;
+};
 float4 PS(VertexOut pin) : SV_Target
 {
 	float texID_data_diffuse = pin.texid.x;
@@ -80,16 +85,28 @@ float4 PS(VertexOut pin) : SV_Target
 	pin.NormalV = normalize(pin.NormalV);
 	return float4(pin.NormalV, 10.0f);
 }
-float4 PS_withnormal(VertexOut pin) : SV_Target
+PixelOut_pbr PS_withnormal(VertexOut pin) : SV_Target
 {
-	float texID_data_diffuse = pin.texid.x;
-	float texID_data_normal = pin.texid.y;
+	PixelOut_pbr ps_out_pbr;
+	//获取漫反射材质
+	float texID_data_diffuse = pin.texid.x;//漫反射纹理ID
+	float texID_data_normal = pin.texid.y;//法线纹理ID
 	float4 tex_color = texture_pack_array.Sample(samTex_liner, float3(pin.tex1.xy, texID_data_diffuse));
 	clip(tex_color.a - 0.5f);
+	//获取金属度及粗糙度材质
+	float texID_data_metallic = pin.texid.z;//金属度纹理ID
+	float texID_data_roughness = pin.texid.w;//粗糙度纹理ID
+	float metallic_color = texture_pack_array.Sample(samTex_liner, float3(pin.tex2.xy, texID_data_metallic)).r;
+	float roughness_color = texture_pack_array.Sample(samTex_liner, float3(pin.tex2.zw, texID_data_roughness)).r;
+	//计算镜面反射光最高强度
+	float3 specular_F0 = lerp(0.04, tex_color.rgb, metallic_color);
+	ps_out_pbr.specroughness = float4(specular_F0, roughness_color);
+	//不包含法线贴图的材质
 	pin.NormalV = normalize(pin.NormalV);
-	if (pin.texid.y == -1) 
+	if (pin.texid.y == -1)
 	{
-		return float4(pin.NormalV, 10.0f);
+		ps_out_pbr.normalmetallic = float4(pin.NormalV, metallic_color);
+		return ps_out_pbr;
 	}
 	pin.tangent = normalize(pin.tangent);
 	//求解图片所在自空间->模型所在统一世界空间的变换矩阵
@@ -101,8 +118,9 @@ float4 PS_withnormal(VertexOut pin) : SV_Target
 	//float3 normal_map = texture_normal.Sample(samTex_liner, pin.tex).rgb;
 	normal_map = 2 * normal_map - 1;                               //将向量从图片坐标[0,1]转换至真实坐标[-1,1]  
 	normal_map = normalize(mul(normal_map, T2W));                  //切线空间至世界空间
-	pin.NormalV = normal_map;
-	return float4(normal_map, 10.0);
+	//pin.NormalV = normal_map;
+	ps_out_pbr.normalmetallic = float4(pin.NormalV, metallic_color);
+	return ps_out_pbr;
 }
 technique11 NormalDepth
 {

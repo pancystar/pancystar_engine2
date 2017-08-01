@@ -47,7 +47,7 @@ engine_basic::engine_fail_reason model_reader_pancymesh_build<T>::create()
 	UINT *data_index_need;
 	ifstream in_stream;
 	in_stream.open(mesh_file_name, ios::binary);
-	int vnum_rec, inum_rec, tnum_rec;
+	int vnum_rec = 0, inum_rec, tnum_rec;
 	in_stream.read(reinterpret_cast<char*>(&vnum_rec), sizeof(vnum_rec));
 	in_stream.read(reinterpret_cast<char*>(&inum_rec), sizeof(inum_rec));
 	in_stream.read(reinterpret_cast<char*>(&tnum_rec), sizeof(tnum_rec));
@@ -120,11 +120,12 @@ class geometry_resource_view
 	int resource_view_ID;
 	int ID_instance_index;//自增ID号
 	bool if_cull_front;
+	bool if_dynamic;
 	model_reader_pancymesh *model_data;
 	std::unordered_map<int, geometry_instance_view> instance_list;
 	std::vector<XMFLOAT4X4> world_matrix_array;
 public:
-	geometry_resource_view(model_reader_pancymesh *model_data_in,int ID_need);
+	geometry_resource_view(model_reader_pancymesh *model_data_in,int ID_need,bool if_dynamic_in);
 	std::vector<XMFLOAT4X4> get_matrix_list();
 	int add_an_instance(XMFLOAT4X4 world_matrix);
 	engine_basic::engine_fail_reason get_technique(ID3DX11EffectTechnique *teque_need) { return model_data->get_technique(teque_need); };
@@ -135,7 +136,7 @@ public:
 	void set_cull_front() { if_cull_front = true; };
 	bool check_if_cullfront() { return if_cull_front; };
 	ID3D11ShaderResourceView *get_texture() { return model_data->get_texture(); }
-	void draw();
+	void draw(bool if_static);
 	void release();
 };
 
@@ -153,8 +154,8 @@ public:
 	T *get_geometry_byindex(int index_input);
 	int get_geometry_num() { return ModelResourceView_list.size(); };
 	//void render_gbuffer();
-	void render_gbuffer(XMFLOAT4X4 view_matrix, XMFLOAT4X4 proj_matrix);
-	void render_shadowmap(XMFLOAT4X4 shadow_matrix);
+	void render_gbuffer(XMFLOAT4X4 view_matrix, XMFLOAT4X4 proj_matrix,bool if_static);
+	void render_shadowmap(XMFLOAT4X4 shadow_matrix, bool if_static);
 	void release();
 };
 template<typename T>
@@ -201,7 +202,7 @@ T* geometry_ResourceView_list<T>::get_geometry_byindex(int resource_ID)
 	return &data_now->second;
 }
 template<typename T>
-void geometry_ResourceView_list<T>::render_gbuffer(XMFLOAT4X4 view_matrix, XMFLOAT4X4 proj_matrix)
+void geometry_ResourceView_list<T>::render_gbuffer(XMFLOAT4X4 view_matrix, XMFLOAT4X4 proj_matrix, bool if_static)
 {
 	//绘制一种模型
 	ID3DX11EffectTechnique *teque_need;
@@ -262,7 +263,7 @@ void geometry_ResourceView_list<T>::render_gbuffer(XMFLOAT4X4 view_matrix, XMFLO
 			shader_gbuffer->get_technique(&teque_need, "NormalDepth_withinstance_normal");
 		}
 		data_need->second.get_technique(teque_need);
-		data_need->second.draw();
+		data_need->second.draw(if_static);
 		d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->RSSetState(NULL);
 	}
 	//还原渲染状态
@@ -274,9 +275,10 @@ void geometry_ResourceView_list<T>::render_gbuffer(XMFLOAT4X4 view_matrix, XMFLO
 	{
 		teque_need->GetPassByIndex(p)->Apply(0, d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex());
 	}
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->RSSetState(NULL);
 }
 template<typename T>
-void geometry_ResourceView_list<T>::render_shadowmap(XMFLOAT4X4 shadow_matrix)
+void geometry_ResourceView_list<T>::render_shadowmap(XMFLOAT4X4 shadow_matrix, bool if_static)
 {
 	for (auto data_need = ModelResourceView_list.begin(); data_need != ModelResourceView_list.end(); ++data_need)
 	{
@@ -319,7 +321,7 @@ void geometry_ResourceView_list<T>::render_shadowmap(XMFLOAT4X4 shadow_matrix)
 			shader_shadow_map->get_technique(&teque_need, "ShadowTech_instance");
 		}
 		data_need->second.get_technique(teque_need);
-		data_need->second.draw();
+		data_need->second.draw(if_static);
 	}
 	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->RSSetState(0);
 }
@@ -359,17 +361,17 @@ public:
 		return this_instance;
 	}
 	//加载和删除一个模型种类
-	engine_basic::engine_fail_reason load_a_model_type(string file_name_mesh, string file_name_mat, int &model_type_ID);
+	engine_basic::engine_fail_reason load_a_model_type(string file_name_mesh, string file_name_mat, bool if_dynamic, int &model_type_ID);
 	engine_basic::engine_fail_reason delete_a_model_type(int model_type_ID);
 	//添加和删除一个模型实例
-	engine_basic::engine_fail_reason add_a_model_instance(int model_type_ID, XMFLOAT4X4 world_Matrix, pancy_model_ID &model_ID);
+	engine_basic::engine_fail_reason add_a_model_instance(int model_type_ID, XMFLOAT4X4 world_Matrix,pancy_model_ID &model_ID);
 	engine_basic::engine_fail_reason delete_a_model_instance(pancy_model_ID model_ID);
 	engine_basic::engine_fail_reason update_a_model_instance(pancy_model_ID model_ID, XMFLOAT4X4 world_Matrix, float delta_time);
 	engine_basic::engine_fail_reason sleep_a_model_instance(pancy_model_ID model_ID);
 	engine_basic::engine_fail_reason wakeup_a_model_instance(pancy_model_ID model_ID);
 	//绘制
 	engine_basic::engine_fail_reason get_a_model_type(geometry_resource_view **data_out,int model_type_ID);
-	void render_gbuffer(XMFLOAT4X4 view_matrix, XMFLOAT4X4 proj_matrix) { model_view_list->render_gbuffer(view_matrix, proj_matrix); };
-	void render_shadowmap(XMFLOAT4X4 shadow_matrix) { model_view_list->render_shadowmap(shadow_matrix); };
+	void render_gbuffer(XMFLOAT4X4 view_matrix, XMFLOAT4X4 proj_matrix, bool if_static) { model_view_list->render_gbuffer(view_matrix, proj_matrix, if_static); };
+	void render_shadowmap(XMFLOAT4X4 shadow_matrix, bool if_static) { model_view_list->render_shadowmap(shadow_matrix, if_static); };
 	void release();
 };

@@ -22,6 +22,9 @@ class Pretreatment_gbuffer : public engine_basic::window_size_observer
 	ID3D11RenderTargetView   *normalspec_target;          //存储法线和镜面反射系数的渲染目标
 	ID3D11ShaderResourceView *normalspec_tex;             //存储法线和镜面反射系数的纹理资源
 
+	ID3D11RenderTargetView   *specroughness_target;       //存储法线和镜面反射系数的渲染目标
+	ID3D11ShaderResourceView *specroughness_tex;          //存储法线和镜面反射系数的纹理资源
+
 	ID3D11RenderTargetView   *gbuffer_diffuse_target;     //存储漫反射光照效果的渲染目标
 	ID3D11ShaderResourceView *gbuffer_diffuse_tex;        //存储漫反射光照效果的纹理资源
 
@@ -34,6 +37,9 @@ class Pretreatment_gbuffer : public engine_basic::window_size_observer
 
 	ID3D11ShaderResourceView *reflect_cubenormal_SRV;   //存储立方法线贴图的纹理资源
 	ID3D11RenderTargetView   *reflect_cubenormal_RTV;   //存储立方法线贴图的渲染目标
+
+	ID3D11ShaderResourceView *reflect_cubeSpecRough_SRV;   //存储立方法线贴图的纹理资源
+	ID3D11RenderTargetView   *reflect_cubeSpecRough_RTV;   //存储立方法线贴图的渲染目标
 
 	ID3D11DepthStencilView   *reflect_DSV;              //深度缓冲区目标
 	ID3D11ShaderResourceView *reflect_depthcube_SRV;    //深度立方贴图
@@ -63,6 +69,7 @@ public:
 	void display_lbuffer(bool if_shadow);
 	void release();
 	ID3D11ShaderResourceView *get_gbuffer_normalspec() { return normalspec_tex; };
+	ID3D11ShaderResourceView *get_gbuffer_specrough() { return specroughness_tex; };
 	ID3D11ShaderResourceView *get_gbuffer_depth() { return depthmap_single_tex; };
 	ID3D11ShaderResourceView *get_gbuffer_difusse() { return gbuffer_diffuse_tex; };
 	ID3D11ShaderResourceView *get_gbuffer_specular() { return gbuffer_specular_tex; };	

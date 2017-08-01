@@ -164,6 +164,7 @@
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="color_test.fx" />
+    <FxCompile Include="find_clip.fx" />
     <FxCompile Include="render_brdf_list.fx">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Effect</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
@@ -172,7 +173,7 @@
     </FxCompile>
     <FxCompile Include="show_pic.fx" />
     <FxCompile Include="skycube.fx" />
-    <FxCompile Include="virtual_light.fx" />
+    <FxCompile Include="virtual_light_pbr.fx" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="assimp_import.h" />

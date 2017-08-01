@@ -300,7 +300,7 @@ void virtual_light_shader::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_
 		{ "TANGENT" ,0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,24 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
 		{ "TEXINDICES" ,0  ,DXGI_FORMAT_R32G32B32A32_UINT  ,0    ,36 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
 		{ "TEXDIFFNORM",0  ,DXGI_FORMAT_R32G32B32A32_FLOAT      ,0    ,52 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
-		{ "TEXOTHER",0  ,DXGI_FORMAT_R32G32B32A32_FLOAT      ,0    ,64 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 }
+		{ "TEXOTHER",0  ,DXGI_FORMAT_R32G32B32A32_FLOAT      ,0    ,68 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 }
 	};
 	*num_member = sizeof(rec) / sizeof(D3D11_INPUT_ELEMENT_DESC);
 	for (UINT i = 0; i < *num_member; ++i)
@@ -498,7 +498,7 @@ void shader_pretreat_gbuffer::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *memb
 		{ "TANGENT"    ,0  ,DXGI_FORMAT_R32G32B32_FLOAT     ,0    ,24 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
 		{ "TEXINDICES" ,0  ,DXGI_FORMAT_R32G32B32A32_UINT   ,0    ,36 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
 		{ "TEXDIFFNORM",0  ,DXGI_FORMAT_R32G32B32A32_FLOAT  ,0    ,52 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
-		{ "TEXOTHER"   ,0  ,DXGI_FORMAT_R32G32B32A32_FLOAT  ,0    ,64 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 }
+		{ "TEXOTHER"   ,0  ,DXGI_FORMAT_R32G32B32A32_FLOAT  ,0    ,68 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 }
 	};
 	*num_member = sizeof(rec) / sizeof(D3D11_INPUT_ELEMENT_DESC);
 	for (UINT i = 0; i < *num_member; ++i)
@@ -816,7 +816,7 @@ void light_shadow::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, U
 		{ "TANGENT" ,0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,24 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
 		{ "TEXINDICES" ,0  ,DXGI_FORMAT_R32G32B32A32_UINT  ,0    ,36 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
 		{ "TEXDIFFNORM",0  ,DXGI_FORMAT_R32G32B32A32_FLOAT      ,0    ,52 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
-		{ "TEXOTHER",0  ,DXGI_FORMAT_R32G32B32A32_FLOAT      ,0    ,64 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 }
+		{ "TEXOTHER",0  ,DXGI_FORMAT_R32G32B32A32_FLOAT      ,0    ,68 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 }
 	};
 	*num_member = sizeof(rec) / sizeof(D3D11_INPUT_ELEMENT_DESC);
 	for (UINT i = 0; i < *num_member; ++i)
@@ -992,6 +992,17 @@ engine_basic::engine_fail_reason light_defered_lightbuffer::set_Normalspec_tex(I
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
+engine_basic::engine_fail_reason light_defered_lightbuffer::set_SpecRoughness_tex(ID3D11ShaderResourceView *tex_in)
+{
+	HRESULT hr = SpecRoughnessMap->SetResource(tex_in);
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason error_message(hr, "lightbuffer shader error when setting SpecRoughness_tex");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
 engine_basic::engine_fail_reason light_defered_lightbuffer::set_DepthMap_tex(ID3D11ShaderResourceView *tex_in)
 {
 	HRESULT hr = DepthMap->SetResource(tex_in);
@@ -1037,6 +1048,7 @@ void light_defered_lightbuffer::init_handle()
 																					  //几何变换信息句柄
 	projmessage_handle = fx_need->GetVariableByName("proj_desc");
 	NormalspecMap = fx_need->GetVariableByName("gNormalspecMap")->AsShaderResource();  //shader中的纹理资源句柄
+	SpecRoughnessMap = fx_need->GetVariableByName("gSpecRoughnessMap")->AsShaderResource();  //shader中的纹理资源句柄
 	DepthMap = fx_need->GetVariableByName("gdepth_map")->AsShaderResource();  //shader中的纹理资源句柄
 	texture_shadow = fx_need->GetVariableByName("texture_shadow")->AsShaderResource();  //shader中的纹理资源句柄
 }
@@ -1074,6 +1086,26 @@ engine_basic::engine_fail_reason light_defered_draw::set_view_pos(XMFLOAT3 eye_p
 engine_basic::engine_fail_reason light_defered_draw::set_trans_world(XMFLOAT4X4 *mat_need)
 {
 	auto check_error = set_matrix(world_matrix_handle, mat_need);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason light_defered_draw::set_trans_view(XMFLOAT4X4 *mat_need)
+{
+	auto check_error = set_matrix(view_matrix_handle, mat_need);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason light_defered_draw::set_trans_invview(XMFLOAT4X4 *mat_need)
+{
+	auto check_error = set_matrix(invview_matrix_handle, mat_need);
 	if (!check_error.check_if_failed())
 	{
 		return check_error;
@@ -1177,6 +1209,53 @@ engine_basic::engine_fail_reason light_defered_draw::set_specular_light_tex(ID3D
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
+engine_basic::engine_fail_reason light_defered_draw::set_normal_tex(ID3D11ShaderResourceView *tex_in)
+{
+	HRESULT hr = texture_normal_handle->SetResource(tex_in);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "deffered light draw error when set normal tex");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason light_defered_draw::set_tex_specroughness_resource(ID3D11ShaderResourceView *buffer_input)
+{
+	HRESULT hr;
+	hr = tex_specroughness->SetResource(buffer_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set tex_specroughness input error in globel reflect final shader");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason light_defered_draw::set_tex_brdflist_resource(ID3D11ShaderResourceView *buffer_input)
+{
+	HRESULT hr;
+	hr = tex_brdf_list->SetResource(buffer_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set tex_brdf_list input error in globel reflect final shader");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason light_defered_draw::set_IBL_tex(ID3D11ShaderResourceView *tex_in)
+{
+	HRESULT hr = texture_ibl_handle->SetResource(tex_in);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "deffered light draw error when set IBL tex");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+
 void light_defered_draw::release()
 {
 	release_basic();
@@ -1192,7 +1271,7 @@ void light_defered_draw::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_po
 		{ "TANGENT" ,0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,24 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
 		{ "TEXINDICES" ,0  ,DXGI_FORMAT_R32G32B32A32_UINT  ,0    ,36 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
 		{ "TEXDIFFNORM",0  ,DXGI_FORMAT_R32G32B32A32_FLOAT      ,0    ,52 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
-		{ "TEXOTHER",0  ,DXGI_FORMAT_R32G32B32A32_FLOAT      ,0    ,64 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 }
+		{ "TEXOTHER",0  ,DXGI_FORMAT_R32G32B32A32_FLOAT      ,0    ,68 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 }
 	};
 	*num_member = sizeof(rec) / sizeof(D3D11_INPUT_ELEMENT_DESC);
 	for (UINT i = 0; i < *num_member; ++i)
@@ -1202,17 +1281,23 @@ void light_defered_draw::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_po
 }
 void light_defered_draw::init_handle()
 {
-	texture_diffuse_handle = fx_need->GetVariableByName("texture_pack_array")->AsShaderResource();  //shader中的纹理资源句柄
-	tex_light_diffuse_handle = fx_need->GetVariableByName("texture_light_diffuse")->AsShaderResource();    //法线贴图纹理
-	tex_light_specular_handle = fx_need->GetVariableByName("texture_light_specular")->AsShaderResource();    //阴影贴图句柄
-	texture_ssao_handle = fx_need->GetVariableByName("texture_ssao")->AsShaderResource();        //环境光贴图句柄
+	texture_ibl_handle = fx_need->GetVariableByName("IBL_cube")->AsShaderResource();
+	tex_specroughness = fx_need->GetVariableByName("gInputspecular_roughness")->AsShaderResource();
+	tex_brdf_list = fx_need->GetVariableByName("gInputbrdf")->AsShaderResource();
+	texture_normal_handle = fx_need->GetVariableByName("gNormalspecMap")->AsShaderResource();
+	texture_diffuse_handle = fx_need->GetVariableByName("texture_pack_array")->AsShaderResource();
+	tex_light_diffuse_handle = fx_need->GetVariableByName("texture_light_diffuse")->AsShaderResource();
+	tex_light_specular_handle = fx_need->GetVariableByName("texture_light_specular")->AsShaderResource();
+	texture_ssao_handle = fx_need->GetVariableByName("texture_ssao")->AsShaderResource();
 	//几何变换句柄
 	view_pos_handle = fx_need->GetVariableByName("position_view");
-	world_matrix_handle = fx_need->GetVariableByName("world_matrix")->AsMatrix();           //世界变换句柄
-	final_matrix_handle = fx_need->GetVariableByName("final_matrix")->AsMatrix();         //全套几何变换句柄
-	ssao_matrix_handle = fx_need->GetVariableByName("ssao_matrix")->AsMatrix();             //ssao矩阵变换句柄
-	world_matrix_array_handle = fx_need->GetVariableByName("world_matrix_array")->AsMatrix();//世界变换组矩阵
-	viewproj_matrix_handle = fx_need->GetVariableByName("view_proj_matrix")->AsMatrix();   //取景*投影变换矩阵
+	world_matrix_handle = fx_need->GetVariableByName("world_matrix")->AsMatrix();
+	view_matrix_handle = fx_need->GetVariableByName("view_matrix")->AsMatrix();
+	invview_matrix_handle = fx_need->GetVariableByName("invview_matrix")->AsMatrix();
+	final_matrix_handle = fx_need->GetVariableByName("final_matrix")->AsMatrix();
+	ssao_matrix_handle = fx_need->GetVariableByName("ssao_matrix")->AsMatrix();
+	world_matrix_array_handle = fx_need->GetVariableByName("world_matrix_array")->AsMatrix();
+	viewproj_matrix_handle = fx_need->GetVariableByName("view_proj_matrix")->AsMatrix();
 	material_need = fx_need->GetVariableByName("material_need");
 }
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~记录cubemap方向到alpha像素~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1272,6 +1357,7 @@ rtgr_reflect::rtgr_reflect(LPCWSTR filename) :shader_basic(filename)
 }
 void rtgr_reflect::init_handle()
 {
+	projmessage_handle = fx_need->GetVariableByName("proj_desc");
 	view_pos_handle = fx_need->GetVariableByName("view_position");
 	view_matrix_handle = fx_need->GetVariableByName("view_matrix")->AsMatrix();       //取景变换句柄	
 	ViewToTexSpace = fx_need->GetVariableByName("gViewToTexSpace")->AsMatrix();
@@ -1291,6 +1377,17 @@ void rtgr_reflect::init_handle()
 void rtgr_reflect::release()
 {
 	release_basic();
+}
+engine_basic::engine_fail_reason rtgr_reflect::set_projmessage(XMFLOAT3 proj_message)
+{
+	HRESULT hr = projmessage_handle->SetRawValue((void*)&proj_message, 0, sizeof(proj_message));
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set set_projmessage error in rtgr reflect");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
 }
 engine_basic::engine_fail_reason rtgr_reflect::set_ViewToTexSpace(XMFLOAT4X4 *mat)
 {
@@ -1475,6 +1572,18 @@ engine_basic::engine_fail_reason rtgr_reflect_blur::set_tex_resource(ID3D11Shade
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
+engine_basic::engine_fail_reason rtgr_reflect_blur::set_tex_resource_array(ID3D11ShaderResourceView *buffer_input)
+{
+	HRESULT hr;
+	hr = tex_input_array->SetResource(buffer_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set reflect blur texture array error in globel reflect blur shader");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
 engine_basic::engine_fail_reason rtgr_reflect_blur::set_image_size(XMFLOAT4 range)
 {
 	HRESULT hr;
@@ -1493,8 +1602,10 @@ void rtgr_reflect_blur::release()
 }
 void rtgr_reflect_blur::init_handle()
 {
+	sample_level_handle = fx_need->GetVariableByName("blur_sample_level");
 	Texelrange = fx_need->GetVariableByName("tex_range_color_normal");
 	tex_input = fx_need->GetVariableByName("gInputImage")->AsShaderResource();
+	tex_input_array = fx_need->GetVariableByName("gInputImagearray")->AsShaderResource();
 	tex_normal_input = fx_need->GetVariableByName("normal_tex")->AsShaderResource();
 	tex_depth_input = fx_need->GetVariableByName("depth_tex")->AsShaderResource();
 	tex_mask_input = fx_need->GetVariableByName("gInputMask")->AsShaderResource();
@@ -1551,6 +1662,18 @@ engine_basic::engine_fail_reason rtgr_reflect_blur::set_tex_mask_resource(ID3D11
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
+engine_basic::engine_fail_reason rtgr_reflect_blur::set_sample_level(XMUINT4 sample_level)
+{
+	HRESULT hr;
+	hr = sample_level_handle->SetRawValue((void*)&sample_level, 0, sizeof(sample_level));
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set sample_level error in globel reflect blur shader");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~最终反射叠加~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 rtgr_reflect_final::rtgr_reflect_final(LPCWSTR filename) : shader_basic(filename)
 {
@@ -1564,6 +1687,12 @@ void rtgr_reflect_final::init_handle()
 	Texelrange = fx_need->GetVariableByName("tex_range_color_normal");
 	tex_color_input = fx_need->GetVariableByName("gInputImage")->AsShaderResource();
 	tex_reflect_input = fx_need->GetVariableByName("gInputReflect")->AsShaderResource();
+
+	tex_color_ao = fx_need->GetVariableByName("gInputAO")->AsShaderResource();
+	tex_metallic = fx_need->GetVariableByName("gInputnormal_metallic")->AsShaderResource();
+	tex_specroughness = fx_need->GetVariableByName("gInputspecular_roughness")->AsShaderResource();
+	tex_brdf_list = fx_need->GetVariableByName("gInputbrdf")->AsShaderResource();
+	tex_albedo_nov = fx_need->GetVariableByName("gInput_albedo_nov")->AsShaderResource();
 }
 void rtgr_reflect_final::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member)
 {
@@ -1600,6 +1729,66 @@ engine_basic::engine_fail_reason rtgr_reflect_final::set_tex_reflect_resource(ID
 	if (FAILED(hr))
 	{
 		engine_basic::engine_fail_reason error_message(hr, "set tex_reflect_resource input error in globel reflect final shader");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason rtgr_reflect_final::set_tex_ao_resource(ID3D11ShaderResourceView *buffer_input) 
+{
+	HRESULT hr;
+	hr = tex_color_ao->SetResource(buffer_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set tex_color_ao input error in globel reflect final shader");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason rtgr_reflect_final::set_tex_metallic_resource(ID3D11ShaderResourceView *buffer_input) 
+{
+	HRESULT hr;
+	hr = tex_metallic->SetResource(buffer_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set tex_metallic input error in globel reflect final shader");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason rtgr_reflect_final::set_tex_specroughness_resource(ID3D11ShaderResourceView *buffer_input) 
+{
+	HRESULT hr;
+	hr = tex_specroughness->SetResource(buffer_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set tex_specroughness input error in globel reflect final shader");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason rtgr_reflect_final::set_tex_brdflist_resource(ID3D11ShaderResourceView *buffer_input) 
+{
+	HRESULT hr;
+	hr = tex_brdf_list->SetResource(buffer_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set tex_brdf_list input error in globel reflect final shader");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason rtgr_reflect_final::set_tex_tex_albedonov_resource(ID3D11ShaderResourceView *buffer_input)
+{
+	HRESULT hr;
+	hr = tex_albedo_nov->SetResource(buffer_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set tex_albedo_nov input error in globel reflect final shader");
 		return error_message;
 	}
 	engine_basic::engine_fail_reason succeed;
@@ -1702,7 +1891,692 @@ void shader_skycube::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point,
 		{ "TANGENT"    ,0  ,DXGI_FORMAT_R32G32B32_FLOAT     ,0    ,24 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
 		{ "TEXINDICES" ,0  ,DXGI_FORMAT_R32G32B32A32_UINT   ,0    ,36 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
 		{ "TEXDIFFNORM",0  ,DXGI_FORMAT_R32G32B32A32_FLOAT  ,0    ,52 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
-		{ "TEXOTHER"   ,0  ,DXGI_FORMAT_R32G32B32A32_FLOAT  ,0    ,64 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 }
+		{ "TEXOTHER"   ,0  ,DXGI_FORMAT_R32G32B32A32_FLOAT  ,0    ,68 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 }
+	};
+	*num_member = sizeof(rec) / sizeof(D3D11_INPUT_ELEMENT_DESC);
+	for (UINT i = 0; i < *num_member; ++i)
+	{
+		member_point[i] = rec[i];
+	}
+}
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~brdf反射强度预处理~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+brdf_envpre_shader::brdf_envpre_shader(LPCWSTR filename) : shader_basic(filename)
+{
+}
+void brdf_envpre_shader::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member)
+{
+	//设置顶点声明
+	D3D11_INPUT_ELEMENT_DESC rec[] =
+	{
+		//语义名    语义索引      数据格式          输入槽 起始地址     输入槽的格式 
+		{ "POSITION",0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,0  ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TEXCOORD",0  ,DXGI_FORMAT_R32G32_FLOAT      ,0    ,12 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 }
+	};
+	*num_member = sizeof(rec) / sizeof(D3D11_INPUT_ELEMENT_DESC);
+	for (UINT i = 0; i < *num_member; ++i)
+	{
+		member_point[i] = rec[i];
+	}
+}
+void brdf_envpre_shader::release()
+{
+	release_basic();
+}
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~HDR亮度平均~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compute_averagelight::compute_averagelight(LPCWSTR filename) :shader_basic(filename)
+{
+}
+engine_basic::engine_fail_reason compute_averagelight::set_compute_tex(ID3D11ShaderResourceView *tex_input)
+{
+	HRESULT hr = texture_input->SetResource(tex_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "an error when setting HDR texture");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason compute_averagelight::set_compute_buffer(ID3D11UnorderedAccessView *buffer_input_need, ID3D11UnorderedAccessView *buffer_output_need)
+{
+	HRESULT hr;
+	hr = buffer_input->SetUnorderedAccessView(buffer_input_need);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set UAV buffer error when setting HDR texture");
+		return error_message;
+	}
+	hr = buffer_output->SetUnorderedAccessView(buffer_output_need);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set UAV buffer error when setting HDR texture");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason compute_averagelight::set_piccturerange(int width_need, int height_need, int buffer_num, int bytewidth)
+{
+	XMUINT4 rec_float = XMUINT4(static_cast<unsigned int>(width_need), static_cast<unsigned int>(height_need), static_cast<unsigned int>(buffer_num), static_cast<unsigned int>(bytewidth));
+	HRESULT hr = texture_range->SetRawValue((void*)&rec_float, 0, sizeof(rec_float));
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set_piccturerange error when setting HDR texture");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+void compute_averagelight::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member)
+{
+}
+void compute_averagelight::release()
+{
+	release_basic();
+}
+void compute_averagelight::init_handle()
+{
+	texture_input = fx_need->GetVariableByName("input_tex")->AsShaderResource();
+	buffer_input = fx_need->GetVariableByName("input_buffer")->AsUnorderedAccessView();
+	buffer_output = fx_need->GetVariableByName("output_buffer")->AsUnorderedAccessView();
+	texture_range = fx_need->GetVariableByName("input_range");
+}
+void compute_averagelight::dispatch(int width_need, int height_need, int final_need, int map_need)
+{
+	ID3DX11EffectTechnique* tech_need;
+	tech_need = fx_need->GetTechniqueByName("HDR_average_pass");
+	D3DX11_TECHNIQUE_DESC techDesc;
+	tech_need->GetDesc(&techDesc);
+	//分发线程
+	for (UINT i = 0; i<techDesc.Passes; ++i)
+	{
+		tech_need->GetPassByIndex(i)->Apply(0, d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex());
+		if (i == 0)
+		{
+			d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->Dispatch(width_need, height_need, 1);
+		}
+		else if (i == 1)
+		{
+			d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->Dispatch(final_need, 1, 1);
+		}
+		else
+		{
+			d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->Dispatch(map_need, 1, 1);
+		}
+	}
+	//还原渲染状态
+	ID3D11ShaderResourceView* nullSRV[1] = { 0 };
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->CSSetShaderResources(0, 1, nullSRV);
+	ID3D11UnorderedAccessView* nullUAV[1] = { 0 };
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->CSSetUnorderedAccessViews(0, 1, nullUAV, 0);
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->CSSetShader(0, 0, 0);
+}
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~HDR_高光提取~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+shader_HDRpreblur::shader_HDRpreblur(LPCWSTR filename) : shader_basic(filename)
+{
+}
+engine_basic::engine_fail_reason shader_HDRpreblur::set_buffer_input(ID3D11ShaderResourceView *buffer_need, ID3D11ShaderResourceView *tex_need)
+{
+	HRESULT hr = tex_input->SetResource(tex_need);
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set_buffer_input error when setting HDR texture");
+		return error_message;
+	}
+
+	hr = buffer_input->SetResource(buffer_need);
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set_buffer_input error when setting HDR texture");
+		return error_message;
+	}
+	XMFLOAT4X4 yuv_rgb = XMFLOAT4X4
+		(1.0f, 1.0f, 1.0f, 0.0f,
+			0.0f, -0.3441f, 1.7720f, 0.0f,
+			1.4020f, -0.7141f, 0.0f, 0.0f,
+			-0.7010f, 0.5291f, -0.8860f, 1.0f);
+	engine_basic::engine_fail_reason check_error = set_matrix(matrix_YUV2RGB, &yuv_rgb);;
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	XMFLOAT4X4 rgb_yuv = XMFLOAT4X4(0.2990f, -0.1687f, 0.5f, 0.0f,
+		0.5870, -0.3313f, -0.4187f, 0.0f,
+		0.1140, 0.5f, -0.0813f, 0.0f,
+		0.0f, 0.5f, 0.5f, 1.0f);
+	check_error = set_matrix(matrix_RGB2YUV, &rgb_yuv);;
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_HDRpreblur::set_lum_message(float average_lum, float HighLight_divide, float HightLight_max, float key_tonemapping)
+{
+	XMFLOAT4 rec_float = XMFLOAT4(average_lum, HighLight_divide, HightLight_max, key_tonemapping);
+	HRESULT hr = lum_message->SetRawValue((void*)&rec_float, 0, sizeof(rec_float));
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "setting HDR lum_message error when setting HDR texture");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_HDRpreblur::set_piccturerange(int width_need, int height_need, int buffer_num, int bytewidth)
+{
+	XMUINT4 rec_float = XMUINT4(static_cast<unsigned int>(width_need), static_cast<unsigned int>(height_need), static_cast<unsigned int>(buffer_num), static_cast<unsigned int>(bytewidth));
+	HRESULT hr = texture_range->SetRawValue((void*)&rec_float, 0, sizeof(rec_float));
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "setting set_piccturerange error when setting HDR texture");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+void shader_HDRpreblur::init_handle()
+{
+	matrix_YUV2RGB = fx_need->GetVariableByName("YUV2RGB")->AsMatrix();
+	matrix_RGB2YUV = fx_need->GetVariableByName("RGB2YUV")->AsMatrix();
+	tex_input = fx_need->GetVariableByName("input_tex")->AsShaderResource();
+	lum_message = fx_need->GetVariableByName("light_average");
+	texture_range = fx_need->GetVariableByName("input_range");
+	buffer_input = fx_need->GetVariableByName("input_buffer")->AsShaderResource();
+}
+void shader_HDRpreblur::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member)
+{
+	//设置顶点声明
+	D3D11_INPUT_ELEMENT_DESC rec[] =
+	{
+		//语义名    语义索引      数据格式          输入槽 起始地址     输入槽的格式 
+		{ "POSITION",0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,0  ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TEXCOORD",0  ,DXGI_FORMAT_R32G32_FLOAT      ,0    ,12 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 }
+	};
+	*num_member = sizeof(rec) / sizeof(D3D11_INPUT_ELEMENT_DESC);
+	for (UINT i = 0; i < *num_member; ++i)
+	{
+		member_point[i] = rec[i];
+	}
+}
+void shader_HDRpreblur::release()
+{
+	release_basic();
+}
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~HDR_高光模糊~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+shader_HDRblur::shader_HDRblur(LPCWSTR filename) : shader_basic(filename)
+{
+}
+engine_basic::engine_fail_reason shader_HDRblur::set_tex_resource(ID3D11ShaderResourceView *buffer_input)
+{
+	HRESULT hr;
+	hr = tex_input->SetResource(buffer_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "setting set_tex_resource error when setting HDR blur shader");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_HDRblur::set_image_size(float width, float height)
+{
+	HRESULT hr;
+	hr = TexelWidth->SetFloat(width);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set_image_size error when setting HDR blur shader");
+		return error_message;
+	}
+	hr = TexelHeight->SetFloat(height);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set_image_size error when setting HDR blur shader");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+void shader_HDRblur::release()
+{
+	release_basic();
+}
+void shader_HDRblur::init_handle()
+{
+	TexelWidth = fx_need->GetVariableByName("gTexelWidth")->AsScalar();
+	TexelHeight = fx_need->GetVariableByName("gTexelHeight")->AsScalar();
+	tex_input = fx_need->GetVariableByName("gInputImage")->AsShaderResource();
+}
+void shader_HDRblur::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member)
+{
+	//设置顶点声明
+	D3D11_INPUT_ELEMENT_DESC rec[] =
+	{
+		//语义名    语义索引      数据格式          输入槽 起始地址     输入槽的格式 
+		{ "POSITION",0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,0  ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TEXCOORD",0  ,DXGI_FORMAT_R32G32_FLOAT      ,0    ,12 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 }
+	};
+	*num_member = sizeof(rec) / sizeof(D3D11_INPUT_ELEMENT_DESC);
+	for (UINT i = 0; i < *num_member; ++i)
+	{
+		member_point[i] = rec[i];
+	}
+}
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~HDR_最终渲染~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+shader_HDRfinal::shader_HDRfinal(LPCWSTR filename) : shader_basic(filename)
+{
+}
+engine_basic::engine_fail_reason shader_HDRfinal::set_tex_resource(ID3D11ShaderResourceView *tex_input_need, ID3D11ShaderResourceView *tex_bloom_need, ID3D11ShaderResourceView *buffer_need)
+{
+	HRESULT hr;
+	hr = tex_input->SetResource(tex_input_need);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set HDR blur texture error in HDR final mapping");
+		return error_message;
+	}
+	hr = tex_bloom->SetResource(tex_bloom_need);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set HDR bloom texture error in HDR final mapping");
+		return error_message;
+	}
+	hr = buffer_input->SetResource(buffer_need);
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set HDR average buffer error in HDR final mapping");
+		return error_message;
+	}
+	XMFLOAT4X4 yuv_rgb = XMFLOAT4X4
+		(1.0f, 1.0f, 1.0f, 0.0f,
+			0.0f, -0.3441f, 1.7720f, 0.0f,
+			1.4020f, -0.7141f, 0.0f, 0.0f,
+			-0.7010f, 0.5291f, -0.8860f, 1.0f);
+	engine_basic::engine_fail_reason check_error = set_matrix(matrix_YUV2RGB, &yuv_rgb);;
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	XMFLOAT4X4 rgb_yuv = XMFLOAT4X4(0.2990f, -0.1687f, 0.5f, 0.0f,
+		0.5870, -0.3313f, -0.4187f, 0.0f,
+		0.1140, 0.5f, -0.0813f, 0.0f,
+		0.0f, 0.5f, 0.5f, 1.0f);
+	check_error = set_matrix(matrix_RGB2YUV, &rgb_yuv);;
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_HDRfinal::set_lum_message(float average_lum, float HighLight_divide, float HightLight_max, float key_tonemapping)
+{
+	XMFLOAT4 rec_float = XMFLOAT4(average_lum, HighLight_divide, HightLight_max, key_tonemapping);
+	HRESULT hr = lum_message->SetRawValue((void*)&rec_float, 0, sizeof(rec_float));
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set HDR lum_message error in HDR final mapping");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_HDRfinal::set_piccturerange(int width_need, int height_need, int buffer_num, int bytewidth)
+{
+	XMUINT4 rec_float = XMUINT4(static_cast<unsigned int>(width_need), static_cast<unsigned int>(height_need), static_cast<unsigned int>(buffer_num), static_cast<unsigned int>(bytewidth));
+	HRESULT hr = texture_range->SetRawValue((void*)&rec_float, 0, sizeof(rec_float));
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set HDR piccturerange error in HDR final mapping");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+void shader_HDRfinal::release()
+{
+	release_basic();
+}
+void shader_HDRfinal::init_handle()
+{
+	lum_message = fx_need->GetVariableByName("light_average");
+	matrix_YUV2RGB = fx_need->GetVariableByName("YUV2RGB")->AsMatrix();
+	matrix_RGB2YUV = fx_need->GetVariableByName("RGB2YUV")->AsMatrix();
+	tex_input = fx_need->GetVariableByName("input_tex")->AsShaderResource();
+	tex_bloom = fx_need->GetVariableByName("input_bloom")->AsShaderResource();
+	texture_range = fx_need->GetVariableByName("input_range");
+	buffer_input = fx_need->GetVariableByName("input_buffer")->AsShaderResource();
+}
+void shader_HDRfinal::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member)
+{
+	//设置顶点声明
+	D3D11_INPUT_ELEMENT_DESC rec[] =
+	{
+		//语义名    语义索引      数据格式          输入槽 起始地址     输入槽的格式 
+		{ "POSITION",0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,0  ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TEXCOORD",0  ,DXGI_FORMAT_R32G32_FLOAT      ,0    ,12 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 }
+	};
+	*num_member = sizeof(rec) / sizeof(D3D11_INPUT_ELEMENT_DESC);
+	for (UINT i = 0; i < *num_member; ++i)
+	{
+		member_point[i] = rec[i];
+	}
+}
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~大气散射预处理~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+shader_atmosphere_pretreat::shader_atmosphere_pretreat(LPCWSTR filename) : shader_basic(filename)
+{
+}
+engine_basic::engine_fail_reason shader_atmosphere_pretreat::set_tex_transmittance(ID3D11ShaderResourceView *tex_input)
+{
+	HRESULT hr;
+	hr = transmittance_texture->SetResource(tex_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set transmittance texture error in atmosphere_pretreat");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_atmosphere_pretreat::set_tex_single_rayleigh_scattering(ID3D11ShaderResourceView *tex_input)
+{
+	HRESULT hr;
+	hr = single_rayleigh_scattering_texture->SetResource(tex_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set single_rayleigh_scattering texture error in atmosphere_pretreat");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_atmosphere_pretreat::set_tex_single_mie_scattering(ID3D11ShaderResourceView *tex_input)
+{
+	HRESULT hr;
+	hr = single_mie_scattering_texture->SetResource(tex_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set single_mie_scattering texture error in atmosphere_pretreat");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_atmosphere_pretreat::set_tex_multiple_scattering(ID3D11ShaderResourceView *tex_input)
+{
+	HRESULT hr;
+	hr = multiple_scattering_texture->SetResource(tex_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set multiple_scattering texture error in atmosphere_pretreat");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_atmosphere_pretreat::set_tex_irradiance(ID3D11ShaderResourceView *tex_input)
+{
+	HRESULT hr;
+	hr = irradiance_texture->SetResource(tex_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set irradiance texture error in atmosphere_pretreat");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_atmosphere_pretreat::set_tex_scattering_density(ID3D11ShaderResourceView *tex_input)
+{
+	HRESULT hr;
+	hr = scattering_density_texture->SetResource(tex_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set scattering_density texture error in atmosphere_pretreat");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+
+engine_basic::engine_fail_reason shader_atmosphere_pretreat::set_scattering_order(unsigned int scattering_order_in)
+{
+	HRESULT hr = scattering_order->SetRawValue((void*)&scattering_order_in, 0, sizeof(scattering_order_in));
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set scattering_order error in atmosphere_pretreat");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_atmosphere_pretreat::set_layer(unsigned int layer_in)
+{
+	HRESULT hr = layer->SetRawValue((void*)&layer_in, 0, sizeof(layer_in));
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set layer error in atmosphere_pretreat");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_atmosphere_pretreat::set_luminance_from_radiance(XMFLOAT4X4 luminance_from_radiance_in)
+{
+	auto check_error = set_matrix(luminance_from_radiance, &luminance_from_radiance_in);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+void shader_atmosphere_pretreat::release()
+{
+	release_basic();
+}
+void shader_atmosphere_pretreat::init_handle()
+{
+
+	scattering_order = fx_need->GetVariableByName("scattering_order");                        //散射层
+	layer = fx_need->GetVariableByName("layer");                                   //3d纹理层
+	luminance_from_radiance = fx_need->GetVariableByName("luminance_from_radiance")->AsMatrix();                 //球光照
+
+	transmittance_texture = fx_need->GetVariableByName("transmittance_texture")->AsShaderResource();                   //透射率纹理
+	single_rayleigh_scattering_texture = fx_need->GetVariableByName("single_rayleigh_scattering_texture")->AsShaderResource();      //单层瑞利散射
+	single_mie_scattering_texture = fx_need->GetVariableByName("single_mie_scattering_texture")->AsShaderResource();           //单层米氏散射
+	multiple_scattering_texture = fx_need->GetVariableByName("multiple_scattering_texture")->AsShaderResource();             //多层散射
+	irradiance_texture = fx_need->GetVariableByName("irradiance_texture")->AsShaderResource();                      //亮度纹理
+	scattering_density_texture = fx_need->GetVariableByName("scattering_density_texture")->AsShaderResource();              //最终散射目标
+}
+void shader_atmosphere_pretreat::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member)
+{
+	//设置顶点声明
+	D3D11_INPUT_ELEMENT_DESC rec[] =
+	{
+		//语义名    语义索引      数据格式          输入槽 起始地址     输入槽的格式 
+		{ "POSITION",0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,0  ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TEXCOORD",0  ,DXGI_FORMAT_R32G32_FLOAT      ,0    ,12 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 }
+	};
+	*num_member = sizeof(rec) / sizeof(D3D11_INPUT_ELEMENT_DESC);
+	for (UINT i = 0; i < *num_member; ++i)
+	{
+		member_point[i] = rec[i];
+	}
+}
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~大气散射着色~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+shader_atmosphere_render::shader_atmosphere_render(LPCWSTR filename) : shader_basic(filename)
+{
+}
+//纹理设置
+engine_basic::engine_fail_reason shader_atmosphere_render::set_tex_transmittance(ID3D11ShaderResourceView *tex_input)
+{
+	HRESULT hr;
+	hr = transmittance_texture->SetResource(tex_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set transmittance texture error in atmosphere_pretreat");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_atmosphere_render::set_tex_scattering(ID3D11ShaderResourceView *tex_input)
+{
+	HRESULT hr;
+	hr = scattering_texture->SetResource(tex_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set scattering texture error in atmosphere_pretreat");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_atmosphere_render::set_tex_single_mie_scattering(ID3D11ShaderResourceView *tex_input)
+{
+	HRESULT hr;
+	hr = single_mie_scattering_texture->SetResource(tex_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set single_mie_scattering texture error in atmosphere_pretreat");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_atmosphere_render::set_tex_irradiance(ID3D11ShaderResourceView *tex_input)
+{
+	HRESULT hr;
+	hr = irradiance_texture->SetResource(tex_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set irradiance texture error in atmosphere_pretreat");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+//矩阵设置
+engine_basic::engine_fail_reason shader_atmosphere_render::set_view_from_clip(XMFLOAT4X4 view_from_clip_in)
+{
+	auto check_error = set_matrix(view_from_clip, &view_from_clip_in);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_atmosphere_render::set_model_from_view(XMFLOAT4X4 view_model_from_view)
+{
+	auto check_error = set_matrix(model_from_view, &view_model_from_view);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+//其他变量设置
+engine_basic::engine_fail_reason shader_atmosphere_render::set_white_point(XMFLOAT3 white_point_in)
+{
+	HRESULT hr = white_point->SetRawValue((void*)&white_point_in, 0, sizeof(white_point_in));
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set white_point_in error in atmosphere_pretreat");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_atmosphere_render::set_earth_center(XMFLOAT3 earth_center_in)
+{
+	HRESULT hr = earth_center->SetRawValue((void*)&earth_center_in, 0, sizeof(earth_center_in));
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set earth_center_in error in atmosphere_pretreat");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_atmosphere_render::set_sun_size(XMFLOAT2 sun_size_in)
+{
+	HRESULT hr = sun_size->SetRawValue((void*)&sun_size_in, 0, sizeof(sun_size_in));
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set sun_size error in atmosphere_pretreat");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_atmosphere_render::set_camera(XMFLOAT3 camera_in)
+{
+	HRESULT hr = camera->SetRawValue((void*)&camera_in, 0, sizeof(camera_in));
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set camera error in atmosphere_pretreat");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_atmosphere_render::set_exposure(float exposure_in)
+{
+	HRESULT hr = exposure->SetRawValue((void*)&exposure_in, 0, sizeof(exposure_in));
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set exposure error in atmosphere_pretreat");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_atmosphere_render::set_sun_direction(XMFLOAT3 sun_direction_in)
+{
+	HRESULT hr = sun_direction->SetRawValue((void*)&sun_direction_in, 0, sizeof(sun_direction_in));
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set sun_direction error in atmosphere_pretreat");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+void shader_atmosphere_render::release()
+{
+	release_basic();
+}
+void shader_atmosphere_render::init_handle()
+{
+
+	white_point = fx_need->GetVariableByName("white_point_in");//白平衡调节
+	earth_center = fx_need->GetVariableByName("earth_center");//3d纹理层
+	sun_size = fx_need->GetVariableByName("sun_size");//3d纹理层
+	
+	camera = fx_need->GetVariableByName("camera");//摄像机位置
+	exposure = fx_need->GetVariableByName("exposure");//白平衡曝光控制
+	sun_direction = fx_need->GetVariableByName("sun_direction");//太阳光方向
+
+	view_from_clip = fx_need->GetVariableByName("view_from_clip")->AsMatrix();//光栅窗口->取景空间变换
+	model_from_view = fx_need->GetVariableByName("model_from_view")->AsMatrix();//取景空间->世界空间变换
+
+	transmittance_texture = fx_need->GetVariableByName("transmittance_texture")->AsShaderResource();//透射率纹理
+	scattering_texture = fx_need->GetVariableByName("scattering_texture")->AsShaderResource();//瑞利散射
+	single_mie_scattering_texture = fx_need->GetVariableByName("single_mie_scattering_texture")->AsShaderResource();//单层米氏散射
+	irradiance_texture = fx_need->GetVariableByName("irradiance_texture")->AsShaderResource();//亮度纹理
+}
+void shader_atmosphere_render::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member)
+{
+	//设置顶点声明
+	D3D11_INPUT_ELEMENT_DESC rec[] =
+	{
+		//语义名    语义索引      数据格式          输入槽 起始地址     输入槽的格式 
+		{ "POSITION",0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,0  ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TEXCOORD",0  ,DXGI_FORMAT_R32G32_FLOAT      ,0    ,12 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 }
 	};
 	*num_member = sizeof(rec) / sizeof(D3D11_INPUT_ELEMENT_DESC);
 	for (UINT i = 0; i < *num_member; ++i)
@@ -2034,6 +2908,91 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 	{
 		return check_error;
 	}
+
+	std::shared_ptr<brdf_envpre_shader> shader_brdf_draw = std::make_shared<brdf_envpre_shader>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\render_brdf_list.cso");
+	check_error = shader_brdf_draw->shder_create();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = add_a_new_shader(std::type_index(typeid(brdf_envpre_shader)), shader_brdf_draw);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+
+	std::shared_ptr<compute_averagelight> shader_compute_averagelight = std::make_shared<compute_averagelight>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\HDR_average_pass.cso");
+	check_error = shader_compute_averagelight->shder_create();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = add_a_new_shader(std::type_index(typeid(compute_averagelight)), shader_compute_averagelight);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+
+	std::shared_ptr<shader_HDRpreblur> shader_hdr_preblur = std::make_shared<shader_HDRpreblur>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\HDR_preblur_pass.cso");
+	check_error = shader_hdr_preblur->shder_create();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = add_a_new_shader(std::type_index(typeid(shader_HDRpreblur)), shader_hdr_preblur);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+
+	std::shared_ptr<shader_HDRblur> shader_hdr_blur = std::make_shared<shader_HDRblur>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\HDR_blur_pass.cso");
+	check_error = shader_hdr_blur->shder_create();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = add_a_new_shader(std::type_index(typeid(shader_HDRblur)), shader_hdr_blur);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+
+	std::shared_ptr<shader_HDRfinal> shader_hdr_final = std::make_shared<shader_HDRfinal>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\HDR_final.cso");
+	check_error = shader_hdr_final->shder_create();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = add_a_new_shader(std::type_index(typeid(shader_HDRfinal)), shader_hdr_final);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+
+	std::shared_ptr<shader_atmosphere_pretreat> shader_atmospherepretreat = std::make_shared<shader_atmosphere_pretreat>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\atmosphere_precompute.cso");
+	check_error = shader_atmospherepretreat->shder_create();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = add_a_new_shader(std::type_index(typeid(shader_atmosphere_pretreat)), shader_atmospherepretreat);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+
+	std::shared_ptr<shader_atmosphere_render> shader_atmosphererender = std::make_shared<shader_atmosphere_render>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\atmosphere_render.cso");
+	check_error = shader_atmosphererender->shder_create();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = add_a_new_shader(std::type_index(typeid(shader_atmosphere_render)), shader_atmosphererender);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
@@ -2069,19 +3028,6 @@ std::shared_ptr<picture_show_shader> shader_control::get_shader_picture(engine_b
 	}
 	auto out_pointer = std::dynamic_pointer_cast<picture_show_shader>(shader_vlight);
 	return out_pointer;
-}
-std::shared_ptr<shader_basic> shader_control::get_shader_by_type(std::string type_name, engine_basic::engine_fail_reason &if_succeed)
-{
-	auto shader_out = shader_list.find(type_name)->second;
-	if (!shader_out)
-	{
-		engine_basic::engine_fail_reason failed_message(std::string("could not find shader") + type_name);
-		if_succeed = failed_message;
-		return 0;
-	}
-	engine_basic::engine_fail_reason succeed;
-	if_succeed = succeed;
-	return shader_out;
 }
 std::shared_ptr<shader_pretreat_gbuffer> shader_control::get_shader_gbuffer(engine_basic::engine_fail_reason &if_succeed)
 {
@@ -2214,6 +3160,97 @@ std::shared_ptr<shader_skycube> shader_control::get_shader_sky_draw(engine_basic
 	}
 	auto out_pointer = std::dynamic_pointer_cast<shader_skycube>(shader_vlight);
 	return out_pointer;
+}
+std::shared_ptr<brdf_envpre_shader> shader_control::get_shader_brdf_pre(engine_basic::engine_fail_reason &if_succeed)
+{
+	std::string name_need = std::type_index(typeid(brdf_envpre_shader)).name();
+	auto shader_vlight = get_shader_by_type(std::type_index(typeid(brdf_envpre_shader)).name(), if_succeed);
+	if (!if_succeed.check_if_failed())
+	{
+		return std::shared_ptr<brdf_envpre_shader>();
+	}
+	auto out_pointer = std::dynamic_pointer_cast<brdf_envpre_shader>(shader_vlight);
+	return out_pointer;
+}
+std::shared_ptr<compute_averagelight> shader_control::get_shader_hdr_averagelight(engine_basic::engine_fail_reason &if_succeed)
+{
+	std::string name_need = std::type_index(typeid(compute_averagelight)).name();
+	auto shader_vlight = get_shader_by_type(std::type_index(typeid(compute_averagelight)).name(), if_succeed);
+	if (!if_succeed.check_if_failed())
+	{
+		return std::shared_ptr<compute_averagelight>();
+	}
+	auto out_pointer = std::dynamic_pointer_cast<compute_averagelight>(shader_vlight);
+	return out_pointer;
+}
+std::shared_ptr<shader_HDRpreblur> shader_control::get_shader_hdr_preblur(engine_basic::engine_fail_reason &if_succeed)
+{
+	std::string name_need = std::type_index(typeid(shader_HDRpreblur)).name();
+	auto shader_vlight = get_shader_by_type(std::type_index(typeid(shader_HDRpreblur)).name(), if_succeed);
+	if (!if_succeed.check_if_failed())
+	{
+		return std::shared_ptr<shader_HDRpreblur>();
+	}
+	auto out_pointer = std::dynamic_pointer_cast<shader_HDRpreblur>(shader_vlight);
+	return out_pointer;
+}
+std::shared_ptr<shader_HDRblur> shader_control::get_shader_hdr_blur(engine_basic::engine_fail_reason &if_succeed)
+{
+	std::string name_need = std::type_index(typeid(shader_HDRblur)).name();
+	auto shader_vlight = get_shader_by_type(std::type_index(typeid(shader_HDRblur)).name(), if_succeed);
+	if (!if_succeed.check_if_failed())
+	{
+		return std::shared_ptr<shader_HDRblur>();
+	}
+	auto out_pointer = std::dynamic_pointer_cast<shader_HDRblur>(shader_vlight);
+	return out_pointer;
+}
+std::shared_ptr<shader_HDRfinal> shader_control::get_shader_hdr_final(engine_basic::engine_fail_reason &if_succeed)
+{
+	std::string name_need = std::type_index(typeid(shader_HDRfinal)).name();
+	auto shader_vlight = get_shader_by_type(std::type_index(typeid(shader_HDRfinal)).name(), if_succeed);
+	if (!if_succeed.check_if_failed())
+	{
+		return std::shared_ptr<shader_HDRfinal>();
+	}
+	auto out_pointer = std::dynamic_pointer_cast<shader_HDRfinal>(shader_vlight);
+	return out_pointer;
+}
+std::shared_ptr<shader_atmosphere_pretreat> shader_control::get_shader_atmosphere_pretreat(engine_basic::engine_fail_reason &if_succeed)
+{
+	std::string name_need = std::type_index(typeid(shader_atmosphere_pretreat)).name();
+	auto shader_vlight = get_shader_by_type(std::type_index(typeid(shader_atmosphere_pretreat)).name(), if_succeed);
+	if (!if_succeed.check_if_failed())
+	{
+		return std::shared_ptr<shader_atmosphere_pretreat>();
+	}
+	auto out_pointer = std::dynamic_pointer_cast<shader_atmosphere_pretreat>(shader_vlight);
+	return out_pointer;
+}
+std::shared_ptr<shader_atmosphere_render> shader_control::get_shader_atmosphere_render(engine_basic::engine_fail_reason &if_succeed)
+{
+	std::string name_need = std::type_index(typeid(shader_atmosphere_render)).name();
+	auto shader_vlight = get_shader_by_type(std::type_index(typeid(shader_atmosphere_render)).name(), if_succeed);
+	if (!if_succeed.check_if_failed())
+	{
+		return std::shared_ptr<shader_atmosphere_render>();
+	}
+	auto out_pointer = std::dynamic_pointer_cast<shader_atmosphere_render>(shader_vlight);
+	return out_pointer;
+}
+
+std::shared_ptr<shader_basic> shader_control::get_shader_by_type(std::string type_name, engine_basic::engine_fail_reason &if_succeed)
+{
+	auto shader_out = shader_list.find(type_name)->second;
+	if (!shader_out)
+	{
+		engine_basic::engine_fail_reason failed_message(std::string("could not find shader") + type_name);
+		if_succeed = failed_message;
+		return 0;
+	}
+	engine_basic::engine_fail_reason succeed;
+	if_succeed = succeed;
+	return shader_out;
 }
 void shader_control::release() 
 {

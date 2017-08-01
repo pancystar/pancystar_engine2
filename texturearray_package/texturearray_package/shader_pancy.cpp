@@ -532,6 +532,59 @@ void brdf_envpre_shader::release()
 {
 	release_basic();
 }
+//简单的3d拾取检测
+find_clip::find_clip(LPCWSTR filename) : shader_basic(filename)
+{
+}
+void find_clip::init_handle()
+{
+	partid_handle = fx_need->GetVariableByName("part_ID");
+	project_matrix_handle = fx_need->GetVariableByName("final_matrix")->AsMatrix();         //全套几何变换句柄
+}
+void find_clip::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member)
+{
+	//设置顶点声明
+	D3D11_INPUT_ELEMENT_DESC rec[] =
+	{
+		//语义名    语义索引      数据格式          输入槽 起始地址     输入槽的格式 
+		{ "POSITION",0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,0  ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "NORMAL"  ,0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,12 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TANGENT" ,0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,24 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TEXINDICES" ,0  ,DXGI_FORMAT_R32G32B32A32_UINT  ,0    ,36 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TEXDIFFNORM",0  ,DXGI_FORMAT_R32G32B32A32_FLOAT      ,0    ,52 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TEXOTHER",0  ,DXGI_FORMAT_R32G32B32A32_FLOAT      ,0    ,64 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 }
+	};
+	*num_member = sizeof(rec) / sizeof(D3D11_INPUT_ELEMENT_DESC);
+	for (UINT i = 0; i < *num_member; ++i)
+	{
+		member_point[i] = rec[i];
+	}
+}
+engine_basic::engine_fail_reason find_clip::set_trans_all(XMFLOAT4X4 *mat_need)
+{
+	auto check_error = set_matrix(project_matrix_handle, mat_need);;
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason find_clip::set_part_ID(XMUINT4 part_ID) 
+{
+	HRESULT hr = partid_handle->SetRawValue((void*)&part_ID, 0, sizeof(part_ID));
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason error_message(hr, "part_ID error when setting find clip");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+void find_clip::release()
+{
+	release_basic();
+}
 //shader管理器
 shader_control *shader_control::shadercontrol_pInstance = NULL;
 shader_control::shader_control() 
@@ -580,7 +633,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 	}
 
 
-	std::shared_ptr<virtual_light_shader> shader_vlight_test = std::make_shared<virtual_light_shader>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\virtual_light.cso");
+	std::shared_ptr<virtual_light_shader> shader_vlight_test = std::make_shared<virtual_light_shader>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\virtual_light_pbr.cso");
 	check_error = shader_vlight_test->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -623,6 +676,18 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 	check_error = add_a_new_shader(std::type_index(typeid(brdf_envpre_shader)), shader_brdf_draw);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+
+	std::shared_ptr<find_clip> shader_find_clip = std::make_shared<find_clip>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\find_clip.cso");
+	check_error = shader_find_clip->shder_create();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = add_a_new_shader(std::type_index(typeid(find_clip)), shader_find_clip);
 	if (!check_error.check_if_failed())
 	{
 		return check_error;
@@ -686,6 +751,17 @@ std::shared_ptr<brdf_envpre_shader> shader_control::get_shader_brdf_pre(engine_b
 	auto out_pointer = std::dynamic_pointer_cast<brdf_envpre_shader>(shader_vlight);
 	return out_pointer;
 }
+std::shared_ptr<find_clip> shader_control::get_shader_find_clip(engine_basic::engine_fail_reason &if_succeed)
+{
+	std::string name_need = std::type_index(typeid(find_clip)).name();
+	auto shader_vlight = get_shader_by_type(std::type_index(typeid(find_clip)).name(), if_succeed);
+	if (!if_succeed.check_if_failed())
+	{
+		return std::shared_ptr<find_clip>();
+	}
+	auto out_pointer = std::dynamic_pointer_cast<find_clip>(shader_vlight);
+	return out_pointer;
+}
 std::shared_ptr<shader_basic> shader_control::get_shader_by_type(std::string type_name, engine_basic::engine_fail_reason &if_succeed)
 {
 	auto shader_out = shader_list.find(type_name)->second;
@@ -699,6 +775,7 @@ std::shared_ptr<shader_basic> shader_control::get_shader_by_type(std::string typ
 	if_succeed = succeed;
 	return shader_out;
 }
+
 void shader_control::release() 
 {
 	for (auto shader_data = shader_list.begin(); shader_data != shader_list.end(); ++shader_data) 

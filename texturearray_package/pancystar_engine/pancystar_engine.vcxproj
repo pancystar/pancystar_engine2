@@ -192,12 +192,21 @@
     <ClCompile Include="shader_pancy.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <FxCompile Include="atmosphere_define.hlsli" />
+    <FxCompile Include="atmosphere_function.hlsli" />
+    <FxCompile Include="atmosphere_precompute.fx" />
+    <FxCompile Include="atmosphere_render.fx" />
     <FxCompile Include="color_test.fx" />
     <FxCompile Include="gbuffer_pretreat.fx" />
+    <FxCompile Include="HDR_average_pass.fx" />
+    <FxCompile Include="HDR_blur_pass.fx" />
+    <FxCompile Include="HDR_final.fx" />
+    <FxCompile Include="HDR_preblur_pass.fx" />
     <FxCompile Include="light_buffer_pretreat.fx" />
     <FxCompile Include="light_deffered.fx" />
     <FxCompile Include="reflect_blur.fx" />
     <FxCompile Include="reflect_final.fx" />
+    <FxCompile Include="render_brdf_list.fx" />
     <FxCompile Include="ResolveMSAAdepthstencil.fx" />
     <FxCompile Include="RTGR.fx" />
     <FxCompile Include="save_cube_depthstencil.fx" />
@@ -209,6 +218,7 @@
     <FxCompile Include="virtual_light.fx" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="atmosphere_renderfunc.hlsli" />
     <None Include="light_count.hlsli" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

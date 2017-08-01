@@ -73,12 +73,16 @@ void count_pbr_reflect(
 	float divide_ndf2 = pi * divide_ndf1 *divide_ndf1;
 	float ndf = (alpha*alpha) / divide_ndf2;
 	//GGX遮挡项
+	
 	float ggx_k = (tex_roughness + 1.0f) * (tex_roughness + 1.0f) / 8.0f;
 	float ggx_v = view_angle / (view_angle*(1 - ggx_k) + ggx_k);
 	float ggx_l = diffuse_angle / (diffuse_angle*(1 - ggx_k) + ggx_k);
 	float ggx = ggx_v * ggx_l;
+	float3 v = reflect(light_dir_in, normal);
+	float blin_phong = pow(max(dot(v, direction_view), 0.0f),10);
 	//最终的镜面反射项
 	specular_out = (fresnel * ndf * ggx) / (4 * view_angle * diffuse_angle);
+	//specular_out = fresnel * ndf *blin_phong / (4 * view_angle * diffuse_angle);
 }
 void compute_dirlight_2(
 	float4 tex_albedo_in,

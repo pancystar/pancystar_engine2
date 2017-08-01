@@ -79,6 +79,14 @@ private:
 
 class scene_test_square : public scene_root 
 {
+	//点击点寻找纹理
+
+	ID3D11Texture2D          *clipTex0;
+	ID3D11Texture2D          *CPU_read_buffer;
+	ID3D11ShaderResourceView *clip_SRV;
+	ID3D11RenderTargetView *clip_RTV;
+	ID3D11DepthStencilView   *clip_DSV;
+	//pbr基础信息
 	pbr_material mat_need_pbrbasic;
 	int now_show_part;
 	ID3D11ShaderResourceView *brdf_pic;
@@ -123,6 +131,7 @@ class scene_test_square : public scene_root
 	ID3D11ShaderResourceView *cubemap_resource;
 
 	ID3D11ShaderResourceView *test_resource;
+
 public:
 	scene_test_square();
 	engine_basic::engine_fail_reason create();
@@ -134,6 +143,7 @@ private:
 	void draw_brdfdata();
 	void show_model();
 	void show_model_single();
+	void find_model_clip();
 	void show_square(texture_combine *texture_deal);
 	void show_cube();
 	void show_pbr_metallic(pbr_material mat_in);
@@ -153,6 +163,10 @@ private:
 	engine_basic::engine_fail_reason export_model(string filepath,string filename);
 	engine_basic::engine_fail_reason read_texture_from_file(std::vector<string> file_name_list);
 	void change_model_texcoord(texture_combine *texture_deal,point_common *vertex_need, int point_num);
+
+	HRESULT CreateCPUaccessBuf(D3D11_TEXTURE2D_DESC texDesc, ID3D11Texture2D **resource_out);
+	void CreateAndCopyToDebugBuf(ID3D11Resource *dest_res, ID3D11Resource *source_res);
+	engine_basic::engine_fail_reason init_clip_texture();
 };
 
 

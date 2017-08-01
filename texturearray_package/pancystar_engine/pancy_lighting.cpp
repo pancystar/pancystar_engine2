@@ -186,8 +186,8 @@ void basic_point_lighting::init_comman_dirlight(shadow_type type_need_shadow)
 {
 	XMFLOAT4 rec_ambient(0.0f, 0.0f, 0.0f, 1.0f);
 	XMFLOAT4 rec_diffuse(0.6f, 0.6f, 0.6f, 1.0f);
-	XMFLOAT4 rec_specular(0.6f, 0.6f, 0.6f, 1.0f);
-	XMFLOAT3 rec_dir(-1.0f, -1.0f, 0.0f);
+	XMFLOAT4 rec_specular(1.0f, 1.0f, 1.0f, 1.0f);
+	XMFLOAT3 rec_dir(-1.0f,-1.0f, 0.0f);
 	light_data.ambient = rec_ambient;
 	light_data.diffuse = rec_diffuse;
 	light_data.specular = rec_specular;
@@ -302,7 +302,7 @@ engine_basic::engine_fail_reason spotlight_with_shadowmap::reset_texture(ID3D11T
 void spotlight_with_shadowmap::draw_shadow()
 {
 	shadowmap_deal->set_renderstate_spot(light_data.position, light_data.dir);
-	pancy_geometry_control_singleton::get_instance()->render_shadowmap(shadowmap_deal->get_shadow_build_matrix());
+	pancy_geometry_control_singleton::get_instance()->render_shadowmap(shadowmap_deal->get_shadow_build_matrix(),false);
 }
 void spotlight_with_shadowmap::release()
 {
@@ -405,7 +405,7 @@ void sunlight_with_shadowmap::draw_shadow_basic(int count)
 	//更新渲染状态
 	shadowmap_array[count]->set_renderstate(mat_sunlight_pssm[count]);
 	//绘制阴影
-	pancy_geometry_control_singleton::get_instance()->render_shadowmap(shadowmap_array[count]->get_shadow_build_matrix());
+	pancy_geometry_control_singleton::get_instance()->render_shadowmap(shadowmap_array[count]->get_shadow_build_matrix(),false);
 }
 void sunlight_with_shadowmap::divide_view_frustum(float lamda_log, int divide_num)
 {

@@ -47,9 +47,6 @@
     <FxCompile Include="color_test.fx">
       <Filter>源文件</Filter>
     </FxCompile>
-    <FxCompile Include="virtual_light.fx">
-      <Filter>源文件</Filter>
-    </FxCompile>
     <FxCompile Include="show_pic.fx">
       <Filter>源文件</Filter>
     </FxCompile>
@@ -57,6 +54,12 @@
       <Filter>源文件</Filter>
     </FxCompile>
     <FxCompile Include="render_brdf_list.fx">
+      <Filter>源文件</Filter>
+    </FxCompile>
+    <FxCompile Include="find_clip.fx">
+      <Filter>源文件</Filter>
+    </FxCompile>
+    <FxCompile Include="virtual_light_pbr.fx">
       <Filter>源文件</Filter>
     </FxCompile>
   </ItemGroup>

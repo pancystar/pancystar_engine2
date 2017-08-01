@@ -7,6 +7,7 @@ cbuffer PerFrame
 	float4   gFrustumCorners[4];   //3D重建的四个角，用于借助光栅化插值
 	float4x4 view_matrix_cube[6];
 	float3   center_position;
+	float3   proj_desc;//投影参数，用于还原深度信息
 };
 Texture2D gNormalDepthMap;
 Texture2D gdepth_map;
@@ -75,7 +76,8 @@ float2 get_depth(float now_distance, float3 ray_dir, float3 position)
 	float3 cube_ray_now = normalize(now_3D_point - center_position);
 	float2 rzAstencil = stencil_cube.Sample(samNormalDepth, cube_ray_now);
 	float rz = rzAstencil.g;
-	rz = 1.0f / (9.996f - rz * 9.996f);
+	//rz = 1.0f / (9.996f - rz * 9.996f);
+	rz = 1.0f / (rz * proj_desc.x + proj_desc.y);
 	uint cube_stencil = round(rzAstencil.r);
 	float depth_3D_point = mul(float4(now_3D_point, 1.0f), view_matrix_cube[cube_stencil]).z;
 	return float2(rz, depth_3D_point);
@@ -92,7 +94,7 @@ void compute_light_range(
 	ray_st = st_find;
 	ray_end = ed_find;
 	[unroll]
-	for (int i = 0; i < 5; ++i)
+	for (int i = 0; i < 10; ++i)
 	{
 		float length_final_rec = (ray_st + ray_end) / 2.0f;
 		float2 check_depth = get_depth(length_final_rec, ray_dir, position);
@@ -116,13 +118,13 @@ void compute_light_step(
 	float3 position,
 	out float end_find)
 {
-	float step = 1.0f / 5;
+	float step = 1.0f / 10;
 	end_find = 0;
 	float now_distance;
 	float2 check_depth;
 
 	//步长移近一位
-	now_distance = ray_end * step * 1;
+	now_distance = ray_end * step * 0.2;
 	check_depth = get_depth(now_distance, ray_dir, position);
 	if (check_depth.x < check_depth.y)
 	{
@@ -130,7 +132,7 @@ void compute_light_step(
 	}
 	else
 	{
-		now_distance = ray_end * step * 2;
+		now_distance = ray_end * step * 0.4;
 		check_depth = get_depth(now_distance, ray_dir, position);
 		if (check_depth.x < check_depth.y)
 		{
@@ -138,7 +140,7 @@ void compute_light_step(
 		}
 		else
 		{
-			now_distance = ray_end * step * 3;
+			now_distance = ray_end * step * 0.6;
 			check_depth = get_depth(now_distance, ray_dir, position);
 			if (check_depth.x < check_depth.y)
 			{
@@ -146,7 +148,7 @@ void compute_light_step(
 			}
 			else
 			{
-				now_distance = ray_end * step * 4;
+				now_distance = ray_end * step * 0.8;
 				check_depth = get_depth(now_distance, ray_dir, position);
 				if (check_depth.x < check_depth.y)
 				{
@@ -154,11 +156,56 @@ void compute_light_step(
 				}
 				else
 				{
-					now_distance = ray_end * step * 5;
+					now_distance = ray_end * step * 1.0;
 					check_depth = get_depth(now_distance, ray_dir, position);
 					if (check_depth.x < check_depth.y)
 					{
 						end_find = now_distance;
+					}
+					else 
+					{
+						now_distance = ray_end * step * 1.5;
+						check_depth = get_depth(now_distance, ray_dir, position);
+						if (check_depth.x < check_depth.y)
+						{
+							end_find = now_distance;
+						}
+						else
+						{
+							now_distance = ray_end * step * 3.0;
+							check_depth = get_depth(now_distance, ray_dir, position);
+							if (check_depth.x < check_depth.y)
+							{
+								end_find = now_distance;
+							}
+							else
+							{
+								now_distance = ray_end * step * 5.0;
+								check_depth = get_depth(now_distance, ray_dir, position);
+								if (check_depth.x < check_depth.y)
+								{
+									end_find = now_distance;
+								}
+								else
+								{
+									now_distance = ray_end * step * 7.5;
+									check_depth = get_depth(now_distance, ray_dir, position);
+									if (check_depth.x < check_depth.y)
+									{
+										end_find = now_distance;
+									}
+									else
+									{
+										now_distance = ray_end * step * 10.0;
+										check_depth = get_depth(now_distance, ray_dir, position);
+										if (check_depth.x < check_depth.y)
+										{
+											end_find = now_distance;
+										}
+									}
+								}
+							}
+						}
 					}
 				}
 			}
@@ -173,7 +220,8 @@ void compute_light_pos(
 	float3 ray_dir,
 	float3 position,
 	out float now_distance,
-	out float3 now_3D_point)
+	out float3 now_3D_point,
+	out float distance_minus)
 {
 	[unroll]
 	for (int i = 0; i < 10; ++i)
@@ -188,23 +236,18 @@ void compute_light_pos(
 		{
 			st_find = now_distance;
 		}
+		distance_minus = abs(check_depth.x - check_depth.y);
 	}
 	now_3D_point = position + ray_dir * now_distance;
 }
 
-
-[earlydepthstencil]
 pixelOut PS(VertexOut pin) : SV_Target
 {
 	pixelOut out_color;
 	out_color.color_need = float4(0.0f, 0.0f, 0.0f, 0.0f);
 	out_color.mask_need = float4(0.0f, 0.0f, 0.0f, 0.0f);
 	float4 mask_color = mask_input.Sample(samTex_liner, pin.Tex);
-	if (mask_color.r < 0.01f)
-	{
-		out_color.mask_need = float4(1.0f, 0.0f, 0.0f, 1.0f);
-		return out_color;
-	}
+	clip(0.3f - mask_color.r);
 	//还原点的世界坐标
 	float4 normalDepth = gNormalDepthMap.Sample(samNormalDepth, pin.Tex);
 	float3 n = normalDepth.xyz;
@@ -302,11 +345,7 @@ float4 PS_cube(VertexOut pin) : SV_Target
 {
 	float4 mask_color = mask_input.Sample(samNormalDepth, pin.Tex);
 	float rec_ifuse = mask_color.r;
-	float4 color_ssr_map = ssrcolor_input.Sample(samNormalDepth, pin.Tex);
-	if (rec_ifuse > 0.8f)
-	{
-		return color_ssr_map;
-	}
+	clip(0.8f - rec_ifuse);
 	//还原点的世界坐标
 	float4 normalDepth = gNormalDepthMap.Sample(samNormalDepth, pin.Tex);
 	float3 n = normalDepth.xyz;
@@ -324,8 +363,8 @@ float4 PS_cube(VertexOut pin) : SV_Target
 	compute_light_step(ray_st, ray_end, ray_dir, position, end_find);
 	float now_distance;
 	float3 now_3D_point;
-	compute_light_pos(st_find, end_find, ray_dir, position, now_distance, now_3D_point);
-
+	float distance_minus;
+	compute_light_pos(st_find, end_find, ray_dir, position, now_distance, now_3D_point, distance_minus);
 	float3 cube_ray2 = normalize(now_3D_point - center_position);
 	//float4 cube_color = texture_cube.SampleLevel(samTex_liner, cube_ray2,0);
 	float alpha_fade = pow(saturate(((20.0f - now_distance) / 20.0f)), 4);
@@ -333,7 +372,7 @@ float4 PS_cube(VertexOut pin) : SV_Target
 	float4 final_color = texture_cube.SampleLevel(samTex_liner, cube_ray2, 0);
 	final_color.a = alpha_fade;
 
-	final_color = (1.0f - rec_ifuse) * final_color + rec_ifuse * color_ssr_map;
+	//final_color = (1.0f - rec_ifuse) * final_color + rec_ifuse * color_ssr_map;
 
 
 	return final_color;

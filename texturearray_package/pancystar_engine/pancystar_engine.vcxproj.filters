@@ -174,5 +174,8 @@
     <None Include="atmosphere_renderfunc.hlsli">
       <Filter>源文件</Filter>
     </None>
+    <None Include="HDR_define.hlsli">
+      <Filter>源文件</Filter>
+    </None>
   </ItemGroup>
 </Project>

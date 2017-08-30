@@ -185,9 +185,9 @@ basic_point_lighting::basic_point_lighting(light_type type_need_light, shadow_ty
 void basic_point_lighting::init_comman_dirlight(shadow_type type_need_shadow)
 {
 	XMFLOAT4 rec_ambient(0.0f, 0.0f, 0.0f, 1.0f);
-	XMFLOAT4 rec_diffuse(0.6f, 0.6f, 0.6f, 1.0f);
-	XMFLOAT4 rec_specular(1.0f, 1.0f, 1.0f, 1.0f);
-	XMFLOAT3 rec_dir(-1.0f,-1.0f, 0.0f);
+	XMFLOAT4 rec_diffuse(0.3f, 0.3f, 0.3f, 1.0f);
+	XMFLOAT4 rec_specular(0.3f, 0.3f, 0.3f, 1.0f);
+	XMFLOAT3 rec_dir(-0.998858631,0.0229830630,0.0418711342);
 	light_data.ambient = rec_ambient;
 	light_data.diffuse = rec_diffuse;
 	light_data.specular = rec_specular;
@@ -705,6 +705,14 @@ engine_basic::engine_fail_reason light_control_singleton::create()
 	}
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
+}
+void light_control_singleton::update_sunlight(XMFLOAT3 dir) 
+{
+	auto data_now = sun_pssmshadow_light.find(sunlight_use);
+	if (data_now != sun_pssmshadow_light.end())
+	{
+		data_now->second.set_light_dir(dir.x, dir.y, dir.z);
+	}
 }
 void light_control_singleton::draw_shadow()
 {

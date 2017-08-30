@@ -142,6 +142,7 @@ public:
 	void draw_shadow();
 	void set_sunlight(int sunlight_ID) { sunlight_use = sunlight_ID; };
 	engine_basic::engine_fail_reason create();
+	void update_sunlight(XMFLOAT3 dir);
 	void release();
 private:
 	void get_shadow_map_matrix(XMFLOAT4X4* mat_out, int &mat_num_out);

@@ -41,29 +41,29 @@ VertexOut VS(VertexIn vin)
 float4 PS(VertexOut pin, uniform bool gHorizontalBlur) : SV_Target
 {
 	float2 texOffset;
-if (gHorizontalBlur)
-{
-	texOffset = float2(gTexelWidth, 0.0f);
-}
-else
-{
-	texOffset = float2(0.0f, gTexelHeight);
-}
-//先以中心点的颜色值作为基础混合值
-float4 center_color = gInputImage.SampleLevel(samInputImage, pin.Tex, 0.0);
-float4 color = gWeights[5] * center_color;
-for (float i = -gBlurRadius; i <= gBlurRadius; ++i)
-{
-	if (i == 0)
-		continue;
-	float2 tex = pin.Tex + i*texOffset;
-	//采集边界点的颜色
-	float4 neighborcolor = gInputImage.SampleLevel(samInputImage, tex, 0.0);
-	//计算当前点的颜色情况
-	float weight = gWeights[i + gBlurRadius];
-	color += weight*neighborcolor;
-}
-return color;
+	if (gHorizontalBlur)
+	{
+		texOffset = float2(gTexelWidth, 0.0f);
+	}
+	else
+	{
+		texOffset = float2(0.0f, gTexelHeight);
+	}
+	//先以中心点的颜色值作为基础混合值
+	float4 center_color = gInputImage.SampleLevel(samInputImage, pin.Tex, 0.0);
+	float4 color = gWeights[5] * center_color;
+	for (float i = -gBlurRadius; i <= gBlurRadius; ++i)
+	{
+		if (i == 0)
+			continue;
+		float2 tex = pin.Tex + i*texOffset;
+		//采集边界点的颜色
+		float4 neighborcolor = gInputImage.SampleLevel(samInputImage, tex, 0.0);
+		//计算当前点的颜色情况
+		float weight = gWeights[i + gBlurRadius];
+		color += weight*neighborcolor;
+	}
+	return color;
 }
 technique11 HorzBlur
 {

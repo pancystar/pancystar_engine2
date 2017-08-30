@@ -208,8 +208,42 @@ engine_basic::engine_fail_reason Pretreatment_gbuffer::init_reflect_texture()
 		return error_message;
 	}
 	safe_release(specroughness_buf);
+
+	//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~创建反射贴图的大气散射纹理~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	texDesc.Width = static_cast<int>(1024.0f * quality_reflect);
+	texDesc.Height = static_cast<int>(1024.0f * quality_reflect);
+	texDesc.MipLevels = 1;
+	texDesc.ArraySize = 1;
+	texDesc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+	texDesc.SampleDesc.Count = 1;
+	texDesc.SampleDesc.Quality = 0;
+	texDesc.Usage = D3D11_USAGE_DEFAULT;
+	texDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+	texDesc.CPUAccessFlags = 0;
+	texDesc.MiscFlags = 0;
+	ID3D11Texture2D* AtmosphereMask_buf = 0;
+	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateTexture2D(&texDesc, 0, &AtmosphereMask_buf);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create reflect AtmosphereMask texture error when create gbuffer");
+		return error_message;
+	}
+	//根据纹理资源创建访问资源以及渲染目标
+	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateRenderTargetView(AtmosphereMask_buf, 0, &reflect_AtmosphereMask_RTV);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create reflect AtmosphereMask_buf rendertargetview error when create gbuffer");
+		return error_message;
+	}
+	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateShaderResourceView(AtmosphereMask_buf, 0, &reflect_AtmosphereMask_SRV);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create reflect AtmosphereMask_buf shaderresourceview error when create gbuffer");
+		return error_message;
+	}
+	safe_release(AtmosphereMask_buf);
 	//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~光照信息存储纹理~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-	ID3D11Texture2D *diffuse_buf = 0, *specular_buf = 0;
+	ID3D11Texture2D *diffuse_buf = 0, *specular_buf = 0,*atmosphere_buffer = 0;
 	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateTexture2D(&texDesc, 0, &diffuse_buf);
 	if (FAILED(hr))
 	{
@@ -220,6 +254,12 @@ engine_basic::engine_fail_reason Pretreatment_gbuffer::init_reflect_texture()
 	if (FAILED(hr))
 	{
 		engine_basic::engine_fail_reason error_message(hr, "create reflect specularlight texture error when create gbuffer");
+		return error_message;
+	}
+	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateTexture2D(&texDesc, 0, &atmosphere_buffer);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create reflect atmosphere texture error when create gbuffer");
 		return error_message;
 	}
 	//根据纹理资源创建访问资源以及渲染目标
@@ -248,8 +288,22 @@ engine_basic::engine_fail_reason Pretreatment_gbuffer::init_reflect_texture()
 		engine_basic::engine_fail_reason error_message(hr, "create reflect specularlight RenderTargetView error when create gbuffer");
 		return error_message;
 	}
+
+	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateShaderResourceView(atmosphere_buffer, 0, &reflect_atmosphere_tex);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create reflect atmospherelight ShaderResourceView error when create gbuffer");
+		return error_message;
+	}
+	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateRenderTargetView(atmosphere_buffer, 0, &reflect_atmosphere_target);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create reflect atmospherelight RenderTargetView error when create gbuffer");
+		return error_message;
+	}
 	safe_release(diffuse_buf);
 	safe_release(specular_buf);
+	safe_release(atmosphere_buffer);
 	//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~创建cube面信息记录纹理~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	D3D11_TEXTURE2D_DESC cubeMapDesc;
 	//渲染目标
@@ -430,6 +484,53 @@ engine_basic::engine_fail_reason Pretreatment_gbuffer::init_texture()
 		return error_message;
 	}
 	safe_release(normalspec_singlebuf);
+	//~~~~~~~~~~~~~~~大气光照掩码纹理~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	texDesc.Width = map_width;
+	texDesc.Height = map_height;
+	texDesc.MipLevels = 1;
+	texDesc.ArraySize = 1;
+	texDesc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+	texDesc.SampleDesc.Count = 4;
+	texDesc.SampleDesc.Quality = 0;
+	texDesc.Usage = D3D11_USAGE_DEFAULT;
+	texDesc.BindFlags = D3D11_BIND_RENDER_TARGET;
+	texDesc.CPUAccessFlags = 0;
+	texDesc.MiscFlags = 0;
+	ID3D11Texture2D* atmospheremask_buf = 0;
+	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateTexture2D(&texDesc, 0, &atmospheremask_buf);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create 4xMSAA atmosphere_buf texture error when create gbuffer");
+		return error_message;
+	}
+	//根据纹理资源创建访问资源以及渲染目标
+	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateRenderTargetView(atmospheremask_buf, 0, &AtmosphereMask_target);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create 4xMSAA atmosphere_buf rendertargetview error when create gbuffer");
+		return error_message;
+	}
+	safe_release(atmospheremask_buf);
+	texDesc.SampleDesc.Count = 1;
+	texDesc.SampleDesc.Quality = 0;
+	texDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+	ID3D11Texture2D* atmosphere_singlebuf = 0;
+	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateTexture2D(&texDesc, 0, &atmosphere_singlebuf);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create noMSAA atmospheremask texture error when create gbuffer");
+		return error_message;
+	}
+	texDesc.SampleDesc.Count = 1;
+	texDesc.SampleDesc.Quality = 0;
+	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateShaderResourceView(atmosphere_singlebuf, 0, &AtmosphereMask_tex);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create noMSAA atmospheremask shaderresourceview error when create gbuffer");
+		return error_message;
+	}
+	safe_release(atmosphere_singlebuf);
+
 
 	//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~镜面光&粗糙度纹理~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	//4xMSAA抗锯齿纹理格式并创建纹理资源~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -482,7 +583,7 @@ engine_basic::engine_fail_reason Pretreatment_gbuffer::init_texture()
 
 	//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~光照信息存储纹理~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	texDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
-	ID3D11Texture2D *diffuse_buf = 0, *specular_buf = 0;
+	ID3D11Texture2D *diffuse_buf = 0, *specular_buf = 0,*atmosphere_buf;
 	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateTexture2D(&texDesc, 0, &diffuse_buf);
 	if (FAILED(hr))
 	{
@@ -495,6 +596,13 @@ engine_basic::engine_fail_reason Pretreatment_gbuffer::init_texture()
 		engine_basic::engine_fail_reason error_message(hr, "create noMSAA specularlight texture error when create gbuffer");
 		return error_message;
 	}
+	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateTexture2D(&texDesc, 0, &atmosphere_buf);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create noMSAA atmosphere texture error when create gbuffer");
+		return error_message;
+	}
+
 	//根据纹理资源创建访问资源以及渲染目标
 	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateShaderResourceView(diffuse_buf, 0, &gbuffer_diffuse_tex);
 	if (FAILED(hr))
@@ -521,8 +629,22 @@ engine_basic::engine_fail_reason Pretreatment_gbuffer::init_texture()
 		engine_basic::engine_fail_reason error_message(hr, "create noMSAA specularlight RenderTargetView error when create gbuffer");
 		return error_message;
 	}
+
+	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateShaderResourceView(atmosphere_buf, 0, &gbuffer_atmosphere_tex);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create noMSAA atmospherelight ShaderResourceView error when create gbuffer");
+		return error_message;
+	}
+	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateRenderTargetView(atmosphere_buf, 0, &gbuffer_atmosphere_target);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create noMSAA atmospherelight RenderTargetView error when create gbuffer");
+		return error_message;
+	}
 	safe_release(diffuse_buf);
 	safe_release(specular_buf);
+	safe_release(atmosphere_buf);
 	//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~4xMSAA重采样深度纹理~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	texDesc.Width = map_width;
 	texDesc.Height = map_height;
@@ -617,12 +739,14 @@ engine_basic::engine_fail_reason Pretreatment_gbuffer::init_texture()
 }
 void Pretreatment_gbuffer::set_normalspecdepth_target()
 {
-	ID3D11RenderTargetView* renderTargets[2] = { normalspec_target,specroughness_target };
-	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetRenderTargets(2, renderTargets, depthmap_target);
+	
+	ID3D11RenderTargetView* renderTargets[3] = { normalspec_target,specroughness_target,AtmosphereMask_target };
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetRenderTargets(3, renderTargets, depthmap_target);
 	//d3d_pancy_basic_singleton::GetInstance()->set_render_target(normalspec_target, depthmap_target);
-	float clearColor[] = { 0.0f, 0.0f, -1.0f, 1e5f };
+	float clearColor[] = { 0.0f, 0.0f, 0.0f, 1e5f };
 	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearRenderTargetView(normalspec_target, clearColor);
 	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearRenderTargetView(specroughness_target, clearColor);
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearRenderTargetView(AtmosphereMask_target, clearColor);
 	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearDepthStencilView(depthmap_target, D3D11_CLEAR_DEPTH, 1.0f, 0);
 }
 void Pretreatment_gbuffer::set_reflect_normaldepth_target()
@@ -633,11 +757,12 @@ void Pretreatment_gbuffer::set_reflect_normaldepth_target()
 	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearRenderTargetView(reflect_cubenormal_RTV, clearColor);
 	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearDepthStencilView(reflect_DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
 	*/
-	ID3D11RenderTargetView* renderTargets[2] = { reflect_cubenormal_RTV,reflect_cubeSpecRough_RTV };
-	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetRenderTargets(2, renderTargets, reflect_DSV);
+	ID3D11RenderTargetView* renderTargets[3] = { reflect_cubenormal_RTV,reflect_cubeSpecRough_RTV,reflect_AtmosphereMask_RTV };
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetRenderTargets(3, renderTargets, reflect_DSV);
 	float clearColor[] = { 0.0f, 0.0f, -1.0f, 1e5f };
 	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearRenderTargetView(reflect_cubenormal_RTV, clearColor);
 	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearRenderTargetView(reflect_cubeSpecRough_RTV, clearColor);
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearRenderTargetView(reflect_AtmosphereMask_RTV, clearColor);
 	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearDepthStencilView(reflect_DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
 }
 void Pretreatment_gbuffer::set_reflect_savedepth_target(int count)
@@ -648,16 +773,16 @@ void Pretreatment_gbuffer::set_reflect_savedepth_target(int count)
 }
 void Pretreatment_gbuffer::set_multirender_target()
 {
-	ID3D11RenderTargetView* renderTargets[2] = { gbuffer_diffuse_target,gbuffer_specular_target };
-	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetRenderTargets(2, renderTargets, NULL);
+	ID3D11RenderTargetView* renderTargets[3] = { gbuffer_diffuse_target,gbuffer_specular_target,gbuffer_atmosphere_target };
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetRenderTargets(3, renderTargets, NULL);
 	float clearColor[] = { 0.0f, 0.0f, 0.0f, 1.0f };
 	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearRenderTargetView(gbuffer_diffuse_target, clearColor);
 	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearRenderTargetView(gbuffer_specular_target, clearColor);
 }
 void Pretreatment_gbuffer::set_reflect_multirender_target()
 {
-	ID3D11RenderTargetView* renderTargets[2] = { reflect_diffuse_target,reflect_specular_target };
-	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetRenderTargets(2, renderTargets, NULL);
+	ID3D11RenderTargetView* renderTargets[3] = { reflect_diffuse_target,reflect_specular_target,reflect_atmosphere_target };
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetRenderTargets(3, renderTargets, NULL);
 	float clearColor[] = { 0.0f, 0.0f, 0.0f, 1.0f };
 	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearRenderTargetView(reflect_diffuse_target, clearColor);
 	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearRenderTargetView(reflect_specular_target, clearColor);
@@ -690,10 +815,14 @@ void Pretreatment_gbuffer::release_texture()
 	safe_release(gbuffer_diffuse_tex);
 	safe_release(gbuffer_specular_target);
 	safe_release(gbuffer_specular_tex);
+	safe_release(gbuffer_atmosphere_target);
+	safe_release(gbuffer_atmosphere_tex);
 	safe_release(depthmap_single_target);
 	safe_release(depthmap_single_tex);
 	safe_release(posttreatment_RTV);
 	safe_release(reflectmask_RTV);
+	safe_release(AtmosphereMask_target);
+	safe_release(AtmosphereMask_tex);
 }
 void Pretreatment_gbuffer::upadte_reflect_render_face()
 { 
@@ -742,9 +871,25 @@ void Pretreatment_gbuffer::render_gbuffer()
 	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateShaderResourceView(specroughnessTex_singlesample, 0, &specroughness_tex);
 	specroughnessTex->Release();
 	specroughnessTex_singlesample->Release();
-	//msaa-shader重采样
-	set_resolvdepth_target();
+	//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~存储大气掩码纹理~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	ID3D11Resource * atmospheremaslTex = 0;
+	ID3D11Resource * atmospheremaslTex_singlesample = 0;
+	AtmosphereMask_target->GetResource(&atmospheremaslTex);
+	AtmosphereMask_tex->GetResource(&atmospheremaslTex_singlesample);
+	//将多重采样纹理转换至非多重纹理
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ResolveSubresource(atmospheremaslTex_singlesample, D3D11CalcSubresource(0, 0, 1), atmospheremaslTex, D3D11CalcSubresource(0, 0, 1), DXGI_FORMAT_R16G16B16A16_FLOAT);
+	AtmosphereMask_tex->Release();
+	AtmosphereMask_tex = NULL;
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateShaderResourceView(atmospheremaslTex_singlesample, 0, &AtmosphereMask_tex);
+	atmospheremaslTex->Release();
+	atmospheremaslTex_singlesample->Release();
+
 	engine_basic::engine_fail_reason check_error;
+	auto shader_atmosphere = shader_control::GetInstance()->get_shader_atmosphere_render(check_error);
+	shader_atmosphere->set_tex_mask(AtmosphereMask_tex);
+	//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~msaa-shader重采样~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	set_resolvdepth_target();
+//	engine_basic::engine_fail_reason check_error;
 	auto shader_resolve = shader_control::GetInstance()->get_shader_resolvedepth(check_error);
 	shader_resolve->set_texture_MSAA(depthmap_tex);
 	XMFLOAT3 rec_proj_vec;
@@ -822,6 +967,14 @@ void Pretreatment_gbuffer::render_lbuffer(XMFLOAT4X4 view_matrix, XMFLOAT4X4 inv
 	pancy_camera::get_instance()->count_invview_matrix(&invview_mat);
 	lbuffer_shader->set_view_matrix(&view_mat);
 	lbuffer_shader->set_invview_matrix(&invview_mat);
+
+	XMFLOAT3 camera_pos;
+	pancy_camera::get_instance()->get_view_position(&camera_pos);
+	lbuffer_shader->set_camera(camera_pos);
+	lbuffer_shader->set_exposure(10.0f);
+	lbuffer_shader->set_tex_mask(AtmosphereMask_tex);
+
+
 	ID3DX11EffectTechnique *tech_need;
 	if (if_shadow == true)
 	{
@@ -832,6 +985,8 @@ void Pretreatment_gbuffer::render_lbuffer(XMFLOAT4X4 view_matrix, XMFLOAT4X4 inv
 		lbuffer_shader->get_technique(&tech_need, "draw_pbr_withoutshadow");
 	}
 	light_buffer_render(tech_need);
+	auto shader_sky = shader_control::GetInstance()->get_shader_sky_draw(check_error);
+	shader_sky->set_tex_atmosphere(gbuffer_atmosphere_tex);
 
 	//渲染反射方向光照纹理
 	D3D11_VIEWPORT shadow_map_VP;
@@ -921,19 +1076,25 @@ void Pretreatment_gbuffer::release()
 {
 	fullscreen_Lbuffer->release();
 	fullscreen_buffer->release();
+	//全局反射gbuffer开启的纹理
 	safe_release(reflect_cubenormal_SRV);
 	safe_release(reflect_cubenormal_RTV);
 	
 	safe_release(reflect_cubeSpecRough_SRV);
 	safe_release(reflect_cubeSpecRough_RTV);
-
+	
+	safe_release(reflect_AtmosphereMask_SRV);
+	safe_release(reflect_AtmosphereMask_RTV);
+	
 	safe_release(reflect_depthcube_SRV);
 	safe_release(reflect_DSV);
-
+	// 全局反射lbuffer开启的纹理
 	safe_release(reflect_diffuse_target);
 	safe_release(reflect_diffuse_tex);
 	safe_release(reflect_specular_target);
 	safe_release(reflect_specular_tex);
+	safe_release(reflect_atmosphere_target);
+	safe_release(reflect_atmosphere_tex);
 
 	reflect_cubestencil_SRV->Release();
 	reflect_cubestencil_SRV_backbuffer->Release();

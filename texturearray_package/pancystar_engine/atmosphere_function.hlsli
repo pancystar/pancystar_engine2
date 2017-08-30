@@ -116,7 +116,7 @@ void assert(bool check)
 }
 float mod(float x, float y) 
 {
-	float rec = x - y * floor(x/y) - 1.0f;
+	float rec = x - y * floor(x/y);
 	return rec;
 }
 #include"atmosphere_define.hlsli"

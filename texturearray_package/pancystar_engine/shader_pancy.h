@@ -243,6 +243,21 @@ private:
 };
 class light_defered_lightbuffer : public shader_basic
 {
+	//大气预计算贴图
+	ID3DX11EffectShaderResourceVariable      *transmittance_texture;                   //透射率纹理
+	ID3DX11EffectShaderResourceVariable      *scattering_texture;                      //散射
+	ID3DX11EffectShaderResourceVariable      *single_mie_scattering_texture;           //单层米氏散射
+	ID3DX11EffectShaderResourceVariable      *irradiance_texture;                      //亮度纹理
+	ID3DX11EffectShaderResourceVariable      *mask_texture;                            //掩码图
+	//一次设置参数
+	ID3DX11EffectVariable                    *white_point;    //白平衡最亮点
+	ID3DX11EffectVariable                    *earth_center;   //地心位置
+	ID3DX11EffectVariable                    *sun_size;       //太阳大小
+	ID3DX11EffectMatrixVariable              *view_from_clip; //反投影光线追踪
+	//逐帧设置参数
+	ID3DX11EffectVariable                    *camera;         //摄像机位置
+	ID3DX11EffectVariable                    *exposure;       //曝光系数
+	//光照信息
 	ID3DX11EffectVariable                 *light_sun;                  //太阳光
 	ID3DX11EffectVariable                 *sunlight_num;               //太阳光分级数量
 	ID3DX11EffectVariable                 *depth_devide;               //每一级的深度
@@ -262,7 +277,21 @@ class light_defered_lightbuffer : public shader_basic
 	ID3DX11EffectShaderResourceVariable   *texture_shadow;             //阴影纹理资源句柄
 public:
 	light_defered_lightbuffer(LPCWSTR filename);
-
+	//纹理设置
+	engine_basic::engine_fail_reason set_tex_transmittance(ID3D11ShaderResourceView *tex_input);
+	engine_basic::engine_fail_reason set_tex_scattering(ID3D11ShaderResourceView *tex_input);
+	engine_basic::engine_fail_reason set_tex_single_mie_scattering(ID3D11ShaderResourceView *tex_input);
+	engine_basic::engine_fail_reason set_tex_irradiance(ID3D11ShaderResourceView *tex_input);
+	engine_basic::engine_fail_reason set_tex_mask(ID3D11ShaderResourceView *tex_input);
+	//矩阵设置
+	engine_basic::engine_fail_reason set_view_from_clip(XMFLOAT4X4 view_from_clip_in);
+	//其他变量设置
+	engine_basic::engine_fail_reason set_white_point(XMFLOAT3 white_point_in);
+	engine_basic::engine_fail_reason set_earth_center(XMFLOAT3 earth_center_in);
+	engine_basic::engine_fail_reason set_sun_size(XMFLOAT2 sun_size_in);
+	engine_basic::engine_fail_reason set_camera(XMFLOAT3 camera_in);
+	engine_basic::engine_fail_reason set_exposure(float exposure_in);
+	//光照信息
 	engine_basic::engine_fail_reason set_sunlight(pancy_light_basic light_need);             //设置太阳光源
 	engine_basic::engine_fail_reason set_sunshadow_matrix(const XMFLOAT4X4* M, int cnt);     //设置太阳阴影图变换矩阵
 	engine_basic::engine_fail_reason set_sunlight_num(XMUINT3 all_light_num);                //设置太阳光源数量
@@ -440,14 +469,19 @@ class shader_skycube : public shader_basic
 	ID3DX11EffectMatrixVariable           *project_matrix_handle;      //全套几何变换句柄
 	ID3DX11EffectMatrixVariable           *world_matrix_handle;        //世界变换句柄
 	ID3DX11EffectMatrixVariable           *normal_matrix_handle;       //法线变换句柄
+	ID3DX11EffectMatrixVariable           *texproj_matrix_handle;      //投影纹理变换句柄
+
 	ID3DX11EffectVariable                 *view_pos_handle;            //视点位置
 	ID3DX11EffectShaderResourceVariable   *cubemap_texture;            //立方贴图资源
+	ID3DX11EffectShaderResourceVariable   *atomosphere_texture;        //大气贴图资源
 public:
 	shader_skycube(LPCWSTR filename);
 	engine_basic::engine_fail_reason set_view_pos(XMFLOAT3 eye_pos);                                 //设置视点位置
 	engine_basic::engine_fail_reason set_trans_world(XMFLOAT4X4 *mat_need);                          //设置世界变换
 	engine_basic::engine_fail_reason set_trans_all(XMFLOAT4X4 *mat_need);                            //设置总变换
-	engine_basic::engine_fail_reason set_tex_resource(ID3D11ShaderResourceView* tex_cube);           //设置纹理资源
+	engine_basic::engine_fail_reason set_trans_texproj(XMFLOAT4X4 *mat_need);                        //设置投影纹理变换
+	engine_basic::engine_fail_reason set_tex_resource(ID3D11ShaderResourceView* tex_cube);           //设置立方纹理资源
+	engine_basic::engine_fail_reason set_tex_atmosphere(ID3D11ShaderResourceView* tex_in);           //设置大气纹理资源
 	void release();
 private:
 	void init_handle();//注册shader中所有全局变量的句柄
@@ -569,6 +603,7 @@ class shader_atmosphere_render : public shader_basic
 	ID3DX11EffectShaderResourceVariable      *scattering_texture;                      //散射
 	ID3DX11EffectShaderResourceVariable      *single_mie_scattering_texture;           //单层米氏散射
 	ID3DX11EffectShaderResourceVariable      *irradiance_texture;                      //亮度纹理
+	ID3DX11EffectShaderResourceVariable      *mask_texture;                            //掩码图
 	//一次设置参数
 	ID3DX11EffectVariable                    *white_point;
 	ID3DX11EffectVariable                    *earth_center;
@@ -579,6 +614,12 @@ class shader_atmosphere_render : public shader_basic
 	ID3DX11EffectVariable                    *exposure;
 	ID3DX11EffectVariable                    *sun_direction;
 	ID3DX11EffectMatrixVariable              *model_from_view;
+	//深度法线图
+	ID3DX11EffectShaderResourceVariable      *depth_texture;//深度图
+	ID3DX11EffectShaderResourceVariable      *normal_texture;//法线图
+	
+	//远截面角点
+	ID3DX11EffectVectorVariable* FrustumCorners;
 public:
 	shader_atmosphere_render(LPCWSTR filename);
 	//纹理设置
@@ -586,6 +627,9 @@ public:
 	engine_basic::engine_fail_reason set_tex_scattering(ID3D11ShaderResourceView *tex_input);
 	engine_basic::engine_fail_reason set_tex_single_mie_scattering(ID3D11ShaderResourceView *tex_input);
 	engine_basic::engine_fail_reason set_tex_irradiance(ID3D11ShaderResourceView *tex_input);
+	engine_basic::engine_fail_reason set_tex_depth(ID3D11ShaderResourceView *tex_input);
+	engine_basic::engine_fail_reason set_tex_normal(ID3D11ShaderResourceView *tex_input);
+	engine_basic::engine_fail_reason set_tex_mask(ID3D11ShaderResourceView *tex_input);
 	//矩阵设置
 	engine_basic::engine_fail_reason set_view_from_clip(XMFLOAT4X4 view_from_clip_in);
 	engine_basic::engine_fail_reason set_model_from_view(XMFLOAT4X4 view_model_from_view);
@@ -596,6 +640,7 @@ public:
 	engine_basic::engine_fail_reason set_camera(XMFLOAT3 camera_in);
 	engine_basic::engine_fail_reason set_exposure(float exposure_in);
 	engine_basic::engine_fail_reason set_sun_direction(XMFLOAT3 sun_direction_in);
+	engine_basic::engine_fail_reason set_FrustumCorners(const XMFLOAT4 v[4]);
 	void release();
 private:
 	void init_handle();//注册shader中所有全局变量的句柄

@@ -219,6 +219,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="atmosphere_renderfunc.hlsli" />
+    <None Include="HDR_define.hlsli" />
     <None Include="light_count.hlsli" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

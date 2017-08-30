@@ -76,6 +76,7 @@ struct PixelOut_pbr
 {
 	float4 normalmetallic     : SV_TARGET0;
 	float4 specroughness      : SV_TARGET1;
+	float4 atmospheremask     : SV_TARGET2;
 };
 float4 PS(VertexOut pin) : SV_Target
 {
@@ -85,9 +86,10 @@ float4 PS(VertexOut pin) : SV_Target
 	pin.NormalV = normalize(pin.NormalV);
 	return float4(pin.NormalV, 10.0f);
 }
-PixelOut_pbr PS_withnormal(VertexOut pin) : SV_Target
+PixelOut_pbr PS_withnormal(VertexOut pin, uniform float mask) : SV_Target
 {
 	PixelOut_pbr ps_out_pbr;
+	ps_out_pbr.atmospheremask.r = mask;
 	//获取漫反射材质
 	float texID_data_diffuse = pin.texid.x;//漫反射纹理ID
 	float texID_data_normal = pin.texid.y;//法线纹理ID
@@ -98,6 +100,11 @@ PixelOut_pbr PS_withnormal(VertexOut pin) : SV_Target
 	float texID_data_roughness = pin.texid.w;//粗糙度纹理ID
 	float metallic_color = texture_pack_array.Sample(samTex_liner, float3(pin.tex2.xy, texID_data_metallic)).r;
 	float roughness_color = texture_pack_array.Sample(samTex_liner, float3(pin.tex2.zw, texID_data_roughness)).r;
+
+	//gamma校正
+	tex_color = float4(pow(tex_color.rgb, float3(2.2f, 2.2f, 2.2f)), tex_color.a);
+	//metallic_color = pow(metallic_color,2.2f);
+	//roughness_color = pow(roughness_color, 2.2f);
 	//计算镜面反射光最高强度
 	float3 specular_F0 = lerp(0.04, tex_color.rgb, metallic_color);
 	ps_out_pbr.specroughness = float4(specular_F0, roughness_color);
@@ -120,6 +127,7 @@ PixelOut_pbr PS_withnormal(VertexOut pin) : SV_Target
 	normal_map = normalize(mul(normal_map, T2W));                  //切线空间至世界空间
 	//pin.NormalV = normal_map;
 	ps_out_pbr.normalmetallic = float4(pin.NormalV, metallic_color);
+	
 	return ps_out_pbr;
 }
 technique11 NormalDepth
@@ -137,7 +145,7 @@ technique11 NormalDepth_CullFornt
 	{
 		SetVertexShader(CompileShader(vs_5_0, VS()));
 		SetGeometryShader(NULL);
-		SetPixelShader(CompileShader(ps_5_0, PS_withnormal()));
+		SetPixelShader(CompileShader(ps_5_0, PS_withnormal(0.0f)));
 		SetRasterizerState(DisableCulling);
 	}
 }
@@ -156,7 +164,7 @@ technique11 NormalDepth_withinstance_normal
 	{
 		SetVertexShader(CompileShader(vs_5_0, VS_instance()));
 		SetGeometryShader(NULL);
-		SetPixelShader(CompileShader(ps_5_0, PS_withnormal()));
+		SetPixelShader(CompileShader(ps_5_0, PS_withnormal(1.0f)));
 	}
 }
 technique11 NormalDepth_withnormal
@@ -165,6 +173,6 @@ technique11 NormalDepth_withnormal
 	{
 		SetVertexShader(CompileShader(vs_5_0, VS()));
 		SetGeometryShader(NULL);
-		SetPixelShader(CompileShader(ps_5_0, PS_withnormal()));
+		SetPixelShader(CompileShader(ps_5_0, PS_withnormal(1.0f)));
 	}
 }

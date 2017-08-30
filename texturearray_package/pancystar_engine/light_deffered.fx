@@ -1,5 +1,8 @@
 /*延迟光照效果*/
+//TODO:大气光的环境光影响蓝->黄
+
 #include"light_count.hlsli"
+#include"atmosphere_renderfunc.hlsli"
 cbuffer perobject
 {
 	pancy_material   material_need;    //材质
@@ -34,12 +37,12 @@ SamplerState samTex
 	AddressU = WRAP;
 	AddressV = WRAP;
 };
-SamplerState samTex_liner
-{
-	Filter = MIN_MAG_MIP_LINEAR;
-	AddressU = WRAP;
-	AddressV = WRAP;
-};
+//SamplerState samTex_liner
+//{
+//	Filter = MIN_MAG_MIP_LINEAR;
+//	AddressU = WRAP;
+//	AddressV = WRAP;
+//};
 struct Vertex_IN//含法线贴图顶点
 {
 	float3	pos 	: POSITION;     //顶点位置
@@ -105,10 +108,13 @@ PixelOut PS(VertexOut pin) :SV_TARGET
 	pin.pos_ssao /= pin.pos_ssao.w;
 	float texID_data_diffuse = pin.texid.x;
 	float4 tex_color = texture_pack_array.Sample(samTex_liner, float3(pin.tex1.xy, texID_data_diffuse));
+	//gamma校正
+	tex_color = float4(pow(tex_color.rgb, float3(2.2f, 2.2f, 2.2f)), tex_color.a);
 	//float4 tex_color = texture_diffuse.Sample(samTex_liner, pin.tex);
 	clip(tex_color.a - 0.6f);
 	//float4 ambient = 0.4f* texture_ssao.Sample(samTex_liner, pin.pos_ssao.xy, 0.0f).r;
 	float tex_ao = texture_ssao.Sample(samTex_liner, pin.pos_ssao.xy, 0.0f).r;
+	
 	//采集法线与金属度
 	float4 normalmetallic = gNormalspecMap.Sample(samTex_liner, pin.pos_ssao.xy, 0.0f);
 	float3 normal_dir = normalize(normalmetallic.rgb);
@@ -128,13 +134,20 @@ PixelOut PS(VertexOut pin) :SV_TARGET
 	//采样环境光
 	uint index = tex_roughness * 6;
 	float4 enviornment_color = IBL_cube.SampleLevel(samTex_liner, reflect_dir, index);
+
+
+
+	//gamma校正
+	//enviornment_color = float4(pow(enviornment_color.rgb, float3(2.2f, 2.2f, 2.2f)), enviornment_color.a);
+	//tex_ao = pow(tex_ao, 2.2f);
 	//计算环境光反射
-	float4 ambient_diffuse = 0.4f*tex_ao *(1.0f - tex_matallic) * tex_color;
-	float4 ambient_specular = 1.0f*tex_ao * (0.6f*enviornment_color + 0.4f*tex_color) * (SpecularColor * EnvBRDF.x + EnvBRDF.y);
+	float4 ambient_diffuse = 0.5f*tex_ao *(1.0f - tex_matallic) * tex_color;
+	float4 ambient_specular = 0.5f*tex_ao * (0.6f*enviornment_color + 0.4f*tex_color) * (SpecularColor * EnvBRDF.x + EnvBRDF.y);
 	float4 ambient = ambient_diffuse + ambient_specular;
 
 	//float4 ambient = 0;
-	float4 diffuse = texture_light_diffuse.Sample(samTex_liner, pin.pos_ssao.xy, 0.0f);      //漫反射光
+	float4 diffuse = texture_light_diffuse.Sample(samTex_liner, pin.pos_ssao.xy, 0.0f)* (1.0 / 3.1415926);      //漫反射光
+	//return diffuse;
 	float4 spec =texture_light_specular.Sample(samTex_liner, pin.pos_ssao.xy, 0.0f);       //镜面反射光
 	float4 final_color = ambient + tex_color * diffuse + spec;
 	final_color.a = tex_color.a;
@@ -150,7 +163,7 @@ PixelOut PS(VertexOut pin) :SV_TARGET
 	*/
 	PixelOut ans_pix;
 	ans_pix.final_color = final_color;
-
+	//ans_pix.final_color = diffuse;
 	//float3 normal_dir = normalize(gNormalspecMap.Sample(samTex_liner, pin.pos_ssao.xy, 0.0f).rgb);
 	//float3 position_view_sun = float3(0.0f, 0.0f, 0.0f);
 	//float3 view_dir = normalize(position_view_sun - pin.position_view);

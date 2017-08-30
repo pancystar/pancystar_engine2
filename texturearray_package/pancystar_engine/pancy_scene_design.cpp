@@ -54,6 +54,15 @@ engine_basic::engine_fail_reason atmosphere_pretreatment::create()
 	{
 		return check_error;
 	}
+
+	fullscreen_aobuffer = new mesh_aosquare(false);
+	check_error = fullscreen_aobuffer->create_object();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+
+	
 	build_atomosphere_texture();
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
@@ -231,14 +240,20 @@ void atmosphere_pretreatment::build_atomosphere_texture()
 	}
 	engine_basic::engine_fail_reason check_error;
 	auto shader_atmosphere_render = shader_control::GetInstance()->get_shader_atmosphere_render(check_error);
+	auto shader_pretreat_lbuffer = shader_control::GetInstance()->get_shader_lightbuffer(check_error);
 	//设定预处理纹理
 	shader_atmosphere_render->set_tex_irradiance(Irradiance_SRV);
 	shader_atmosphere_render->set_tex_scattering(Scattering_SRV);
 	shader_atmosphere_render->set_tex_single_mie_scattering(SinglMieScattering_SRV);
 	shader_atmosphere_render->set_tex_transmittance(transmittance_SRV);
-	//设定固定参数
-	//白平衡
+
+	shader_pretreat_lbuffer->set_tex_irradiance(Irradiance_SRV);
+	shader_pretreat_lbuffer->set_tex_scattering(Scattering_SRV);
+	shader_pretreat_lbuffer->set_tex_single_mie_scattering(SinglMieScattering_SRV);
+	shader_pretreat_lbuffer->set_tex_transmittance(transmittance_SRV);
+	//~~~~~~~~~~~~~~设定固定参数~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	shader_atmosphere_render->set_white_point(XMFLOAT3(1.0f, 1.0f, 1.0f));
+	shader_pretreat_lbuffer->set_white_point(XMFLOAT3(1.0f, 1.0f, 1.0f));
 	//反投影
 	const float kFovY = engine_basic::perspective_message::get_instance()->get_perspective_angle();
 	const float kTanFovY = tan(kFovY / 2.0);
@@ -251,13 +266,16 @@ void atmosphere_pretreatment::build_atomosphere_texture()
 		0.0, 0.0, 1.0, 1.0
 	};
 	shader_atmosphere_render->set_view_from_clip(clip_matrix);
+	shader_pretreat_lbuffer->set_view_from_clip(clip_matrix);
 	//地球信息
 	float kBottomRadius = 6360000.0; 
 	float kLengthUnitInMeters = 1000.0;
-	shader_atmosphere_render->set_earth_center(XMFLOAT3(0.0f, 0.0f, kBottomRadius / kLengthUnitInMeters));
+	shader_atmosphere_render->set_earth_center(XMFLOAT3(0.0f, -kBottomRadius / kLengthUnitInMeters,0.0f ));
+	shader_pretreat_lbuffer->set_earth_center(XMFLOAT3(0.0f, -kBottomRadius / kLengthUnitInMeters, 0.0f));
 	//太阳信息
 	double kSunAngularRadius = 0.00935 / 2.0;
 	shader_atmosphere_render->set_sun_size(XMFLOAT2(tan(kSunAngularRadius),cos(kSunAngularRadius)));
+	shader_pretreat_lbuffer->set_sun_size(XMFLOAT2(tan(kSunAngularRadius), cos(kSunAngularRadius)));
 }
 void atmosphere_pretreatment::draw_transmittance()
 {
@@ -453,12 +471,13 @@ void atmosphere_pretreatment::display(XMFLOAT3 sundir)
 	shader_atmosphere_render->set_sun_direction(sundir);
 	shader_atmosphere_render->set_exposure(10.0f);
 	shader_atmosphere_render->get_technique(&teque_need, "draw_atmosphere");
-	fullscreen_buffer->get_teque(teque_need);
-	fullscreen_buffer->show_mesh();
+	fullscreen_aobuffer->get_teque(teque_need);
+	fullscreen_aobuffer->show_mesh();
 }
 void atmosphere_pretreatment::release()
 {
 	add_blend->Release();
+	fullscreen_aobuffer->release();
 	//临时数据
 	delta_Irradiance_SRV->Release();
 	delta_Irradiance_RTV->Release();
@@ -814,7 +833,7 @@ void scene_test_square::update(float delta_time)
 	XMFLOAT4X4 world_matrix;
 	XMFLOAT4X4 final_matrix;
 	//更新城堡
-	trans_world = XMMatrixTranslation(0.0, 0.0, 0.0);
+	trans_world = XMMatrixTranslation(0.0, 5.0, 0.0);
 	scal_world = XMMatrixScaling(1, 1, 1);
 	XMStoreFloat4x4(&world_matrix, scal_world *  trans_world);
 	geometry_resource_view *data_need;
@@ -832,7 +851,7 @@ void scene_test_square::update(float delta_time)
 	XMStoreFloat4x4(&world_matrix, scal_world *  trans_world);
 	pancy_geometry_control_singleton::get_instance()->update_a_model_instance(ID_model_sky, world_matrix, delta_time);
 	//更新pbr测试
-	trans_world = XMMatrixTranslation(0.0, 1.0, 0.0);
+	trans_world = XMMatrixTranslation(0.0, 6.0, 0.0);
 	scal_world = XMMatrixScaling(0.05, 0.05, 0.05);
 	XMStoreFloat4x4(&world_matrix, scal_world *  trans_world);
 	pancy_geometry_control_singleton::get_instance()->update_a_model_instance(ID_model_pbrtest, world_matrix, delta_time);
@@ -1137,6 +1156,8 @@ void pancy_scene_control::render_environment()
 	if (pretreat_render->get_now_reflect_render_face() % 2 == 1)
 	{
 		engine_basic::engine_fail_reason check_error;
+		
+
 		auto shader_need = shader_control::GetInstance()->get_shader_lightdeffered(check_error);
 		D3D11_VIEWPORT shadow_map_VP;
 		shadow_map_VP.TopLeftX = 0.0f;
@@ -1175,7 +1196,9 @@ void pancy_scene_control::render_environment()
 			XMFLOAT4X4 VPT;
 			XMStoreFloat4x4(&VPT, V * P * T);
 			shader_need->set_trans_ssao(&VPT);
-
+			auto shader_sky = shader_control::GetInstance()->get_shader_sky_draw(check_error);
+			shader_sky->set_tex_atmosphere(pretreat_render->get_reflect_atmosphere());
+			shader_sky->set_trans_texproj(&VPT);
 			scene_list[scene_now_show]->display_environment(view_matrix_reflect, Proj_mat_reflect);
 		}
 	}
@@ -1202,7 +1225,7 @@ void pancy_scene_control::update(float delta_time)
 	{
 		if (pancy_input::GetInstance()->check_mouseDown(0))
 		{
-			sundir.z += pancy_input::GetInstance()->MouseMove_Y() * 0.01f;
+			sundir.y -= pancy_input::GetInstance()->MouseMove_Y() * 0.01f;
 			float average = sqrt(sundir.x * sundir.x + sundir.y * sundir.y + sundir.z * sundir.z);
 			sundir.x /= average;
 			sundir.y /= average;
@@ -1222,7 +1245,6 @@ void pancy_scene_control::update(float delta_time)
 }
 void pancy_scene_control::display()
 {
-
 	//设置摄像机属性
 	auto scene_camera = pancy_camera::get_instance();
 	XMFLOAT4X4 inv_view_mat;
@@ -1245,7 +1267,7 @@ void pancy_scene_control::display()
 	light_control_singleton::GetInstance()->draw_shadow();
 	//计算光照
 	d3d_pancy_basic_singleton::GetInstance()->reset_viewport();
-	pretreat_render->display_lbuffer(true);
+	pretreat_render->display_lbuffer(false);
 	//正式渲染
 	//d3d_pancy_basic_singleton::GetInstance()->restore_render_target();
 	//d3d_pancy_basic_singleton::GetInstance()->set_render_target(posttreatment_RTV);
@@ -1277,9 +1299,16 @@ void pancy_scene_control::display()
 	//交换到屏幕
 	//HRESULT hr = swapchain->Present(0, 0);
 	//atmosphere_texture->build_atomosphere_texture();
-	
-	
-	atmosphere_texture->display(sundir);
+
+
+	auto shader_test_ato = shader_control::GetInstance()->get_shader_atmosphere_render(check_error);
+	shader_test_ato->set_tex_depth(pretreat_render->get_gbuffer_depth());
+	shader_test_ato->set_tex_normal(pretreat_render->get_gbuffer_normalspec());
+	XMFLOAT4 far_corner[4];
+	engine_basic::perspective_message::get_instance()->get_FrustumFarCorner(far_corner);
+	shader_test_ato->set_FrustumCorners(far_corner);
+	//atmosphere_texture->display(sundir);
+	light_control_singleton::GetInstance()->update_sunlight(sundir);
 	d3d_pancy_basic_singleton::GetInstance()->end_draw();
 }
 engine_basic::engine_fail_reason pancy_scene_control::add_a_scene(scene_root* scene_in)

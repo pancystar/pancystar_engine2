@@ -22,14 +22,20 @@ class Pretreatment_gbuffer : public engine_basic::window_size_observer
 	ID3D11RenderTargetView   *normalspec_target;          //存储法线和镜面反射系数的渲染目标
 	ID3D11ShaderResourceView *normalspec_tex;             //存储法线和镜面反射系数的纹理资源
 
+	ID3D11RenderTargetView   *AtmosphereMask_target;          //存储大气光照掩码的渲染目标
+	ID3D11ShaderResourceView *AtmosphereMask_tex;             //存储大气光照掩码的纹理资源
+
 	ID3D11RenderTargetView   *specroughness_target;       //存储法线和镜面反射系数的渲染目标
 	ID3D11ShaderResourceView *specroughness_tex;          //存储法线和镜面反射系数的纹理资源
 
 	ID3D11RenderTargetView   *gbuffer_diffuse_target;     //存储漫反射光照效果的渲染目标
 	ID3D11ShaderResourceView *gbuffer_diffuse_tex;        //存储漫反射光照效果的纹理资源
 
-	ID3D11RenderTargetView   *gbuffer_specular_target;    //存储漫反射光照效果的渲染目标
-	ID3D11ShaderResourceView *gbuffer_specular_tex;       //存储漫反射光照效果的纹理资源
+	ID3D11RenderTargetView   *gbuffer_specular_target;    //存储漫镜面反射光照效果的渲染目标
+	ID3D11ShaderResourceView *gbuffer_specular_tex;       //存储漫镜面光照效果的纹理资源
+
+	ID3D11RenderTargetView   *gbuffer_atmosphere_target;    //存储大气光照效果的渲染目标
+	ID3D11ShaderResourceView *gbuffer_atmosphere_tex;       //存储大气光照效果的纹理资源
 
 	ID3D11RenderTargetView   *depthmap_single_target;     //存储深度msaa采样后信息的渲染目标
 	ID3D11ShaderResourceView *depthmap_single_tex;        //存储深度msaa采样后信息的纹理资源
@@ -41,6 +47,9 @@ class Pretreatment_gbuffer : public engine_basic::window_size_observer
 	ID3D11ShaderResourceView *reflect_cubeSpecRough_SRV;   //存储立方法线贴图的纹理资源
 	ID3D11RenderTargetView   *reflect_cubeSpecRough_RTV;   //存储立方法线贴图的渲染目标
 
+	ID3D11ShaderResourceView *reflect_AtmosphereMask_SRV;   //存储立方大气贴图的纹理资源
+	ID3D11RenderTargetView   *reflect_AtmosphereMask_RTV;   //存储立方大气贴图的渲染目标
+
 	ID3D11DepthStencilView   *reflect_DSV;              //深度缓冲区目标
 	ID3D11ShaderResourceView *reflect_depthcube_SRV;    //深度立方贴图
 
@@ -49,6 +58,9 @@ class Pretreatment_gbuffer : public engine_basic::window_size_observer
 
 	ID3D11RenderTargetView   *reflect_specular_target;    //存储反射贴图漫反射光照效果的渲染目标
 	ID3D11ShaderResourceView *reflect_specular_tex;       //存储反射贴图漫反射光照效果的纹理资源
+
+	ID3D11RenderTargetView   *reflect_atmosphere_target;    //存储反射贴图大气光照效果的渲染目标
+	ID3D11ShaderResourceView *reflect_atmosphere_tex;       //存储反射贴图大气射光照效果的纹理资源
 
 	ID3D11ShaderResourceView *reflect_cubestencil_SRV;    //存储静态cubemapping的纹理资源
 	ID3D11RenderTargetView   *reflect_cubestencil_RTV[6]; //存储静态cubemapping的渲染目标
@@ -76,6 +88,7 @@ public:
 
 	ID3D11ShaderResourceView *get_reflect_difusse() { return reflect_diffuse_tex; };
 	ID3D11ShaderResourceView *get_reflect_specular() { return reflect_specular_tex; };
+	ID3D11ShaderResourceView *get_reflect_atmosphere() { return reflect_atmosphere_tex; };
 
 	ID3D11RenderTargetView *get_posttreat_color_map() { return posttreatment_RTV; };
 	ID3D11RenderTargetView *get_posttreat_mask_map() { return reflectmask_RTV; };

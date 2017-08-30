@@ -153,13 +153,15 @@ void count_brdf_reflect(
 	out float3 specular_out
 	)
 {
-	float3 h_vec = (light_dir_in + direction_view) / 2.0f;
+	float3 h_vec = normalize((light_dir_in + direction_view) / 2.0f);
+
 	diffuse_out = (1 - tex_matallic);
 	float pi = 3.141592653;
 	float view_angle = dot(direction_view, normal);//视线夹角
 	float cos_vh = dot(direction_view, h_vec);
 	//菲涅尔项
-	float3 fresnel = specular_F0 + (float4(1.0f, 1.0f, 1.0f, 1.0f) - specular_F0)*(1.0f - pow(cos_vh, 5.0f));
+	//float3 fresnel = specular_F0 +(float4(1.0f, 1.0f, 1.0f, 1.0f) - specular_F0)*(1.0f - pow(cos_vh, 5.0f));
+	float3 fresnel = specular_F0 + (1 - specular_F0)*pow(2, (-5.55473*cos_vh - 6.98316)*cos_vh);
 	//NDF法线扰乱项
 	float alpha = tex_roughness * tex_roughness;
 	float nh_mul = dot(normal, h_vec);
@@ -173,6 +175,9 @@ void count_brdf_reflect(
 	float ggx = ggx_v * ggx_l;
 	//最终的镜面反射项
 	specular_out = (fresnel * ndf * ggx) / (4 * view_angle * diffuse_angle);
+
+
+	//specular_out = tex_roughness;
 }
 //方向光pbr
 void compute_dirlight_pbr(

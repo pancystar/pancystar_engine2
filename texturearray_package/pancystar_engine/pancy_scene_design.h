@@ -59,6 +59,7 @@ private:
 class atmosphere_pretreatment 
 {
 	Geometry_basic           *fullscreen_buffer;          //全屏幕平面
+	Geometry_basic           *fullscreen_aobuffer;          //全屏幕平面
 	ID3D11ShaderResourceView *transmittance_SRV;
 	ID3D11RenderTargetView *transmittance_RTV;
 

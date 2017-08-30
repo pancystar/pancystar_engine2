@@ -289,6 +289,8 @@ void ssao_pancy::blur_ssaomap()
 	engine_basic::engine_fail_reason check_error;
 	auto shader_need = shader_control::GetInstance()->get_shader_virtual_light(check_error);
 	auto shader_deffered = shader_control::GetInstance()->get_shader_lightdeffered(check_error);
+	auto shader_sky = shader_control::GetInstance()->get_shader_sky_draw(check_error);
+	shader_sky->set_trans_texproj(&VPT);
 	shader_need->set_ssaotex(ambient_tex_blur2);
 	shader_deffered->set_ssaotex(ambient_tex_blur2);
 	shader_need->set_trans_ssao(&VPT);

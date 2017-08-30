@@ -2,6 +2,7 @@ Texture2D<float4>   input_tex;
 uint4                input_range;
 RWStructuredBuffer<float> input_buffer;
 RWStructuredBuffer<float> output_buffer;
+#include"HDR_define.hlsli"
 //第一遍处理，读入未处理的图像，获取其亮度数据，并下采样至1/16的buffer
 [numthreads(16, 16, 1)]
 void main_first(uint3 DTid : SV_DispatchThreadID)

@@ -49,6 +49,10 @@ struct point_2D
 	XMFLOAT3 position;
 	XMFLOAT2 texcoord;
 };
+struct point_UV
+{
+	XMFLOAT2 texcoord;
+};
 struct point_ssao 
 {
 	XMFLOAT3 position;
@@ -179,6 +183,7 @@ engine_basic::engine_fail_reason Geometry<T>::init_point(T *vertex, UINT *index)
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
+
 template<typename T>
 engine_basic::engine_fail_reason Geometry<T>::create_object()
 {
@@ -282,6 +287,16 @@ public:
 	mesh_aosquare(bool if_adj);
 private:
 	engine_basic::engine_fail_reason find_point(point_ssao *vertex, UINT *index, int &num_vertex, int &num_index);
+};
+template <>   // 对point_UV 型特例化  
+engine_basic::engine_fail_reason Geometry<point_UV>::init_point(point_UV *vertex, UINT *index);
+class mesh_square_tessellation : public Geometry<point_UV>
+{
+public:
+	mesh_square_tessellation(bool if_adj);
+	void show_mesh();
+private:
+	engine_basic::engine_fail_reason find_point(point_UV *vertex, UINT *index, int &num_vertex, int &num_index);
 };
 
 

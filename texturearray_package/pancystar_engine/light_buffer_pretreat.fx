@@ -139,23 +139,38 @@ float3 count_normal_sphereradiance(float pz,VertexOut pin, float render_check, f
 	float3 rec_dir = sun_light.dir;
 	rec_dir.x = -rec_dir.x;
 	rec_dir.y = -rec_dir.y;
+
+	float minus_hack = 1.0f;
+	if (rec_dir.y < 0.0f)
+	{
+		minus_hack = max(0.0f, 0.2f + rec_dir.y);
+		rec_dir.y = 0.0f;
+	}
+
+
 	float3 sun_irradiance = GetSunAndSkyIrradiance(point_in - earth_center, normal, rec_dir, sky_irradiance);
 	//sphere_radiance = sun_irradiance;
 
 	//float3 sphere_radiance = kSphereAlbedo * (1.0 / PI) * (sun_irradiance + sky_irradiance)
 	float3 sphere_radiance = sun_irradiance + sky_irradiance;
 	//float shadow_length = max(0.0, min(shadow_out, distance_to_intersection) - shadow_in) * lightshaft_fadein_hack;
-	float shadow_length = 0.0f;
+	float shadow_length = 0.5f;
 	//float3 transmittance;
 	in_scatter = GetSkyRadianceToPoint(camera - earth_center, point_in - earth_center, shadow_length, rec_dir, transmittance);
 	//sphere_radiance = sphere_radiance * transmittance + in_scatter;
-	return sphere_radiance * render_check;
+	return minus_hack * sphere_radiance * render_check;
 }
 float3 count_sky_radiance(float3 view_direction)
 {
 	float3 rec_dir = sun_light.dir;
 	rec_dir.x = -rec_dir.x;
 	rec_dir.y = -rec_dir.y;
+	float minus_hack = 1.0f;
+	if (rec_dir.y < 0.0f) 
+	{
+		minus_hack = max(0.0f,0.2f + rec_dir.y);
+		rec_dir.y = 0.0f;
+	}
 	float shadow_length = 0.0f;;
 	float3 transmittance;
 	float3 radiance = GetSkyRadiance(camera - earth_center, view_direction, shadow_length, rec_dir, transmittance);
@@ -165,7 +180,7 @@ float3 count_sky_radiance(float3 view_direction)
 	}
 	//float3 rgb_color = pow(float3(1.0f, 1.0f, 1.0f) - exp(-radiance / white_point_in * exposure), float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2));
 	//float3 rgb_color = float3(1.0f, 1.0f, 1.0f) - exp(-radiance / white_point_in * exposure);
-	return radiance;
+	return minus_hack * radiance;
 }
 VertexOut VS(VertexIn vin)
 {

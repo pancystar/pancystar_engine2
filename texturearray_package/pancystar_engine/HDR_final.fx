@@ -69,9 +69,10 @@ float4 PS(VertexOut Input) : SV_TARGET
 	//计算最终颜色
 	float4 finalcolor = float4(ACESFitted(input_texcolor, light_avege_lum)+ 0.6f*input_bloomcolor , input_texcolor.a);
 	//return finalcolor;
-	//return input_texcolor;
+	return input_texcolor;
+	//finalcolor = float4(float3(1.0, 1.0, 1.0) - exp(-input_texcolor.rgb / 1 * 10),1.0f);
 	//gamma校正
-	return float4(pow(finalcolor,float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2)),1.0f);
+	//return float4(pow(finalcolor.rgb,float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2)),1.0f);
 }
 technique11 draw_HDRfinal
 {

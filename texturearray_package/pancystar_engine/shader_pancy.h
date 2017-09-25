@@ -646,6 +646,124 @@ private:
 	void init_handle();//注册shader中所有全局变量的句柄
 	void set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member);
 };
+class compute_FFT : public shader_basic
+{
+	ID3DX11EffectShaderResourceVariable      *SRV_input;
+	ID3DX11EffectUnorderedAccessViewVariable *UAV_output;	  //compute_shader计算完毕纹理资源
+	ID3DX11EffectConstantBuffer              *constent_buffer;    //常量缓冲区
+public:
+	compute_FFT(LPCWSTR filename);
+	engine_basic::engine_fail_reason set_shader_resource(ID3D11ShaderResourceView *data_input);
+	engine_basic::engine_fail_reason set_compute_UAV(ID3D11UnorderedAccessView *buffer_input_need);
+	engine_basic::engine_fail_reason set_Constant_Buffer(ID3D11Buffer *buffer_input);
+
+	void release();
+	void dispatch(int grad, LPCSTR name);
+private:
+	void init_handle();//注册shader中所有全局变量的句柄
+	void set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member);
+};
+class shader_ocean_simulateCS : public shader_basic
+{
+	ID3DX11EffectShaderResourceVariable      *SRV_input_h0;
+	ID3DX11EffectShaderResourceVariable      *SRV_input_omega;
+	ID3DX11EffectUnorderedAccessViewVariable *UAV_output;	  //compute_shader计算完毕纹理资源
+
+	ID3DX11EffectConstantBuffer              *constent_buffer_Immutable;    //常量缓冲区
+	ID3DX11EffectConstantBuffer              *constent_buffer_ChangePerFrame;    //常量缓冲区
+public:
+	shader_ocean_simulateCS(LPCWSTR filename);
+	engine_basic::engine_fail_reason set_shader_resource_h0(ID3D11ShaderResourceView *data_input_h0);
+	engine_basic::engine_fail_reason set_shader_resource_omega(ID3D11ShaderResourceView *data_input_omega);
+	engine_basic::engine_fail_reason set_compute_UAV(ID3D11UnorderedAccessView *buffer_input_need);
+	engine_basic::engine_fail_reason set_Constant_Buffer_Immutable(ID3D11Buffer *buffer_input);
+	engine_basic::engine_fail_reason set_Constant_Buffer_ChangePerFrame(ID3D11Buffer *buffer_input);
+
+	void release();
+	void dispatch(int grad_x, int grad_y);
+private:
+	void init_handle();//注册shader中所有全局变量的句柄
+	void set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member);
+};
+class shader_ocean_simulateVPS : public shader_basic
+{
+	ID3DX11EffectShaderResourceVariable      *SRV_input_tex;
+	ID3DX11EffectShaderResourceVariable      *SRV_input_buffer;
+
+	ID3DX11EffectConstantBuffer              *constent_buffer_Immutable;    //常量缓冲区
+	ID3DX11EffectConstantBuffer              *constent_buffer_ChangePerFrame;    //常量缓冲区
+public:
+	shader_ocean_simulateVPS(LPCWSTR filename);
+	engine_basic::engine_fail_reason set_shader_resource_texture(ID3D11ShaderResourceView *data_input);
+	engine_basic::engine_fail_reason set_shader_resource_buffer(ID3D11ShaderResourceView *data_input);
+	engine_basic::engine_fail_reason set_Constant_Buffer_Immutable(ID3D11Buffer *buffer_input);
+	engine_basic::engine_fail_reason set_Constant_Buffer_ChangePerFrame(ID3D11Buffer *buffer_input);
+
+	void release();
+private:
+	void init_handle();//注册shader中所有全局变量的句柄
+	void set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member);
+};
+class shader_ocean_render : public shader_basic
+{
+	ID3DX11EffectShaderResourceVariable      *SRV_tex_displayment;
+	ID3DX11EffectShaderResourceVariable      *SRV_tex_Perlin;
+	ID3DX11EffectShaderResourceVariable      *SRV_tex_gradient;
+	ID3DX11EffectShaderResourceVariable      *SRV_tex_Fresnel;
+	ID3DX11EffectShaderResourceVariable      *SRV_tex_ReflectCube;
+
+	ID3DX11EffectConstantBuffer              *constent_buffer_Shading;    //常量缓冲区
+	ID3DX11EffectConstantBuffer              *constent_buffer_PerCall;    //常量缓冲区
+public:
+	shader_ocean_render(LPCWSTR filename);
+	engine_basic::engine_fail_reason set_texture_displayment(ID3D11ShaderResourceView *tex_input);
+	engine_basic::engine_fail_reason set_texture_Perlin(ID3D11ShaderResourceView *tex_input);
+	engine_basic::engine_fail_reason set_texture_gradient(ID3D11ShaderResourceView *tex_input);
+	engine_basic::engine_fail_reason set_texture_Fresnel(ID3D11ShaderResourceView *tex_input);
+	engine_basic::engine_fail_reason set_texture_ReflectCube(ID3D11ShaderResourceView *tex_input);
+
+
+	engine_basic::engine_fail_reason set_Constant_Buffer_Shading(ID3D11Buffer *buffer_input);
+	engine_basic::engine_fail_reason set_Constant_Buffer_PerCall(ID3D11Buffer *buffer_input);
+
+	void release();
+private:
+	void init_handle();//注册shader中所有全局变量的句柄
+	void set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member);
+};
+class shader_ocean_draw : public shader_basic
+{
+	ID3DX11EffectVariable                 *view_pos_handle;          //视点位置
+	ID3DX11EffectMatrixVariable              *final_mat_handle;
+	ID3DX11EffectMatrixVariable              *scal_mat_handle;
+
+	ID3DX11EffectShaderResourceVariable      *SRV_tex_displayment;
+	ID3DX11EffectShaderResourceVariable      *SRV_tex_Perlin;
+	ID3DX11EffectShaderResourceVariable      *SRV_tex_gradient;
+	ID3DX11EffectShaderResourceVariable      *SRV_tex_Fresnel;
+	ID3DX11EffectShaderResourceVariable      *SRV_tex_ReflectCube;
+
+	ID3DX11EffectConstantBuffer              *constent_buffer_Shading;    //常量缓冲区
+	ID3DX11EffectConstantBuffer              *constent_buffer_PerCall;    //常量缓冲区
+public:
+	shader_ocean_draw(LPCWSTR filename);
+	engine_basic::engine_fail_reason set_view_pos(XMFLOAT3 eye_pos);
+	engine_basic::engine_fail_reason set_texture_displayment(ID3D11ShaderResourceView *tex_input);
+	engine_basic::engine_fail_reason set_texture_Perlin(ID3D11ShaderResourceView *tex_input);
+	engine_basic::engine_fail_reason set_texture_gradient(ID3D11ShaderResourceView *tex_input);
+	engine_basic::engine_fail_reason set_texture_Fresnel(ID3D11ShaderResourceView *tex_input);
+	engine_basic::engine_fail_reason set_texture_ReflectCube(ID3D11ShaderResourceView *tex_input);
+
+	engine_basic::engine_fail_reason set_trans_all(XMFLOAT4X4 *mat_need);
+	engine_basic::engine_fail_reason set_trans_scal(XMFLOAT4X4 *mat_need);
+	engine_basic::engine_fail_reason set_Constant_Buffer_Shading(ID3D11Buffer *buffer_input);
+	engine_basic::engine_fail_reason set_Constant_Buffer_PerCall(ID3D11Buffer *buffer_input);
+
+	void release();
+private:
+	void init_handle();//注册shader中所有全局变量的句柄
+	void set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member);
+};
 
 class shader_control
 {
@@ -699,6 +817,12 @@ public:
 	std::shared_ptr<shader_HDRfinal> get_shader_hdr_final(engine_basic::engine_fail_reason &if_succeed);
 	std::shared_ptr<shader_atmosphere_pretreat> get_shader_atmosphere_pretreat(engine_basic::engine_fail_reason &if_succeed);
 	std::shared_ptr<shader_atmosphere_render> get_shader_atmosphere_render(engine_basic::engine_fail_reason &if_succeed);
+	std::shared_ptr<compute_FFT> get_shader_compute_fft(engine_basic::engine_fail_reason &if_succeed);
+	std::shared_ptr<shader_ocean_simulateCS> get_shader_oceansimulate_cs(engine_basic::engine_fail_reason &if_succeed);
+	std::shared_ptr<shader_ocean_simulateVPS> get_shader_oceansimulate_vps(engine_basic::engine_fail_reason &if_succeed);
+	std::shared_ptr<shader_ocean_render> get_shader_oceanrender_vps(engine_basic::engine_fail_reason &if_succeed);
+	std::shared_ptr<shader_ocean_draw> get_shader_oceandraw_tess(engine_basic::engine_fail_reason &if_succeed);
+
 	void release();
 private:
 	engine_basic::engine_fail_reason init_basic();

@@ -141,8 +141,8 @@ PixelOut PS(VertexOut pin) :SV_TARGET
 	//enviornment_color = float4(pow(enviornment_color.rgb, float3(2.2f, 2.2f, 2.2f)), enviornment_color.a);
 	//tex_ao = pow(tex_ao, 2.2f);
 	//计算环境光反射
-	float4 ambient_diffuse = 0.5f*tex_ao *(1.0f - tex_matallic) * tex_color;
-	float4 ambient_specular = 0.5f*tex_ao * (0.6f*enviornment_color + 0.4f*tex_color) * (SpecularColor * EnvBRDF.x + EnvBRDF.y);
+	float4 ambient_diffuse = 0.2f*tex_ao *(1.0f - tex_matallic) * tex_color;
+	float4 ambient_specular = 0.2f*tex_ao * (0.6f*enviornment_color + 0.4f*tex_color) * (SpecularColor * EnvBRDF.x + EnvBRDF.y);
 	float4 ambient = ambient_diffuse + ambient_specular;
 
 	//float4 ambient = 0;
@@ -169,7 +169,7 @@ PixelOut PS(VertexOut pin) :SV_TARGET
 	//float3 view_dir = normalize(position_view_sun - pin.position_view);
 
 	ans_pix.reflect_message.rgb = tex_color.rgb;
-	ans_pix.reflect_message.r = 0.5;
+	ans_pix.reflect_message.r = 1.0;
 	return ans_pix;
 }
 PixelOut PS_withputao(VertexOut pin) :SV_TARGET

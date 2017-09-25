@@ -2804,6 +2804,515 @@ void shader_atmosphere_render::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *mem
 		member_point[i] = rec[i];
 	}
 }
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~快速傅里叶变换~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compute_FFT::compute_FFT(LPCWSTR filename) :shader_basic(filename)
+{
+}
+engine_basic::engine_fail_reason compute_FFT::set_shader_resource(ID3D11ShaderResourceView *data_input)
+{
+	HRESULT hr = SRV_input->SetResource(data_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "an error when setting FFT SRV");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason compute_FFT::set_compute_UAV(ID3D11UnorderedAccessView *buffer_input_need) 
+{
+	HRESULT hr;
+	hr = UAV_output->SetUnorderedAccessView(buffer_input_need);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set UAV buffer error when setting FFT texture");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason compute_FFT::set_Constant_Buffer(ID3D11Buffer *buffer_input) 
+{
+	HRESULT hr;
+	hr = constent_buffer->SetConstantBuffer(buffer_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set constant buffer error when setting FFT texture");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+void compute_FFT::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member)
+{
+}
+void compute_FFT::release()
+{
+	release_basic();
+}
+void compute_FFT::init_handle()
+{
+	SRV_input = fx_need->GetVariableByName("g_SrcData")->AsShaderResource();
+	UAV_output = fx_need->GetVariableByName("g_DstData")->AsUnorderedAccessView();
+	constent_buffer = fx_need->GetConstantBufferByName("cbChangePerCall");
+	//constent_buffer = fx_need->GetVariableByName("cbChangePerCall")->AsConstantBuffer();
+}
+void compute_FFT::dispatch(int grad,LPCSTR name)
+{
+	ID3DX11EffectTechnique* tech_need;
+	tech_need = fx_need->GetTechniqueByName(name);
+	D3DX11_TECHNIQUE_DESC techDesc;
+	tech_need->GetDesc(&techDesc);
+	//分发线程
+	for (UINT i = 0; i<techDesc.Passes; ++i)
+	{
+		tech_need->GetPassByIndex(i)->Apply(0, d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex());
+		d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->Dispatch(grad, 1, 1);
+	}
+	//还原渲染状态
+	ID3D11ShaderResourceView* nullSRV[1] = { 0 };
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->CSSetShaderResources(0, 1, nullSRV);
+	ID3D11UnorderedAccessView* nullUAV[1] = { 0 };
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->CSSetUnorderedAccessViews(0, 1, nullUAV, 0);
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->CSSetShader(0, 0, 0);
+}
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~水面渲染预处理(先于傅里叶变换)~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+shader_ocean_simulateCS::shader_ocean_simulateCS(LPCWSTR filename) :shader_basic(filename)
+{
+}
+engine_basic::engine_fail_reason shader_ocean_simulateCS::set_shader_resource_h0(ID3D11ShaderResourceView *data_input)
+{
+	HRESULT hr = SRV_input_h0->SetResource(data_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "an error when setting ocean simulate CS SRV");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_ocean_simulateCS::set_shader_resource_omega(ID3D11ShaderResourceView *data_input)
+{
+	HRESULT hr = SRV_input_omega->SetResource(data_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "an error when setting ocean simulate CS SRV");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_ocean_simulateCS::set_compute_UAV(ID3D11UnorderedAccessView *buffer_input_need)
+{
+	HRESULT hr;
+	hr = UAV_output->SetUnorderedAccessView(buffer_input_need);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set UAV buffer error when setting ocean simulate CS");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_ocean_simulateCS::set_Constant_Buffer_Immutable(ID3D11Buffer *buffer_input)
+{
+	HRESULT hr;
+	hr = constent_buffer_Immutable->SetConstantBuffer(buffer_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set constent_buffer_Immutable error when setting ocean simulate CS");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_ocean_simulateCS::set_Constant_Buffer_ChangePerFrame(ID3D11Buffer *buffer_input)
+{
+	HRESULT hr;
+	hr = constent_buffer_ChangePerFrame->SetConstantBuffer(buffer_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set constent_buffer_ChangePerFrame error when setting ocean simulate CS");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+void shader_ocean_simulateCS::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member)
+{
+}
+void shader_ocean_simulateCS::release()
+{
+	release_basic();
+}
+void shader_ocean_simulateCS::init_handle()
+{
+	SRV_input_h0 = fx_need->GetVariableByName("g_InputH0")->AsShaderResource();
+	SRV_input_omega = fx_need->GetVariableByName("g_InputOmega")->AsShaderResource();
+	UAV_output = fx_need->GetVariableByName("g_OutputHt")->AsUnorderedAccessView();
+	constent_buffer_Immutable = fx_need->GetConstantBufferByName("cbImmutable");
+	constent_buffer_ChangePerFrame = fx_need->GetConstantBufferByName("cbChangePerFrame");
+	//constent_buffer_Immutable = fx_need->GetVariableByName("cbImmutable")->AsConstantBuffer();
+	//constent_buffer_ChangePerFrame = fx_need->GetVariableByName("cbChangePerFrame")->AsConstantBuffer();
+}
+void shader_ocean_simulateCS::dispatch(int grad_x,int grad_y)
+{
+	ID3DX11EffectTechnique* tech_need;
+	tech_need = fx_need->GetTechniqueByName("common_simulatepre");
+	D3DX11_TECHNIQUE_DESC techDesc;
+	tech_need->GetDesc(&techDesc);
+	//分发线程
+	for (UINT i = 0; i<techDesc.Passes; ++i)
+	{
+		tech_need->GetPassByIndex(i)->Apply(0, d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex());
+		d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->Dispatch(grad_x, grad_y, 1);
+	}
+	//还原渲染状态
+	ID3D11ShaderResourceView* nullSRV[2] = { 0 ,0};
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->CSSetShaderResources(0, 2, nullSRV);
+	ID3D11UnorderedAccessView* nullUAV[1] = { 0 };
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->CSSetUnorderedAccessViews(0, 1, nullUAV, 0);
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->CSSetShader(0, 0, 0);
+}
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~水面预渲染(后于傅里叶变换)~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+shader_ocean_simulateVPS::shader_ocean_simulateVPS(LPCWSTR filename) :shader_basic(filename)
+{
+}
+engine_basic::engine_fail_reason shader_ocean_simulateVPS::set_shader_resource_texture(ID3D11ShaderResourceView *data_input)
+{
+	HRESULT hr = SRV_input_tex->SetResource(data_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "an error when setting ocean simulate VSPS texture SRV");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_ocean_simulateVPS::set_shader_resource_buffer(ID3D11ShaderResourceView *data_input)
+{
+	HRESULT hr = SRV_input_buffer->SetResource(data_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "an error when setting ocean simulate VSPS buffer SRV");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_ocean_simulateVPS::set_Constant_Buffer_Immutable(ID3D11Buffer *buffer_input)
+{
+	HRESULT hr;
+	hr = constent_buffer_Immutable->SetConstantBuffer(buffer_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set constent_buffer_Immutable error when setting ocean simulate VSPS");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_ocean_simulateVPS::set_Constant_Buffer_ChangePerFrame(ID3D11Buffer *buffer_input)
+{
+	HRESULT hr;
+	hr = constent_buffer_ChangePerFrame->SetConstantBuffer(buffer_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set constent_buffer_ChangePerFrame error when setting ocean simulate VSPS");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+void shader_ocean_simulateVPS::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member)
+{
+	//设置顶点声明
+	D3D11_INPUT_ELEMENT_DESC rec[] =
+	{
+		//语义名    语义索引      数据格式          输入槽 起始地址     输入槽的格式 
+		{ "POSITION",0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,0  ,D3D11_INPUT_PER_VERTEX_DATA  ,0 }
+	};
+	*num_member = sizeof(rec) / sizeof(D3D11_INPUT_ELEMENT_DESC);
+	for (UINT i = 0; i < *num_member; ++i)
+	{
+		member_point[i] = rec[i];
+	}
+}
+void shader_ocean_simulateVPS::release()
+{
+	release_basic();
+}
+void shader_ocean_simulateVPS::init_handle()
+{
+	SRV_input_buffer = fx_need->GetVariableByName("g_InputDxyz")->AsShaderResource();
+	SRV_input_tex = fx_need->GetVariableByName("g_samplerDisplacementMap")->AsShaderResource();
+	constent_buffer_Immutable = fx_need->GetConstantBufferByName("cbImmutable");
+	constent_buffer_ChangePerFrame = fx_need->GetConstantBufferByName("cbChangePerFrame");
+	//constent_buffer_Immutable = fx_need->GetVariableByName("cbImmutable")->AsConstantBuffer();
+	//constent_buffer_ChangePerFrame = fx_need->GetVariableByName("cbChangePerFrame")->AsConstantBuffer();
+}
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~水面正式渲染(非曲面细分)~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+shader_ocean_render::shader_ocean_render(LPCWSTR filename) :shader_basic(filename)
+{
+}
+engine_basic::engine_fail_reason shader_ocean_render::set_texture_displayment(ID3D11ShaderResourceView *data_input)
+{
+	HRESULT hr = SRV_tex_displayment->SetResource(data_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "an error when setting ocean render displayment SRV");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_ocean_render::set_texture_Perlin(ID3D11ShaderResourceView *data_input)
+{
+	HRESULT hr = SRV_tex_Perlin->SetResource(data_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "an error when setting ocean render Perlin SRV");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_ocean_render::set_texture_gradient(ID3D11ShaderResourceView *data_input)
+{
+	HRESULT hr = SRV_tex_gradient->SetResource(data_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "an error when setting ocean render gradient SRV");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_ocean_render::set_texture_Fresnel(ID3D11ShaderResourceView *data_input)
+{
+	HRESULT hr = SRV_tex_Fresnel->SetResource(data_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "an error when setting ocean render Fresnel SRV");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_ocean_render::set_texture_ReflectCube(ID3D11ShaderResourceView *data_input)
+{
+	HRESULT hr = SRV_tex_ReflectCube->SetResource(data_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "an error when setting ocean render ReflectCube SRV");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+
+engine_basic::engine_fail_reason shader_ocean_render::set_Constant_Buffer_Shading(ID3D11Buffer *buffer_input)
+{
+	HRESULT hr;
+	hr = constent_buffer_Shading->SetConstantBuffer(buffer_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set constent_buffer_Shading error when setting ocean render VSPS");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_ocean_render::set_Constant_Buffer_PerCall(ID3D11Buffer *buffer_input)
+{
+	HRESULT hr;
+	hr = constent_buffer_PerCall->SetConstantBuffer(buffer_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set constent_buffer_PerCall error when setting ocean render VSPS");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+void shader_ocean_render::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member)
+{
+	//设置顶点声明
+	D3D11_INPUT_ELEMENT_DESC rec[] =
+	{
+		//语义名    语义索引      数据格式          输入槽 起始地址     输入槽的格式 
+		{ "POSITION",0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,0  ,D3D11_INPUT_PER_VERTEX_DATA  ,0 }
+	};
+	*num_member = sizeof(rec) / sizeof(D3D11_INPUT_ELEMENT_DESC);
+	for (UINT i = 0; i < *num_member; ++i)
+	{
+		member_point[i] = rec[i];
+	}
+}
+void shader_ocean_render::release()
+{
+	release_basic();
+}
+void shader_ocean_render::init_handle()
+{
+	SRV_tex_displayment = fx_need->GetVariableByName("g_texDisplacement")->AsShaderResource();
+	SRV_tex_Perlin = fx_need->GetVariableByName("g_texPerlin")->AsShaderResource();
+	SRV_tex_gradient = fx_need->GetVariableByName("g_texGradient")->AsShaderResource();
+	SRV_tex_Fresnel = fx_need->GetVariableByName("g_texFresnel")->AsShaderResource();
+	SRV_tex_ReflectCube = fx_need->GetVariableByName("g_texReflectCube")->AsShaderResource();
+
+	constent_buffer_Shading = fx_need->GetConstantBufferByName("cbShading");
+	constent_buffer_PerCall = fx_need->GetConstantBufferByName("cbChangePerCall");
+	//constent_buffer_Shading = fx_need->GetVariableByName("cbShading")->AsConstantBuffer();
+	//constent_buffer_PerCall = fx_need->GetVariableByName("cbChangePerCall")->AsConstantBuffer();
+}
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~水面正式渲染(曲面细分)~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+shader_ocean_draw::shader_ocean_draw(LPCWSTR filename) :shader_basic(filename)
+{
+}
+engine_basic::engine_fail_reason shader_ocean_draw::set_view_pos(XMFLOAT3 eye_pos)
+{
+	HRESULT hr = view_pos_handle->SetRawValue((void*)&eye_pos, 0, sizeof(eye_pos));
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason error_message(hr, "ocean draw error when setting view position");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_ocean_draw::set_texture_displayment(ID3D11ShaderResourceView *data_input)
+{
+	HRESULT hr = SRV_tex_displayment->SetResource(data_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "an error when setting ocean render displayment SRV");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_ocean_draw::set_texture_Perlin(ID3D11ShaderResourceView *data_input)
+{
+	HRESULT hr = SRV_tex_Perlin->SetResource(data_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "an error when setting ocean render Perlin SRV");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_ocean_draw::set_texture_gradient(ID3D11ShaderResourceView *data_input)
+{
+	HRESULT hr = SRV_tex_gradient->SetResource(data_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "an error when setting ocean render gradient SRV");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_ocean_draw::set_texture_Fresnel(ID3D11ShaderResourceView *data_input)
+{
+	HRESULT hr = SRV_tex_Fresnel->SetResource(data_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "an error when setting ocean render Fresnel SRV");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_ocean_draw::set_texture_ReflectCube(ID3D11ShaderResourceView *data_input)
+{
+	HRESULT hr = SRV_tex_ReflectCube->SetResource(data_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "an error when setting ocean render ReflectCube SRV");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_ocean_draw::set_trans_all(XMFLOAT4X4 *mat_need)
+{
+	auto check_error = set_matrix(final_mat_handle, mat_need);;
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_ocean_draw::set_trans_scal(XMFLOAT4X4 *mat_need)
+{
+	auto check_error = set_matrix(scal_mat_handle, mat_need);;
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_ocean_draw::set_Constant_Buffer_Shading(ID3D11Buffer *buffer_input)
+{
+	HRESULT hr;
+	hr = constent_buffer_Shading->SetConstantBuffer(buffer_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set constent_buffer_Shading error when setting ocean render VSPS");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_ocean_draw::set_Constant_Buffer_PerCall(ID3D11Buffer *buffer_input)
+{
+	HRESULT hr;
+	hr = constent_buffer_PerCall->SetConstantBuffer(buffer_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set constent_buffer_PerCall error when setting ocean render VSPS");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+void shader_ocean_draw::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member)
+{
+	//设置顶点声明
+	D3D11_INPUT_ELEMENT_DESC rec[] =
+	{
+		{ "TEXCOORD",0  ,DXGI_FORMAT_R32G32_FLOAT      ,0    ,0 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 }
+	};
+	*num_member = sizeof(rec) / sizeof(D3D11_INPUT_ELEMENT_DESC);
+	for (UINT i = 0; i < *num_member; ++i)
+	{
+		member_point[i] = rec[i];
+	}
+}
+void shader_ocean_draw::release()
+{
+	release_basic();
+}
+void shader_ocean_draw::init_handle()
+{
+	view_pos_handle = fx_need->GetVariableByName("g_LocalEye");
+	scal_mat_handle = fx_need->GetVariableByName("scal_matrix")->AsMatrix();
+	final_mat_handle = fx_need->GetVariableByName("final_matrix")->AsMatrix();
+	SRV_tex_displayment = fx_need->GetVariableByName("g_texDisplacement")->AsShaderResource();
+	SRV_tex_Perlin = fx_need->GetVariableByName("g_texPerlin")->AsShaderResource();
+	SRV_tex_gradient = fx_need->GetVariableByName("g_texGradient")->AsShaderResource();
+	SRV_tex_Fresnel = fx_need->GetVariableByName("g_texFresnel")->AsShaderResource();
+	SRV_tex_ReflectCube = fx_need->GetVariableByName("g_texReflectCube")->AsShaderResource();
+
+	constent_buffer_Shading = fx_need->GetConstantBufferByName("cbShading");
+	constent_buffer_PerCall = fx_need->GetConstantBufferByName("cbChangePerCall");
+	//constent_buffer_Shading = fx_need->GetVariableByName("cbShading")->AsConstantBuffer();
+	//constent_buffer_PerCall = fx_need->GetVariableByName("cbChangePerCall")->AsConstantBuffer();
+}
 //shader管理器
 shader_control *shader_control::shadercontrol_pInstance = NULL;
 shader_control::shader_control() 
@@ -3213,6 +3722,66 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
+	std::shared_ptr<compute_FFT> shader_compute_FFT = std::make_shared<compute_FFT>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\fft_512x512_c2c.cso");
+	check_error = shader_compute_FFT->shder_create();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = add_a_new_shader(std::type_index(typeid(compute_FFT)), shader_compute_FFT);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+
+	std::shared_ptr<shader_ocean_simulateCS> shader_oceanpre_cs = std::make_shared<shader_ocean_simulateCS>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\ocean_simulator_cs.cso");
+	check_error = shader_oceanpre_cs->shder_create();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = add_a_new_shader(std::type_index(typeid(shader_ocean_simulateCS)), shader_oceanpre_cs);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+
+	std::shared_ptr<shader_ocean_simulateVPS> shader_oceanpre_vps = std::make_shared<shader_ocean_simulateVPS>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\ocean_simulator_vs_ps.cso");
+	check_error = shader_oceanpre_vps->shder_create();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = add_a_new_shader(std::type_index(typeid(shader_ocean_simulateVPS)), shader_oceanpre_vps);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+
+	std::shared_ptr<shader_ocean_render> shader_oceanrender_vps = std::make_shared<shader_ocean_render>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\ocean_shading.cso");
+	check_error = shader_oceanrender_vps->shder_create();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = add_a_new_shader(std::type_index(typeid(shader_ocean_render)), shader_oceanrender_vps);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+
+	std::shared_ptr<shader_ocean_draw> shader_oceandraw_tess = std::make_shared<shader_ocean_draw>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\ocean_draw.cso");
+	check_error = shader_oceandraw_tess->shder_create();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = add_a_new_shader(std::type_index(typeid(shader_ocean_draw)), shader_oceandraw_tess);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
@@ -3456,6 +4025,61 @@ std::shared_ptr<shader_atmosphere_render> shader_control::get_shader_atmosphere_
 		return std::shared_ptr<shader_atmosphere_render>();
 	}
 	auto out_pointer = std::dynamic_pointer_cast<shader_atmosphere_render>(shader_vlight);
+	return out_pointer;
+}
+std::shared_ptr<compute_FFT> shader_control::get_shader_compute_fft(engine_basic::engine_fail_reason &if_succeed)
+{
+	std::string name_need = std::type_index(typeid(compute_FFT)).name();
+	auto shader_vlight = get_shader_by_type(std::type_index(typeid(compute_FFT)).name(), if_succeed);
+	if (!if_succeed.check_if_failed())
+	{
+		return std::shared_ptr<compute_FFT>();
+	}
+	auto out_pointer = std::dynamic_pointer_cast<compute_FFT>(shader_vlight);
+	return out_pointer;
+}
+std::shared_ptr<shader_ocean_simulateCS> shader_control::get_shader_oceansimulate_cs(engine_basic::engine_fail_reason &if_succeed)
+{
+	std::string name_need = std::type_index(typeid(shader_ocean_simulateCS)).name();
+	auto shader_vlight = get_shader_by_type(std::type_index(typeid(shader_ocean_simulateCS)).name(), if_succeed);
+	if (!if_succeed.check_if_failed())
+	{
+		return std::shared_ptr<shader_ocean_simulateCS>();
+	}
+	auto out_pointer = std::dynamic_pointer_cast<shader_ocean_simulateCS>(shader_vlight);
+	return out_pointer;
+}
+std::shared_ptr<shader_ocean_simulateVPS> shader_control::get_shader_oceansimulate_vps(engine_basic::engine_fail_reason &if_succeed)
+{
+	std::string name_need = std::type_index(typeid(shader_ocean_simulateVPS)).name();
+	auto shader_vlight = get_shader_by_type(std::type_index(typeid(shader_ocean_simulateVPS)).name(), if_succeed);
+	if (!if_succeed.check_if_failed())
+	{
+		return std::shared_ptr<shader_ocean_simulateVPS>();
+	}
+	auto out_pointer = std::dynamic_pointer_cast<shader_ocean_simulateVPS>(shader_vlight);
+	return out_pointer;
+}
+std::shared_ptr<shader_ocean_render> shader_control::get_shader_oceanrender_vps(engine_basic::engine_fail_reason &if_succeed)
+{
+	std::string name_need = std::type_index(typeid(shader_ocean_render)).name();
+	auto shader_vlight = get_shader_by_type(std::type_index(typeid(shader_ocean_render)).name(), if_succeed);
+	if (!if_succeed.check_if_failed())
+	{
+		return std::shared_ptr<shader_ocean_render>();
+	}
+	auto out_pointer = std::dynamic_pointer_cast<shader_ocean_render>(shader_vlight);
+	return out_pointer;
+}
+std::shared_ptr<shader_ocean_draw> shader_control::get_shader_oceandraw_tess(engine_basic::engine_fail_reason &if_succeed)
+{
+	std::string name_need = std::type_index(typeid(shader_ocean_draw)).name();
+	auto shader_vlight = get_shader_by_type(std::type_index(typeid(shader_ocean_draw)).name(), if_succeed);
+	if (!if_succeed.check_if_failed())
+	{
+		return std::shared_ptr<shader_ocean_draw>();
+	}
+	auto out_pointer = std::dynamic_pointer_cast<shader_ocean_draw>(shader_vlight);
 	return out_pointer;
 }
 

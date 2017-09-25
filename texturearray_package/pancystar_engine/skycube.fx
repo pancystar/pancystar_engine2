@@ -53,7 +53,7 @@ float4 PS(VertexOut pin) :SV_TARGET
 	tex_color = texture_cube.Sample(samTex, map_direct);
 	pin.pos_texproj /= pin.pos_texproj.w;
 	float4 atomosphere_color = atmosphere_mask.Sample(samTex, pin.pos_texproj.xy);
-	return atomosphere_color;
+	return tex_color;
 }
 
 technique11 draw_sky

@@ -163,11 +163,13 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="pancy_atmosphere.h" />
     <ClInclude Include="geometry.h" />
     <ClInclude Include="PancyCamera.h" />
     <ClInclude Include="PancyInput.h" />
     <ClInclude Include="pancystar_engine_basic.h" />
     <ClInclude Include="pancy_d3d11_basic.h" />
+    <ClInclude Include="pancy_FFT_ocean.h" />
     <ClInclude Include="pancy_lighting.h" />
     <ClInclude Include="pancy_model_control.h" />
     <ClInclude Include="pancy_pretreatment.h" />
@@ -177,12 +179,14 @@
     <ClInclude Include="shader_pancy.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="pancy_atmosphere.cpp" />
     <ClCompile Include="geometry.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="PancyCamera.cpp" />
     <ClCompile Include="PancyInput.cpp" />
     <ClCompile Include="pancystar_engine_basic.cpp" />
     <ClCompile Include="pancy_d3d11_basic.cpp" />
+    <ClCompile Include="pancy_FFT_ocean.cpp" />
     <ClCompile Include="pancy_lighting.cpp" />
     <ClCompile Include="pancy_model_control.cpp" />
     <ClCompile Include="pancy_posttreatment.cpp" />
@@ -197,6 +201,7 @@
     <FxCompile Include="atmosphere_precompute.fx" />
     <FxCompile Include="atmosphere_render.fx" />
     <FxCompile Include="color_test.fx" />
+    <FxCompile Include="fft_512x512_c2c.fx" />
     <FxCompile Include="gbuffer_pretreat.fx" />
     <FxCompile Include="HDR_average_pass.fx" />
     <FxCompile Include="HDR_blur_pass.fx" />
@@ -204,6 +209,10 @@
     <FxCompile Include="HDR_preblur_pass.fx" />
     <FxCompile Include="light_buffer_pretreat.fx" />
     <FxCompile Include="light_deffered.fx" />
+    <FxCompile Include="ocean_draw.fx" />
+    <FxCompile Include="ocean_shading.fx" />
+    <FxCompile Include="ocean_simulator_cs.fx" />
+    <FxCompile Include="ocean_simulator_vs_ps.fx" />
     <FxCompile Include="reflect_blur.fx" />
     <FxCompile Include="reflect_final.fx" />
     <FxCompile Include="render_brdf_list.fx" />

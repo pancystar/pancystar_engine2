@@ -116,8 +116,9 @@ void assert(bool check)
 }
 float mod(float x, float y) 
 {
-	float rec = x - y * floor(x/y);
-	return rec;
+	return fmod(x, y);
+	//float rec = x - y * floor(x/y);
+	//return rec;
 }
 #include"atmosphere_define.hlsli"
 static const AtmosphereParameters ATMOSPHERE =
@@ -347,11 +348,12 @@ the transmittance texture:
 
 DimensionlessSpectrum ComputeTransmittanceToTopAtmosphereBoundaryTexture(in AtmosphereParameters atmosphere, in float2 gl_frag_coord) 
 {
-	//const float2 TRANSMITTANCE_TEXTURE_SIZE =float2(TRANSMITTANCE_TEXTURE_WIDTH, TRANSMITTANCE_TEXTURE_HEIGHT);
+	const float2 TRANSMITTANCE_TEXTURE_SIZE =float2(TRANSMITTANCE_TEXTURE_WIDTH, TRANSMITTANCE_TEXTURE_HEIGHT);
 	Length r;
 	Number mu;
 	//todo 更改gl下的
-	GetRMuFromTransmittanceTextureUv(atmosphere, gl_frag_coord, r, mu);
+	GetRMuFromTransmittanceTextureUv(atmosphere, gl_frag_coord / TRANSMITTANCE_TEXTURE_SIZE, r, mu);
+	//return float3(r/10000, mu+0.1f, 0.0f);
 	return ComputeTransmittanceToTopAtmosphereBoundary(atmosphere, r, mu);
 }
 

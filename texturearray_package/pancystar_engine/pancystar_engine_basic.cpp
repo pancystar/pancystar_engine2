@@ -36,6 +36,13 @@ void engine_fail_reason::show_failed_reason()
 	MessageBox(0, data_output,L"error",MB_OK);
 }
 // ˝—ß‘ÀÀ„
+DirectX::XMFLOAT2 engine_mathmatic::vec2_plus(DirectX::XMFLOAT2 vec1_in, DirectX::XMFLOAT2 vec2_in)
+{
+	DirectX::XMFLOAT2 vec_out;
+	vec_out.x = vec1_in.x + vec2_in.x;
+	vec_out.y = vec1_in.y + vec2_in.y;
+	return vec_out;
+}
 DirectX::XMFLOAT3 engine_mathmatic::vec3_plus(DirectX::XMFLOAT3 vec1_in, DirectX::XMFLOAT3 vec2_in)
 {
 	DirectX::XMFLOAT3 vec_out;
@@ -43,6 +50,33 @@ DirectX::XMFLOAT3 engine_mathmatic::vec3_plus(DirectX::XMFLOAT3 vec1_in, DirectX
 	vec_out.y = vec1_in.y + vec2_in.y;
 	vec_out.z = vec1_in.z + vec2_in.z;
 	return vec_out;
+}
+DirectX::XMFLOAT4 engine_mathmatic::vec4_plus(DirectX::XMFLOAT4 vec1_in, DirectX::XMFLOAT4 vec2_in)
+{
+	DirectX::XMFLOAT4 vec_out;
+	vec_out.x = vec1_in.x + vec2_in.x;
+	vec_out.y = vec1_in.y + vec2_in.y;
+	vec_out.z = vec1_in.z + vec2_in.z;
+	vec_out.w = vec1_in.w + vec2_in.w;
+	return vec_out;
+}
+DirectX::XMFLOAT4 engine_mathmatic::vec4mulmat(DirectX::XMFLOAT4 vec1_in, DirectX::XMFLOAT4X4 mat_in)
+{
+	DirectX::XMVECTOR vec_in_mul = DirectX::XMLoadFloat4(&vec1_in);
+	DirectX::XMMATRIX mat_in_mul = DirectX::XMLoadFloat4x4(&mat_in);
+	DirectX::XMVECTOR vec_out_mul = DirectX::XMVector4Transform(vec_in_mul, mat_in_mul);
+	DirectX::XMFLOAT4 vec_out;
+	DirectX::XMStoreFloat4(&vec_out, vec_out_mul);
+	return vec_out;
+}
+float engine_mathmatic::vec4dot(DirectX::XMFLOAT4 vec1_in, DirectX::XMFLOAT4 vec2_in)
+{
+	DirectX::XMVECTOR vec1_in_mul = DirectX::XMLoadFloat4(&vec1_in);
+	DirectX::XMVECTOR vec2_in_mul = DirectX::XMLoadFloat4(&vec2_in);
+	DirectX::XMVECTOR vec_out_mul = DirectX::XMVector4Dot(vec1_in_mul, vec2_in_mul);
+	float dot_out;
+	DirectX::XMStoreFloat(&dot_out, vec_out_mul);
+	return dot_out;
 }
 DirectX::XMFLOAT3 engine_mathmatic::vec3_minus(DirectX::XMFLOAT3 vec1_in, DirectX::XMFLOAT3 vec2_in)
 {
@@ -66,6 +100,14 @@ DirectX::XMFLOAT3 engine_mathmatic::vec3_divide(DirectX::XMFLOAT3 vec_in, float 
 	vec_out.x = vec_in.x / scal_num;
 	vec_out.y = vec_in.y / scal_num;
 	vec_out.z = vec_in.z / scal_num;
+	return vec_out;
+}
+float engine_mathmatic::vec3_length(DirectX::XMFLOAT3 vec_in)
+{
+	DirectX::XMVECTOR vec_in_mul = DirectX::XMLoadFloat3(&vec_in);
+	DirectX::XMVECTOR vec_out_mul = DirectX::XMVector3Length(vec_in_mul);
+	float vec_out;
+	DirectX::XMStoreFloat(&vec_out, vec_out_mul);
 	return vec_out;
 }
 DirectX::XMFLOAT3 engine_mathmatic::vec3_normalize(DirectX::XMFLOAT3 vec_in)

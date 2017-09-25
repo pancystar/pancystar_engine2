@@ -51,6 +51,12 @@
     <ClInclude Include="pancy_posttreatment.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="pancy_atmosphere.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="pancy_FFT_ocean.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="geometry.cpp">
@@ -90,6 +96,12 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="pancy_posttreatment.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="pancy_atmosphere.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="pancy_FFT_ocean.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
@@ -164,6 +176,21 @@
       <Filter>源文件</Filter>
     </FxCompile>
     <FxCompile Include="atmosphere_render.fx">
+      <Filter>源文件</Filter>
+    </FxCompile>
+    <FxCompile Include="fft_512x512_c2c.fx">
+      <Filter>源文件</Filter>
+    </FxCompile>
+    <FxCompile Include="ocean_simulator_cs.fx">
+      <Filter>源文件</Filter>
+    </FxCompile>
+    <FxCompile Include="ocean_simulator_vs_ps.fx">
+      <Filter>源文件</Filter>
+    </FxCompile>
+    <FxCompile Include="ocean_shading.fx">
+      <Filter>源文件</Filter>
+    </FxCompile>
+    <FxCompile Include="ocean_draw.fx">
       <Filter>源文件</Filter>
     </FxCompile>
   </ItemGroup>

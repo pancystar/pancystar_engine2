@@ -83,11 +83,16 @@ namespace engine_basic
 	class engine_mathmatic
 	{
 	public:
+		static DirectX::XMFLOAT2 vec2_plus(DirectX::XMFLOAT2 vec1_in, DirectX::XMFLOAT2 vec2_in);
 		static DirectX::XMFLOAT3 vec3_plus(DirectX::XMFLOAT3 vec1_in, DirectX::XMFLOAT3 vec2_in);
+		static DirectX::XMFLOAT4 vec4_plus(DirectX::XMFLOAT4 vec1_in, DirectX::XMFLOAT4 vec2_in);
+		static DirectX::XMFLOAT4 vec4mulmat(DirectX::XMFLOAT4 vec1_in, DirectX::XMFLOAT4X4 mat_in);
+		static float vec4dot(DirectX::XMFLOAT4 vec1_in, DirectX::XMFLOAT4 vec2_in);
 		static DirectX::XMFLOAT3 vec3_minus(DirectX::XMFLOAT3 vec1_in, DirectX::XMFLOAT3 vec2_in);
 		static DirectX::XMFLOAT3 vec3_multi(DirectX::XMFLOAT3 vec_in, float scal_num);
 		static DirectX::XMFLOAT3 vec3_divide(DirectX::XMFLOAT3 vec_in, float scal_num);
 		static DirectX::XMFLOAT3 vec3_normalize(DirectX::XMFLOAT3 vec_in);
+		static float vec3_length(DirectX::XMFLOAT3 vec_in);
 		static DirectX::XMFLOAT3 vec3_linear_inter(DirectX::XMFLOAT3 vec1_in, DirectX::XMFLOAT3 vec2_in, float distance);
 		static DirectX::XMFLOAT3 vec3_nilinear_inter(DirectX::XMFLOAT3 vec1_in, DirectX::XMFLOAT3 vec2_in, DirectX::XMFLOAT3 vec3_in, DirectX::XMFLOAT3 vec4_in, float distance_1, float distance_2);
 	};

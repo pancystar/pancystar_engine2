@@ -56,7 +56,7 @@ void count_pbr_reflect(
 	)
 {
 	float4 F0 = lerp(0.04, tex_albedo_in, tex_matallic);
-	float3 h_vec = (light_dir_in + direction_view) / 2.0f;
+	float3 h_vec = normalize((light_dir_in + direction_view) / 2.0f);
 	diffuse_out = tex_albedo_in * (1 - tex_matallic);
 
 	float pi = 3.141592653;

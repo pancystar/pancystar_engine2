@@ -130,7 +130,8 @@ HRESULT engine_windows_main::game_create()
 		fail_message.show_failed_reason();
 		return E_FAIL;
 	}
-	scene_root *test_scene = new scene_test_square();
+	//
+	scene_root *test_scene = new scene_test_environment(scene_main->get_pretreat(), scene_main->get_post_hdr());
 	fail_message = test_scene->create();
 	if (!fail_message.check_if_failed())
 	{

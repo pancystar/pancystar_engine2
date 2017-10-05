@@ -64,10 +64,38 @@ private:
 };
 class scene_test_environment : public scene_root
 {
+	Geometry_basic           *fullscreen_buffer;
+	XMFLOAT3                 up_cube_reflect[6];
+	XMFLOAT3                 look_cube_reflect[6];
+	float quality_reflect;
+	pancy_model_ID ID_model_sky;
+	int model_ID_sky;
+	ID3D11ShaderResourceView *tex_cubesky;
 	ID3D11ShaderResourceView *SRV_cube;
-	ID3D11ShaderResourceView *RTV_cube;
-public:
+	ID3D11RenderTargetView *RTV_cube[7*6];
 
+	ID3D11ShaderResourceView *SRV_diffusecube;
+	ID3D11RenderTargetView *RTV_diffusecube[6];
+
+	ID3D11ShaderResourceView *SRV_singlecube;
+	ID3D11RenderTargetView *RTV_singlecube[6];
+
+	ID3D11DepthStencilView   *reflect_cube_DSV;
+	Pretreatment_gbuffer *pretreat_render;
+	render_posttreatment_HDR  *HDR_tonemapping;
+
+public:
+	scene_test_environment(Pretreatment_gbuffer *pretreat_in, render_posttreatment_HDR  *HDR_in);
+	engine_basic::engine_fail_reason create();
+	void display();
+	void display_nopost() {};
+	void display_environment(XMFLOAT4X4 view_matrix, XMFLOAT4X4 proj_matrix);
+	void update(float delta_time);
+	void release();
+private:
+	void show_sky_single();
+	void show_sky_cube();
+	engine_basic::engine_fail_reason create_cubemap();
 };
 
 
@@ -108,6 +136,9 @@ public:
 	engine_basic::engine_fail_reason create();
 	engine_basic::engine_fail_reason add_a_scene(scene_root* scene_in);
 	engine_basic::engine_fail_reason change_now_scene(int scene_ID);
+
+	Pretreatment_gbuffer* get_pretreat() { return pretreat_render; };
+	render_posttreatment_HDR* get_post_hdr(){ return HDR_tonemapping; };
 	void release();
 private:
 	void render_environment();

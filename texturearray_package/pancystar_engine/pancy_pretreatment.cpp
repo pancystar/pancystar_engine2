@@ -1,7 +1,7 @@
 #include"pancy_pretreatment.h"
 Pretreatment_gbuffer::Pretreatment_gbuffer(int width_need, int height_need, float quality_reflect_need)
 {
-	
+
 	environment_map_place = XMFLOAT3(0.0f, 5.0f, 0.0f);
 	map_width = width_need;
 	map_height = height_need;
@@ -25,7 +25,7 @@ Pretreatment_gbuffer::Pretreatment_gbuffer(int width_need, int height_need, floa
 	reflect_specular_target = NULL;
 	reflect_specular_tex = NULL;
 	reflect_cubestencil_SRV = NULL;
-	for (int i = 0; i < 6; ++i) 
+	for (int i = 0; i < 6; ++i)
 	{
 		reflect_cubestencil_RTV[i] = NULL;
 	}
@@ -243,7 +243,7 @@ engine_basic::engine_fail_reason Pretreatment_gbuffer::init_reflect_texture()
 	}
 	safe_release(AtmosphereMask_buf);
 	//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~光照信息存储纹理~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-	ID3D11Texture2D *diffuse_buf = 0, *specular_buf = 0,*atmosphere_buffer = 0;
+	ID3D11Texture2D *diffuse_buf = 0, *specular_buf = 0, *atmosphere_buffer = 0;
 	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateTexture2D(&texDesc, 0, &diffuse_buf);
 	if (FAILED(hr))
 	{
@@ -583,7 +583,7 @@ engine_basic::engine_fail_reason Pretreatment_gbuffer::init_texture()
 
 	//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~光照信息存储纹理~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	texDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
-	ID3D11Texture2D *diffuse_buf = 0, *specular_buf = 0,*atmosphere_buf;
+	ID3D11Texture2D *diffuse_buf = 0, *specular_buf = 0, *atmosphere_buf;
 	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateTexture2D(&texDesc, 0, &diffuse_buf);
 	if (FAILED(hr))
 	{
@@ -739,7 +739,7 @@ engine_basic::engine_fail_reason Pretreatment_gbuffer::init_texture()
 }
 void Pretreatment_gbuffer::set_normalspecdepth_target()
 {
-	
+
 	ID3D11RenderTargetView* renderTargets[3] = { normalspec_target,specroughness_target,AtmosphereMask_target };
 	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetRenderTargets(3, renderTargets, depthmap_target);
 	//d3d_pancy_basic_singleton::GetInstance()->set_render_target(normalspec_target, depthmap_target);
@@ -790,7 +790,7 @@ void Pretreatment_gbuffer::set_reflect_multirender_target()
 void Pretreatment_gbuffer::set_posttreat_input_target()
 {
 	ID3D11RenderTargetView* renderTargets[2] = { posttreatment_RTV,reflectmask_RTV };
-	d3d_pancy_basic_singleton::GetInstance()->set_render_target(renderTargets,2);
+	d3d_pancy_basic_singleton::GetInstance()->set_render_target(renderTargets, 2);
 	//d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetRenderTargets(2, renderTargets, NULL);
 	float clearColor[] = { 0.0f, 0.0f, 0.0f, 1.0f };
 	float mask_clearColor[] = { 1.0f, 0.0f, 0.0f, 1.0f };
@@ -825,7 +825,7 @@ void Pretreatment_gbuffer::release_texture()
 	safe_release(AtmosphereMask_tex);
 }
 void Pretreatment_gbuffer::upadte_reflect_render_face()
-{ 
+{
 	if (now_reflect_render_face == 11)
 	{
 		environment_map_renderplace = environment_map_place;
@@ -833,7 +833,7 @@ void Pretreatment_gbuffer::upadte_reflect_render_face()
 		std::swap(reflect_cubestencil_SRV_backbuffer, reflect_cubestencil_SRV);
 		for (int i = 0; i < 6; ++i)
 		{
-			std::swap(reflect_cubestencil_RTV[i],reflect_cubestencil_RTV_backbuffer[i]);
+			std::swap(reflect_cubestencil_RTV[i], reflect_cubestencil_RTV_backbuffer[i]);
 		}
 	}
 	now_reflect_render_face = (now_reflect_render_face + 1) % 12;
@@ -845,7 +845,7 @@ void Pretreatment_gbuffer::render_gbuffer()
 	//绘制gbuffer
 	XMFLOAT4X4 view_mat;
 	pancy_camera::get_instance()->count_view_matrix(&view_mat);
-	pancy_geometry_control_singleton::get_instance()->render_gbuffer(view_mat, engine_basic::perspective_message::get_instance()->get_proj_matrix(),false);
+	pancy_geometry_control_singleton::get_instance()->render_gbuffer(view_mat, engine_basic::perspective_message::get_instance()->get_proj_matrix(), false);
 	//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~存储法线镜面反射光纹理~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	ID3D11Resource * normalDepthTex = 0;
 	ID3D11Resource * normalDepthTex_singlesample = 0;
@@ -889,7 +889,7 @@ void Pretreatment_gbuffer::render_gbuffer()
 	shader_atmosphere->set_tex_mask(AtmosphereMask_tex);
 	//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~msaa-shader重采样~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	set_resolvdepth_target();
-//	engine_basic::engine_fail_reason check_error;
+	//	engine_basic::engine_fail_reason check_error;
 	auto shader_resolve = shader_control::GetInstance()->get_shader_resolvedepth(check_error);
 	shader_resolve->set_texture_MSAA(depthmap_tex);
 	XMFLOAT3 rec_proj_vec;
@@ -929,10 +929,10 @@ void Pretreatment_gbuffer::render_gbuffer()
 		look_vec = look_cube_reflect[now_reflect_render_face / 2];
 		up_vec = up_cube_reflect[now_reflect_render_face / 2];
 		pancy_camera::get_instance()->count_view_matrix(look_vec, up_vec, environment_map_place, &view_matrix_reflect);
-		pancy_geometry_control_singleton::get_instance()->render_gbuffer(view_matrix_reflect, Proj_mat_reflect,true);
+		pancy_geometry_control_singleton::get_instance()->render_gbuffer(view_matrix_reflect, Proj_mat_reflect, true);
 		//渲染深度到立方模板纹理贴图
 		auto shader_save_depth = shader_control::GetInstance()->get_shader_reflect_savedepth(check_error);
-		shader_save_depth->set_cube_count(XMFLOAT3(now_reflect_render_face / 2,0.0f,0.0f));
+		shader_save_depth->set_cube_count(XMFLOAT3(now_reflect_render_face / 2, 0.0f, 0.0f));
 		shader_save_depth->set_depthtex_input(reflect_depthcube_SRV);
 		set_reflect_savedepth_target(now_reflect_render_face / 2);
 		ID3DX11EffectTechnique *tech_need;
@@ -1027,7 +1027,7 @@ void Pretreatment_gbuffer::render_lbuffer(XMFLOAT4X4 view_matrix, XMFLOAT4X4 inv
 		pancy_camera::get_instance()->count_invview_matrix(look_vec, up_vec, environment_map_place, &invview_matrix_reflect);
 		lbuffer_shader->set_view_matrix(&view_matrix_reflect);
 		lbuffer_shader->set_invview_matrix(&invview_matrix_reflect);
-		
+
 		if (if_shadow == true)
 		{
 			lbuffer_shader->get_technique(&tech_need, "draw_pbr_withoutMSAA");
@@ -1036,7 +1036,7 @@ void Pretreatment_gbuffer::render_lbuffer(XMFLOAT4X4 view_matrix, XMFLOAT4X4 inv
 		{
 			lbuffer_shader->get_technique(&tech_need, "draw_pbr_withoutshadowMSAA");
 		}
-	
+
 		light_buffer_render(tech_need);
 	}
 	d3d_pancy_basic_singleton::GetInstance()->reset_viewport();
@@ -1079,13 +1079,13 @@ void Pretreatment_gbuffer::release()
 	//全局反射gbuffer开启的纹理
 	safe_release(reflect_cubenormal_SRV);
 	safe_release(reflect_cubenormal_RTV);
-	
+
 	safe_release(reflect_cubeSpecRough_SRV);
 	safe_release(reflect_cubeSpecRough_RTV);
-	
+
 	safe_release(reflect_AtmosphereMask_SRV);
 	safe_release(reflect_AtmosphereMask_RTV);
-	
+
 	safe_release(reflect_depthcube_SRV);
 	safe_release(reflect_DSV);
 	// 全局反射lbuffer开启的纹理
@@ -1114,4 +1114,70 @@ void Pretreatment_gbuffer::light_buffer_render(ID3DX11EffectTechnique* tech)
 {
 	fullscreen_Lbuffer->get_teque(tech);
 	fullscreen_Lbuffer->show_mesh();
+}
+
+
+void Pretreatment_gbuffer::render_gbuffer(XMFLOAT4X4 view_matrix)
+{
+	engine_basic::engine_fail_reason check_error;
+	set_reflect_normaldepth_target();
+	XMFLOAT4X4 Proj_mat_reflect;
+	XMStoreFloat4x4(&Proj_mat_reflect, DirectX::XMMatrixPerspectiveFovLH(0.5f*XM_PI, 1.0f, engine_basic::perspective_message::get_instance()->get_perspective_near_plane(), engine_basic::perspective_message::get_instance()->get_perspective_far_plane()));
+	XMFLOAT3 look_vec, up_vec;
+	pancy_geometry_control_singleton::get_instance()->render_gbuffer(view_matrix, Proj_mat_reflect, true);
+
+}
+void Pretreatment_gbuffer::render_lbuffer_cube(XMFLOAT4X4 view_matrix, XMFLOAT4X4 invview_matrix, bool if_shadow)
+{
+	engine_basic::engine_fail_reason check_error;
+	auto lbuffer_shader = shader_control::GetInstance()->get_shader_lightbuffer(check_error);
+	last_reflect_render_face = now_reflect_render_face;
+	set_reflect_multirender_target();
+	float halfwidth = engine_basic::perspective_message::get_instance()->get_perspective_far_plane() * tanf(0.5f*0.5f*XM_PI);
+	XMFLOAT4 reflectcube_FarCorner[4];
+	reflectcube_FarCorner[0] = DirectX::XMFLOAT4(-halfwidth, -halfwidth, engine_basic::perspective_message::get_instance()->get_perspective_far_plane(), 1.0f);
+	reflectcube_FarCorner[1] = DirectX::XMFLOAT4(-halfwidth, +halfwidth, engine_basic::perspective_message::get_instance()->get_perspective_far_plane(), 1.0f);
+	reflectcube_FarCorner[2] = DirectX::XMFLOAT4(+halfwidth, +halfwidth, engine_basic::perspective_message::get_instance()->get_perspective_far_plane(), 1.0f);
+	reflectcube_FarCorner[3] = DirectX::XMFLOAT4(+halfwidth, -halfwidth, engine_basic::perspective_message::get_instance()->get_perspective_far_plane(), 1.0f);
+	XMFLOAT4X4 Proj_mat_reflect;
+	XMStoreFloat4x4(&Proj_mat_reflect, DirectX::XMMatrixPerspectiveFovLH(0.5f*XM_PI, 1.0f, engine_basic::perspective_message::get_instance()->get_perspective_near_plane(), engine_basic::perspective_message::get_instance()->get_perspective_far_plane()));
+	XMFLOAT3 rec_proj_vec;
+	rec_proj_vec.x = 1.0f / Proj_mat_reflect._43;
+	rec_proj_vec.y = -Proj_mat_reflect._33 / Proj_mat_reflect._43;
+	rec_proj_vec.z = 0.0f;
+	lbuffer_shader->set_projmessage(rec_proj_vec);
+	lbuffer_shader->set_DepthMap_tex(reflect_depthcube_SRV);
+	lbuffer_shader->set_Normalspec_tex(reflect_cubenormal_SRV);
+	lbuffer_shader->set_SpecRoughness_tex(reflect_cubeSpecRough_SRV);
+	lbuffer_shader->set_FrustumCorners(reflectcube_FarCorner);
+	//计算取景变换
+	lbuffer_shader->set_view_matrix(&view_matrix);
+	lbuffer_shader->set_invview_matrix(&invview_matrix);
+	ID3DX11EffectTechnique *tech_need;
+	if (if_shadow == true)
+	{
+		lbuffer_shader->get_technique(&tech_need, "draw_pbr_withoutMSAA");
+	}
+	else
+	{
+		lbuffer_shader->get_technique(&tech_need, "draw_pbr_withoutshadowMSAA");
+	}
+
+	light_buffer_render(tech_need);
+}
+void Pretreatment_gbuffer::display(XMFLOAT4X4 view_matrix)
+{
+	render_gbuffer(view_matrix);
+}
+void Pretreatment_gbuffer::display_lbuffer(XMFLOAT4X4 view_matrix, XMFLOAT4X4 invview_matrix, bool if_shadow) 
+{
+	render_lbuffer_cube(view_matrix, invview_matrix, if_shadow);
+	engine_basic::engine_fail_reason check_error;
+	auto shader_deffered = shader_control::GetInstance()->get_shader_lightdeffered(check_error);
+	shader_deffered->set_diffuse_light_tex(gbuffer_diffuse_tex);
+	shader_deffered->set_specular_light_tex(gbuffer_specular_tex);
+	shader_deffered->set_normal_tex(normalspec_tex);
+	shader_deffered->set_tex_specroughness_resource(specroughness_tex);
+	auto shader_sky = shader_control::GetInstance()->get_shader_sky_draw(check_error);
+	shader_sky->set_tex_atmosphere(reflect_atmosphere_tex);
 }

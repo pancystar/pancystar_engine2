@@ -84,6 +84,7 @@ namespace engine_basic
 	{
 	public:
 		static DirectX::XMFLOAT2 vec2_plus(DirectX::XMFLOAT2 vec1_in, DirectX::XMFLOAT2 vec2_in);
+		static DirectX::XMFLOAT2 vec2_mul(DirectX::XMFLOAT2 vec1_in, DirectX::XMFLOAT2 vec2_in);
 		static DirectX::XMFLOAT3 vec3_plus(DirectX::XMFLOAT3 vec1_in, DirectX::XMFLOAT3 vec2_in);
 		static DirectX::XMFLOAT4 vec4_plus(DirectX::XMFLOAT4 vec1_in, DirectX::XMFLOAT4 vec2_in);
 		static DirectX::XMFLOAT4 vec4mulmat(DirectX::XMFLOAT4 vec1_in, DirectX::XMFLOAT4X4 mat_in);

@@ -298,7 +298,15 @@ public:
 private:
 	engine_basic::engine_fail_reason find_point(point_UV *vertex, UINT *index, int &num_vertex, int &num_index);
 };
-
+class mesh_multisquare_tessellation : public Geometry<point_UV>
+{
+	int divide_level;
+public:
+	mesh_multisquare_tessellation(bool if_adj,int divide_level_in);
+	void show_mesh();
+private:
+	engine_basic::engine_fail_reason find_point(point_UV *vertex, UINT *index, int &num_vertex, int &num_index);
+};
 
 template<typename T>
 class mesh_model : public Geometry<T> 

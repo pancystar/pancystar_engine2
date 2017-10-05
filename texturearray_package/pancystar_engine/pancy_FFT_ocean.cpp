@@ -894,17 +894,32 @@ FFT_ocean::FFT_ocean()
 {
 }
 
-void FFT_ocean::initRenderResource(const OceanParameter& ocean_param, ID3D11Device* pd3dDevice, const DXGI_SURFACE_DESC* pBackBufferSurfaceDesc)
+engine_basic::engine_fail_reason FFT_ocean::create(const OceanParameter& ocean_param, ID3D11Device* pd3dDevice, const DXGI_SURFACE_DESC* pBackBufferSurfaceDesc)
 {
+	engine_basic::engine_fail_reason check_error;
+	HRESULT hr;
+	//创建水面范围网格
+	fullscreen_buffer = new mesh_multisquare_tessellation(false, 25);
+	check_error = fullscreen_buffer->create_object();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
 	g_PatchLength = ocean_param.patch_length;
 	g_DisplaceMapDim = ocean_param.dmap_dim;
 	g_WindDir = ocean_param.wind_dir;
 
 	// D3D buffers
-	createSurfaceMesh(pd3dDevice);
-	createFresnelMap(pd3dDevice);
-	loadTextures(pd3dDevice);
-
+	check_error = createFresnelMap(pd3dDevice);
+	if (!check_error.check_if_failed()) 
+	{
+		return check_error;
+	}
+	check_error = loadTextures(pd3dDevice);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
 	/*
 	// HLSL
 	// Vertex & pixel shaders
@@ -946,8 +961,11 @@ void FFT_ocean::initRenderResource(const OceanParameter& ocean_param, ID3D11Devi
 	cb_desc.MiscFlags = 0;
 	cb_desc.ByteWidth = PAD16(sizeof(Const_Per_Call));
 	cb_desc.StructureByteStride = 0;
-	pd3dDevice->CreateBuffer(&cb_desc, NULL, &g_pPerCallCB);
-	assert(g_pPerCallCB);
+	hr = pd3dDevice->CreateBuffer(&cb_desc, NULL, &g_pPerCallCB);
+	if (FAILED(hr)) 
+	{
+		engine_basic::engine_fail_reason error_message(hr,"create water constant buffer error");
+	}
 
 	Const_Shading shading_data;
 	// Grid side length * 2
@@ -979,47 +997,11 @@ void FFT_ocean::initRenderResource(const OceanParameter& ocean_param, ID3D11Devi
 	cb_desc.CPUAccessFlags = 0;
 	cb_desc.ByteWidth = PAD16(sizeof(Const_Shading));
 	cb_desc.StructureByteStride = 0;
-	pd3dDevice->CreateBuffer(&cb_desc, &cb_init_data, &g_pShadingCB);
-	assert(g_pShadingCB);
-
-	// Samplers
-	D3D11_SAMPLER_DESC sam_desc;
-	sam_desc.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
-	sam_desc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
-	sam_desc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
-	sam_desc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
-	sam_desc.MipLODBias = 0;
-	sam_desc.MaxAnisotropy = 1;
-	sam_desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
-	sam_desc.BorderColor[0] = 1.0f;
-	sam_desc.BorderColor[1] = 1.0f;
-	sam_desc.BorderColor[2] = 1.0f;
-	sam_desc.BorderColor[3] = 1.0f;
-	sam_desc.MinLOD = 0;
-	sam_desc.MaxLOD = FLT_MAX;
-	pd3dDevice->CreateSamplerState(&sam_desc, &g_pHeightSampler);
-	assert(g_pHeightSampler);
-
-	sam_desc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-	pd3dDevice->CreateSamplerState(&sam_desc, &g_pCubeSampler);
-	assert(g_pCubeSampler);
-
-	sam_desc.Filter = D3D11_FILTER_ANISOTROPIC;
-	sam_desc.MaxAnisotropy = 8;
-	pd3dDevice->CreateSamplerState(&sam_desc, &g_pGradientSampler);
-	assert(g_pGradientSampler);
-
-	sam_desc.MaxLOD = FLT_MAX;
-	sam_desc.MaxAnisotropy = 4;
-	pd3dDevice->CreateSamplerState(&sam_desc, &g_pPerlinSampler);
-	assert(g_pPerlinSampler);
-
-	sam_desc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-	sam_desc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
-	sam_desc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
-	sam_desc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
-	pd3dDevice->CreateSamplerState(&sam_desc, &g_pFresnelSampler);
-	assert(g_pFresnelSampler);
+	hr = pd3dDevice->CreateBuffer(&cb_desc, &cb_init_data, &g_pShadingCB);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create water constant buffer error");
+	}
 
 	// State blocks
 	D3D11_RASTERIZER_DESC ras_desc;
@@ -1034,20 +1016,29 @@ void FFT_ocean::initRenderResource(const OceanParameter& ocean_param, ID3D11Devi
 	ras_desc.MultisampleEnable = TRUE;
 	ras_desc.AntialiasedLineEnable = FALSE;
 
-	pd3dDevice->CreateRasterizerState(&ras_desc, &g_pRSState_Solid);
-	assert(g_pRSState_Solid);
+	hr = pd3dDevice->CreateRasterizerState(&ras_desc, &g_pRSState_Solid);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create water render State Solid error");
+	}
 
 	ras_desc.FillMode = D3D11_FILL_WIREFRAME;
 
-	pd3dDevice->CreateRasterizerState(&ras_desc, &g_pRSState_Wireframe);
-	assert(g_pRSState_Wireframe);
+	hr = pd3dDevice->CreateRasterizerState(&ras_desc, &g_pRSState_Wireframe);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create water render State wireframe error");
+	}
 
 	D3D11_DEPTH_STENCIL_DESC depth_desc;
 	memset(&depth_desc, 0, sizeof(D3D11_DEPTH_STENCIL_DESC));
 	depth_desc.DepthEnable = FALSE;
 	depth_desc.StencilEnable = FALSE;
-	pd3dDevice->CreateDepthStencilState(&depth_desc, &g_pDSState_Disable);
-	assert(g_pDSState_Disable);
+	hr = pd3dDevice->CreateDepthStencilState(&depth_desc, &g_pDSState_Disable);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create water render State disable error");
+	}
 
 	D3D11_BLEND_DESC blend_desc;
 	memset(&blend_desc, 0, sizeof(D3D11_BLEND_DESC));
@@ -1061,30 +1052,22 @@ void FFT_ocean::initRenderResource(const OceanParameter& ocean_param, ID3D11Devi
 	blend_desc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
 	blend_desc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
 	blend_desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
-	pd3dDevice->CreateBlendState(&blend_desc, &g_pBState_Transparent);
-	assert(g_pBState_Transparent);
+	hr = pd3dDevice->CreateBlendState(&blend_desc, &g_pBState_Transparent);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create water render State transparent error");
+	}
+	engine_basic::engine_fail_reason succeed;;
+	return succeed;
 }
 
-void FFT_ocean::cleanupRenderResource()
+void FFT_ocean::release()
 {
-	SAFE_RELEASE(g_pMeshIB);
-	SAFE_RELEASE(g_pMeshVB);
-	SAFE_RELEASE(g_pMeshLayout);
-
-	SAFE_RELEASE(g_pOceanSurfVS);
-	SAFE_RELEASE(g_pOceanSurfPS);
-	SAFE_RELEASE(g_pWireframePS);
-
+	fullscreen_buffer->release();
 	SAFE_RELEASE(g_pFresnelMap);
 	SAFE_RELEASE(g_pSRV_Fresnel);
 	SAFE_RELEASE(g_pSRV_Perlin);
 	SAFE_RELEASE(g_pSRV_ReflectCube);
-
-	SAFE_RELEASE(g_pHeightSampler);
-	SAFE_RELEASE(g_pGradientSampler);
-	SAFE_RELEASE(g_pFresnelSampler);
-	SAFE_RELEASE(g_pPerlinSampler);
-	SAFE_RELEASE(g_pCubeSampler);
 
 	SAFE_RELEASE(g_pPerCallCB);
 	SAFE_RELEASE(g_pPerFrameCB);
@@ -1094,333 +1077,11 @@ void FFT_ocean::cleanupRenderResource()
 	SAFE_RELEASE(g_pRSState_Wireframe);
 	SAFE_RELEASE(g_pDSState_Disable);
 	SAFE_RELEASE(g_pBState_Transparent);
-
-	g_render_list.clear();
 }
 
-
-
-// Generate boundary mesh for a patch. Return the number of generated indices
-int FFT_ocean::generateBoundaryMesh(int left_degree, int right_degree, int bottom_degree, int top_degree, RECT vert_rect, DWORD* output)
+engine_basic::engine_fail_reason FFT_ocean::createFresnelMap(ID3D11Device* pd3dDevice)
 {
-	// Triangle list for bottom boundary
-	int i, j;
-	int counter = 0;
-	int width = vert_rect.right - vert_rect.left;
-
-	if (bottom_degree > 0)
-	{
-		int b_step = width / bottom_degree;
-
-		for (i = 0; i < width; i += b_step)
-		{
-			output[counter++] = MESH_INDEX_2D(i, 0);
-			output[counter++] = MESH_INDEX_2D(i + b_step / 2, 1);
-			output[counter++] = MESH_INDEX_2D(i + b_step, 0);
-
-			for (j = 0; j < b_step / 2; j++)
-			{
-				if (i == 0 && j == 0 && left_degree > 0)
-					continue;
-
-				output[counter++] = MESH_INDEX_2D(i, 0);
-				output[counter++] = MESH_INDEX_2D(i + j, 1);
-				output[counter++] = MESH_INDEX_2D(i + j + 1, 1);
-			}
-
-			for (j = b_step / 2; j < b_step; j++)
-			{
-				if (i == width - b_step && j == b_step - 1 && right_degree > 0)
-					continue;
-
-				output[counter++] = MESH_INDEX_2D(i + b_step, 0);
-				output[counter++] = MESH_INDEX_2D(i + j, 1);
-				output[counter++] = MESH_INDEX_2D(i + j + 1, 1);
-			}
-		}
-	}
-
-	// Right boundary
-	int height = vert_rect.top - vert_rect.bottom;
-
-	if (right_degree > 0)
-	{
-		int r_step = height / right_degree;
-
-		for (i = 0; i < height; i += r_step)
-		{
-			output[counter++] = MESH_INDEX_2D(width, i);
-			output[counter++] = MESH_INDEX_2D(width - 1, i + r_step / 2);
-			output[counter++] = MESH_INDEX_2D(width, i + r_step);
-
-			for (j = 0; j < r_step / 2; j++)
-			{
-				if (i == 0 && j == 0 && bottom_degree > 0)
-					continue;
-
-				output[counter++] = MESH_INDEX_2D(width, i);
-				output[counter++] = MESH_INDEX_2D(width - 1, i + j);
-				output[counter++] = MESH_INDEX_2D(width - 1, i + j + 1);
-			}
-
-			for (j = r_step / 2; j < r_step; j++)
-			{
-				if (i == height - r_step && j == r_step - 1 && top_degree > 0)
-					continue;
-
-				output[counter++] = MESH_INDEX_2D(width, i + r_step);
-				output[counter++] = MESH_INDEX_2D(width - 1, i + j);
-				output[counter++] = MESH_INDEX_2D(width - 1, i + j + 1);
-			}
-		}
-	}
-
-	// Top boundary
-	if (top_degree > 0)
-	{
-		int t_step = width / top_degree;
-
-		for (i = 0; i < width; i += t_step)
-		{
-			output[counter++] = MESH_INDEX_2D(i, height);
-			output[counter++] = MESH_INDEX_2D(i + t_step / 2, height - 1);
-			output[counter++] = MESH_INDEX_2D(i + t_step, height);
-
-			for (j = 0; j < t_step / 2; j++)
-			{
-				if (i == 0 && j == 0 && left_degree > 0)
-					continue;
-
-				output[counter++] = MESH_INDEX_2D(i, height);
-				output[counter++] = MESH_INDEX_2D(i + j, height - 1);
-				output[counter++] = MESH_INDEX_2D(i + j + 1, height - 1);
-			}
-
-			for (j = t_step / 2; j < t_step; j++)
-			{
-				if (i == width - t_step && j == t_step - 1 && right_degree > 0)
-					continue;
-
-				output[counter++] = MESH_INDEX_2D(i + t_step, height);
-				output[counter++] = MESH_INDEX_2D(i + j, height - 1);
-				output[counter++] = MESH_INDEX_2D(i + j + 1, height - 1);
-			}
-		}
-	}
-
-	// Left boundary
-	if (left_degree > 0)
-	{
-		int l_step = height / left_degree;
-
-		for (i = 0; i < height; i += l_step)
-		{
-			output[counter++] = MESH_INDEX_2D(0, i);
-			output[counter++] = MESH_INDEX_2D(1, i + l_step / 2);
-			output[counter++] = MESH_INDEX_2D(0, i + l_step);
-
-			for (j = 0; j < l_step / 2; j++)
-			{
-				if (i == 0 && j == 0 && bottom_degree > 0)
-					continue;
-
-				output[counter++] = MESH_INDEX_2D(0, i);
-				output[counter++] = MESH_INDEX_2D(1, i + j);
-				output[counter++] = MESH_INDEX_2D(1, i + j + 1);
-			}
-
-			for (j = l_step / 2; j < l_step; j++)
-			{
-				if (i == height - l_step && j == l_step - 1 && top_degree > 0)
-					continue;
-
-				output[counter++] = MESH_INDEX_2D(0, i + l_step);
-				output[counter++] = MESH_INDEX_2D(1, i + j);
-				output[counter++] = MESH_INDEX_2D(1, i + j + 1);
-			}
-		}
-	}
-
-	return counter;
-}
-
-// Generate boundary mesh for a patch. Return the number of generated indices
-int FFT_ocean::generateInnerMesh(RECT vert_rect, DWORD* output)
-{
-	int i, j;
-	int counter = 0;
-	int width = vert_rect.right - vert_rect.left;
-	int height = vert_rect.top - vert_rect.bottom;
-
-	bool reverse = false;
-	for (i = 0; i < height; i++)
-	{
-		if (reverse == false)
-		{
-			output[counter++] = MESH_INDEX_2D(0, i);
-			output[counter++] = MESH_INDEX_2D(0, i + 1);
-			for (j = 0; j < width; j++)
-			{
-				output[counter++] = MESH_INDEX_2D(j + 1, i);
-				output[counter++] = MESH_INDEX_2D(j + 1, i + 1);
-			}
-		}
-		else
-		{
-			output[counter++] = MESH_INDEX_2D(width, i);
-			output[counter++] = MESH_INDEX_2D(width, i + 1);
-			for (j = width - 1; j >= 0; j--)
-			{
-				output[counter++] = MESH_INDEX_2D(j, i);
-				output[counter++] = MESH_INDEX_2D(j, i + 1);
-			}
-		}
-
-		reverse = !reverse;
-	}
-
-	return counter;
-}
-
-void FFT_ocean::createSurfaceMesh(ID3D11Device* pd3dDevice)
-{
-	fullscreen_buffer = new mesh_square_tessellation(false);
-	fullscreen_buffer->create_object();
-	// --------------------------------- Vertex Buffer -------------------------------
-	int num_verts = (g_MeshDim + 1) * (g_MeshDim + 1);
-	ocean_vertex* pV = new ocean_vertex[num_verts];
-	assert(pV);
-
-	int i, j;
-	for (i = 0; i <= g_MeshDim; i++)
-	{
-		for (j = 0; j <= g_MeshDim; j++)
-		{
-			pV[i * (g_MeshDim + 1) + j].index_x = (float)j;
-			pV[i * (g_MeshDim + 1) + j].index_y = (float)i;
-		}
-	}
-
-	D3D11_BUFFER_DESC vb_desc;
-	vb_desc.ByteWidth = num_verts * sizeof(ocean_vertex);
-	vb_desc.Usage = D3D11_USAGE_IMMUTABLE;
-	vb_desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-	vb_desc.CPUAccessFlags = 0;
-	vb_desc.MiscFlags = 0;
-	vb_desc.StructureByteStride = sizeof(ocean_vertex);
-
-	D3D11_SUBRESOURCE_DATA init_data;
-	init_data.pSysMem = pV;
-	init_data.SysMemPitch = 0;
-	init_data.SysMemSlicePitch = 0;
-
-	SAFE_RELEASE(g_pMeshVB);
-	pd3dDevice->CreateBuffer(&vb_desc, &init_data, &g_pMeshVB);
-	assert(g_pMeshVB);
-
-	SAFE_DELETE_ARRAY(pV);
-
-
-	// --------------------------------- Index Buffer -------------------------------
-	// The index numbers for all mesh LODs (up to 256x256)
-	const int index_size_lookup[] = { 0, 0, 4284, 18828, 69444, 254412, 956916, 3689820, 14464836 };
-
-	memset(&g_mesh_patterns[0][0][0][0][0], 0, sizeof(g_mesh_patterns));
-
-	g_Lods = 0;
-	for (i = g_MeshDim; i > 1; i >>= 1)
-		g_Lods++;
-
-	// Generate patch meshes. Each patch contains two parts: the inner mesh which is a regular
-	// grids in a triangle strip. The boundary mesh is constructed w.r.t. the edge degrees to
-	// meet water-tight requirement.
-	DWORD* index_array = new DWORD[index_size_lookup[g_Lods]];
-	assert(index_array);
-
-	int offset = 0;
-	int level_size = g_MeshDim;
-
-	// Enumerate patterns
-	for (int level = 0; level <= g_Lods - 2; level++)
-	{
-		int left_degree = level_size;
-
-		for (int left_type = 0; left_type < 3; left_type++)
-		{
-			int right_degree = level_size;
-
-			for (int right_type = 0; right_type < 3; right_type++)
-			{
-				int bottom_degree = level_size;
-
-				for (int bottom_type = 0; bottom_type < 3; bottom_type++)
-				{
-					int top_degree = level_size;
-
-					for (int top_type = 0; top_type < 3; top_type++)
-					{
-						QuadRenderParam* pattern = &g_mesh_patterns[level][left_type][right_type][bottom_type][top_type];
-
-						// Inner mesh (triangle strip)
-						RECT inner_rect;
-						inner_rect.left = (left_degree == level_size) ? 0 : 1;
-						inner_rect.right = (right_degree == level_size) ? level_size : level_size - 1;
-						inner_rect.bottom = (bottom_degree == level_size) ? 0 : 1;
-						inner_rect.top = (top_degree == level_size) ? level_size : level_size - 1;
-
-						int num_new_indices = generateInnerMesh(inner_rect, index_array + offset);
-
-						pattern->inner_start_index = offset;
-						pattern->num_inner_verts = (level_size + 1) * (level_size + 1);
-						pattern->num_inner_faces = num_new_indices - 2;
-						offset += num_new_indices;
-
-						// Boundary mesh (triangle list)
-						int l_degree = (left_degree == level_size) ? 0 : left_degree;
-						int r_degree = (right_degree == level_size) ? 0 : right_degree;
-						int b_degree = (bottom_degree == level_size) ? 0 : bottom_degree;
-						int t_degree = (top_degree == level_size) ? 0 : top_degree;
-
-						RECT outer_rect = { 0, level_size, level_size, 0 };
-						num_new_indices = generateBoundaryMesh(l_degree, r_degree, b_degree, t_degree, outer_rect, index_array + offset);
-
-						pattern->boundary_start_index = offset;
-						pattern->num_boundary_verts = (level_size + 1) * (level_size + 1);
-						pattern->num_boundary_faces = num_new_indices / 3;
-						offset += num_new_indices;
-
-						top_degree /= 2;
-					}
-					bottom_degree /= 2;
-				}
-				right_degree /= 2;
-			}
-			left_degree /= 2;
-		}
-		level_size /= 2;
-	}
-
-	assert(offset == index_size_lookup[g_Lods]);
-
-	D3D11_BUFFER_DESC ib_desc;
-	ib_desc.ByteWidth = index_size_lookup[g_Lods] * sizeof(DWORD);
-	ib_desc.Usage = D3D11_USAGE_IMMUTABLE;
-	ib_desc.BindFlags = D3D11_BIND_INDEX_BUFFER;
-	ib_desc.CPUAccessFlags = 0;
-	ib_desc.MiscFlags = 0;
-	ib_desc.StructureByteStride = sizeof(DWORD);
-
-	init_data.pSysMem = index_array;
-
-	SAFE_RELEASE(g_pMeshIB);
-	pd3dDevice->CreateBuffer(&ib_desc, &init_data, &g_pMeshIB);
-	assert(g_pMeshIB);
-
-	SAFE_DELETE_ARRAY(index_array);
-}
-
-void FFT_ocean::createFresnelMap(ID3D11Device* pd3dDevice)
-{
+	HRESULT hr;
 	//DWORD* buffer = new DWORD[FRESNEL_TEX_SIZE];
 	DWORD buffer[FRESNEL_TEX_SIZE];
 	for (int i = 0; i < FRESNEL_TEX_SIZE; i++)
@@ -1454,8 +1115,11 @@ void FFT_ocean::createFresnelMap(ID3D11Device* pd3dDevice)
 	init_data.SysMemPitch = 0;
 	init_data.SysMemSlicePitch = 0;
 
-	pd3dDevice->CreateTexture1D(&tex_desc, &init_data, &g_pFresnelMap);
-	assert(g_pFresnelMap);
+	hr = pd3dDevice->CreateTexture1D(&tex_desc, &init_data, &g_pFresnelMap);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create water Fresnel buffer error");
+	}
 
 	//SAFE_DELETE_ARRAY(buffer);
 
@@ -1466,527 +1130,32 @@ void FFT_ocean::createFresnelMap(ID3D11Device* pd3dDevice)
 	srv_desc.Texture1D.MipLevels = 1;
 	srv_desc.Texture1D.MostDetailedMip = 0;
 
-	pd3dDevice->CreateShaderResourceView(g_pFresnelMap, &srv_desc, &g_pSRV_Fresnel);
-	assert(g_pSRV_Fresnel);
+	hr = pd3dDevice->CreateShaderResourceView(g_pFresnelMap, &srv_desc, &g_pSRV_Fresnel);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create water Fresnel SRV error");
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
 }
 
-void FFT_ocean::loadTextures(ID3D11Device* pd3dDevice)
+engine_basic::engine_fail_reason FFT_ocean::loadTextures(ID3D11Device* pd3dDevice)
 {
 	WCHAR strPath[MAX_PATH];
-	//DXUTFindDXSDKMediaFileCch(strPath, MAX_PATH, L"Media\\OceanCS\\perlin_noise.dds");
-	//D3DX11CreateShaderResourceViewFromFile(pd3dDevice, strPath, NULL, NULL, &g_pSRV_Perlin, NULL);
-
 	HRESULT hr = CreateDDSTextureFromFile(d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device(), L"OceanCS\\perlin_noise.dds", 0, &g_pSRV_Perlin, 0, 0);
-
-	assert(g_pSRV_Perlin);
-
-	//DXUTFindDXSDKMediaFileCch(strPath, MAX_PATH, L"Media\\OceanCS\\reflect_cube.dds");
-	//D3DX11CreateShaderResourceViewFromFile(pd3dDevice, strPath, NULL, NULL, &g_pSRV_ReflectCube, NULL);
-
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "read water perlin_noise texture OceanCS\\perlin_noise.dds error");
+	}
 	hr = CreateDDSTextureFromFile(d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device(), L"OceanCS\\reflect_cube.dds", 0, &g_pSRV_ReflectCube, 0, 0);
-	assert(g_pSRV_ReflectCube);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "read water perlin_noise texture OceanCS\\reflect_cube.dds error");
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
 }
 
-bool FFT_ocean::checkNodeVisibility(const QuadNode& quad_node)
-{
-	// Plane equation setup
-
-	XMFLOAT4X4 matProj = engine_basic::perspective_message::get_instance()->get_proj_matrix();
-
-	// Left plane
-	float fov_x = atan(1.0f / matProj(0, 0));
-	XMFLOAT4 plane_left(cos(fov_x), 0, sin(fov_x), 0);
-	// Right plane
-	XMFLOAT4 plane_right(-cos(fov_x), 0, sin(fov_x), 0);
-
-	// Bottom plane
-	float fov_y = atan(1.0f / matProj(1, 1));
-	XMFLOAT4 plane_bottom(0, cos(fov_y), sin(fov_y), 0);
-	// Top plane
-	XMFLOAT4 plane_top(0, -cos(fov_y), sin(fov_y), 0);
-
-	// Test quad corners against view frustum in view space
-	XMFLOAT4 corner_verts[4];
-	corner_verts[0] = XMFLOAT4(quad_node.bottom_left.x, quad_node.bottom_left.y, 0, 1);
-	corner_verts[1] = engine_basic::engine_mathmatic::vec4_plus(corner_verts[0], XMFLOAT4(quad_node.length, 0, 0, 0));
-	corner_verts[2] = engine_basic::engine_mathmatic::vec4_plus(corner_verts[0], XMFLOAT4(quad_node.length, quad_node.length, 0, 0));
-	corner_verts[3] = engine_basic::engine_mathmatic::vec4_plus(corner_verts[0], XMFLOAT4(0, quad_node.length, 0, 0));
-	//corner_verts[1] = corner_verts[0] + XMFLOAT4(quad_node.length, 0, 0, 0);
-	//corner_verts[2] = corner_verts[0] + XMFLOAT4(quad_node.length, quad_node.length, 0, 0);
-	//corner_verts[3] = corner_verts[0] + XMFLOAT4(0, quad_node.length, 0, 0);
-
-	XMFLOAT4X4 matView;
-	//= D3DXMATRIX(1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1) * *camera.GetViewMatrix();
-	pancy_camera::get_instance()->count_view_matrix(&matView);
-	XMStoreFloat4x4(&matView, XMLoadFloat4x4(&XMFLOAT4X4(1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1)) * XMLoadFloat4x4(&matView));
-	corner_verts[0] = engine_basic::engine_mathmatic::vec4mulmat(corner_verts[0], matView);
-	corner_verts[1] = engine_basic::engine_mathmatic::vec4mulmat(corner_verts[1], matView);
-	corner_verts[2] = engine_basic::engine_mathmatic::vec4mulmat(corner_verts[2], matView);
-	corner_verts[3] = engine_basic::engine_mathmatic::vec4mulmat(corner_verts[3], matView);
-	//D3DXVec4Transform(&corner_verts[0], &corner_verts[0], &matView);
-	//D3DXVec4Transform(&corner_verts[1], &corner_verts[1], &matView);
-	//D3DXVec4Transform(&corner_verts[2], &corner_verts[2], &matView);
-	//D3DXVec4Transform(&corner_verts[3], &corner_verts[3], &matView);
-
-	// Test against eye plane
-	if (corner_verts[0].z < 0 && corner_verts[1].z < 0 && corner_verts[2].z < 0 && corner_verts[3].z < 0)
-		return false;
-
-	// Test against left plane
-	float dist_0 = engine_basic::engine_mathmatic::vec4dot(corner_verts[0], plane_left);
-	float dist_1 = engine_basic::engine_mathmatic::vec4dot(corner_verts[1], plane_left);
-	float dist_2 = engine_basic::engine_mathmatic::vec4dot(corner_verts[1], plane_left);
-	float dist_3 = engine_basic::engine_mathmatic::vec4dot(corner_verts[3], plane_left);
-
-	//float dist_0 = D3DXVec4Dot(&corner_verts[0], &plane_left);
-	//float dist_1 = D3DXVec4Dot(&corner_verts[1], &plane_left);
-	//float dist_2 = D3DXVec4Dot(&corner_verts[2], &plane_left);
-	//float dist_3 = D3DXVec4Dot(&corner_verts[3], &plane_left);
-	if (dist_0 < 0 && dist_1 < 0 && dist_2 < 0 && dist_3 < 0)
-		return false;
-
-	// Test against right plane
-	dist_0 = engine_basic::engine_mathmatic::vec4dot(corner_verts[0], plane_right);
-	dist_1 = engine_basic::engine_mathmatic::vec4dot(corner_verts[1], plane_right);
-	dist_2 = engine_basic::engine_mathmatic::vec4dot(corner_verts[1], plane_right);
-	dist_3 = engine_basic::engine_mathmatic::vec4dot(corner_verts[3], plane_right);
-	//dist_0 = D3DXVec4Dot(&corner_verts[0], &plane_right);
-	//dist_1 = D3DXVec4Dot(&corner_verts[1], &plane_right);
-	//dist_2 = D3DXVec4Dot(&corner_verts[2], &plane_right);
-	//dist_3 = D3DXVec4Dot(&corner_verts[3], &plane_right);
-	if (dist_0 < 0 && dist_1 < 0 && dist_2 < 0 && dist_3 < 0)
-		return false;
-
-	// Test against bottom plane
-	dist_0 = engine_basic::engine_mathmatic::vec4dot(corner_verts[0], plane_bottom);
-	dist_1 = engine_basic::engine_mathmatic::vec4dot(corner_verts[1], plane_bottom);
-	dist_2 = engine_basic::engine_mathmatic::vec4dot(corner_verts[1], plane_bottom);
-	dist_3 = engine_basic::engine_mathmatic::vec4dot(corner_verts[3], plane_bottom);
-	//dist_0 = D3DXVec4Dot(&corner_verts[0], &plane_bottom);
-	//dist_1 = D3DXVec4Dot(&corner_verts[1], &plane_bottom);
-	//dist_2 = D3DXVec4Dot(&corner_verts[2], &plane_bottom);
-	//dist_3 = D3DXVec4Dot(&corner_verts[3], &plane_bottom);
-	if (dist_0 < 0 && dist_1 < 0 && dist_2 < 0 && dist_3 < 0)
-		return false;
-
-	// Test against top plane
-	dist_0 = engine_basic::engine_mathmatic::vec4dot(corner_verts[0], plane_top);
-	dist_1 = engine_basic::engine_mathmatic::vec4dot(corner_verts[1], plane_top);
-	dist_2 = engine_basic::engine_mathmatic::vec4dot(corner_verts[1], plane_top);
-	dist_3 = engine_basic::engine_mathmatic::vec4dot(corner_verts[3], plane_top);
-	//dist_0 = D3DXVec4Dot(&corner_verts[0], &plane_top);
-	//dist_1 = D3DXVec4Dot(&corner_verts[1], &plane_top);
-	//dist_2 = D3DXVec4Dot(&corner_verts[2], &plane_top);
-	//dist_3 = D3DXVec4Dot(&corner_verts[3], &plane_top);
-	if (dist_0 < 0 && dist_1 < 0 && dist_2 < 0 && dist_3 < 0)
-		return false;
-
-	return true;
-}
-
-float FFT_ocean::estimateGridCoverage(const QuadNode& quad_node, float screen_area)
-{
-	// Estimate projected area
-
-	// Test 16 points on the quad and find out the biggest one.
-	const static float sample_pos[16][2] =
-	{
-		{ 0, 0 },
-		{ 0, 1 },
-		{ 1, 0 },
-		{ 1, 1 },
-		{ 0.5f, 0.333f },
-		{ 0.25f, 0.667f },
-		{ 0.75f, 0.111f },
-		{ 0.125f, 0.444f },
-		{ 0.625f, 0.778f },
-		{ 0.375f, 0.222f },
-		{ 0.875f, 0.556f },
-		{ 0.0625f, 0.889f },
-		{ 0.5625f, 0.037f },
-		{ 0.3125f, 0.37f },
-		{ 0.8125f, 0.704f },
-		{ 0.1875f, 0.148f },
-	};
-	XMFLOAT4X4 matProj = engine_basic::perspective_message::get_instance()->get_proj_matrix();
-	//D3DXMATRIX matProj = *camera.GetProjMatrix();
-	//D3DXVECTOR3 eye_point = *camera.GetEyePt();
-	XMFLOAT3 eye_point;
-	pancy_camera::get_instance()->get_view_position(&eye_point);
-	eye_point = XMFLOAT3(eye_point.x, eye_point.z, eye_point.y);
-	float grid_len_world = quad_node.length / g_MeshDim;
-
-	float max_area_proj = 0;
-	for (int i = 0; i < 16; i++)
-	{
-		//D3DXVECTOR3 test_point(quad_node.bottom_left.x + quad_node.length * sample_pos[i][0], quad_node.bottom_left.y + quad_node.length * sample_pos[i][1], 0);
-		XMFLOAT3 test_point(quad_node.bottom_left.x + quad_node.length * sample_pos[i][0], quad_node.bottom_left.y + quad_node.length * sample_pos[i][1], 0);
-		//D3DXVECTOR3 eye_vec = test_point - eye_point
-		XMFLOAT3 eye_vec = engine_basic::engine_mathmatic::vec3_minus(test_point, eye_point);
-		float dist = engine_basic::engine_mathmatic::vec3_length(eye_vec);
-		//float dist = D3DXVec3Length(&eye_vec);
-
-		float area_world = grid_len_world * grid_len_world;// * abs(eye_point.z) / sqrt(nearest_sqr_dist);
-		float area_proj = area_world * matProj(0, 0) * matProj(1, 1) / (dist * dist);
-
-		if (max_area_proj < area_proj)
-			max_area_proj = area_proj;
-	}
-
-	float pixel_coverage = max_area_proj * screen_area * 0.25f;
-
-	return pixel_coverage;
-}
-
-bool FFT_ocean::isLeaf(const QuadNode& quad_node)
-{
-	return (quad_node.sub_node[0] == -1 && quad_node.sub_node[1] == -1 && quad_node.sub_node[2] == -1 && quad_node.sub_node[3] == -1);
-}
-
-int FFT_ocean::searchLeaf(const vector<QuadNode>& node_list, const XMFLOAT2& point)
-{
-	int index = -1;
-
-	int size = (int)node_list.size();
-	QuadNode node = node_list[size - 1];
-
-	while (!isLeaf(node))
-	{
-		bool found = false;
-
-		for (int i = 0; i < 4; i++)
-		{
-			index = node.sub_node[i];
-			if (index == -1)
-				continue;
-
-			QuadNode sub_node = node_list[index];
-			if (point.x >= sub_node.bottom_left.x && point.x <= sub_node.bottom_left.x + sub_node.length &&
-				point.y >= sub_node.bottom_left.y && point.y <= sub_node.bottom_left.y + sub_node.length)
-			{
-				node = sub_node;
-				found = true;
-				break;
-			}
-		}
-
-		if (!found)
-			return -1;
-	}
-
-	return index;
-}
-
-QuadRenderParam& FFT_ocean::selectMeshPattern(const QuadNode& quad_node)
-{
-	// Check 4 adjacent quad.
-	DirectX::XMFLOAT2 point_left = engine_basic::engine_mathmatic::vec2_plus(quad_node.bottom_left, DirectX::XMFLOAT2(-g_PatchLength * 0.5f, quad_node.length * 0.5f));
-	int left_adj_index = searchLeaf(g_render_list, point_left);
-	DirectX::XMFLOAT2 point_right = engine_basic::engine_mathmatic::vec2_plus(quad_node.bottom_left, DirectX::XMFLOAT2(quad_node.length + g_PatchLength * 0.5f, quad_node.length * 0.5f));
-	int right_adj_index = searchLeaf(g_render_list, point_right);
-
-	DirectX::XMFLOAT2 point_bottom = engine_basic::engine_mathmatic::vec2_plus(quad_node.bottom_left, DirectX::XMFLOAT2(quad_node.length * 0.5f, -g_PatchLength * 0.5f));
-	int bottom_adj_index = searchLeaf(g_render_list, point_bottom);
-
-	DirectX::XMFLOAT2 point_top = engine_basic::engine_mathmatic::vec2_plus(quad_node.bottom_left, DirectX::XMFLOAT2(quad_node.length * 0.5f, quad_node.length + g_PatchLength * 0.5f));
-	int top_adj_index = searchLeaf(g_render_list, point_top);
-	/*
-	D3DXVECTOR2 point_right = quad_node.bottom_left + D3DXVECTOR2(quad_node.length + g_PatchLength * 0.5f, quad_node.length * 0.5f);
-	int right_adj_index = searchLeaf(g_render_list, point_right);
-
-	D3DXVECTOR2 point_bottom = quad_node.bottom_left + D3DXVECTOR2(quad_node.length * 0.5f, -g_PatchLength * 0.5f);
-	int bottom_adj_index = searchLeaf(g_render_list, point_bottom);
-
-	D3DXVECTOR2 point_top = quad_node.bottom_left + D3DXVECTOR2(quad_node.length * 0.5f, quad_node.length + g_PatchLength * 0.5f);
-	int top_adj_index = searchLeaf(g_render_list, point_top);
-	*/
-	int left_type = 0;
-	if (left_adj_index != -1 && g_render_list[left_adj_index].length > quad_node.length * 0.999f)
-	{
-		QuadNode adj_node = g_render_list[left_adj_index];
-		float scale = adj_node.length / quad_node.length * (g_MeshDim >> quad_node.lod) / (g_MeshDim >> adj_node.lod);
-		if (scale > 3.999f)
-			left_type = 2;
-		else if (scale > 1.999f)
-			left_type = 1;
-	}
-
-	int right_type = 0;
-	if (right_adj_index != -1 && g_render_list[right_adj_index].length > quad_node.length * 0.999f)
-	{
-		QuadNode adj_node = g_render_list[right_adj_index];
-		float scale = adj_node.length / quad_node.length * (g_MeshDim >> quad_node.lod) / (g_MeshDim >> adj_node.lod);
-		if (scale > 3.999f)
-			right_type = 2;
-		else if (scale > 1.999f)
-			right_type = 1;
-	}
-
-	int bottom_type = 0;
-	if (bottom_adj_index != -1 && g_render_list[bottom_adj_index].length > quad_node.length * 0.999f)
-	{
-		QuadNode adj_node = g_render_list[bottom_adj_index];
-		float scale = adj_node.length / quad_node.length * (g_MeshDim >> quad_node.lod) / (g_MeshDim >> adj_node.lod);
-		if (scale > 3.999f)
-			bottom_type = 2;
-		else if (scale > 1.999f)
-			bottom_type = 1;
-	}
-
-	int top_type = 0;
-	if (top_adj_index != -1 && g_render_list[top_adj_index].length > quad_node.length * 0.999f)
-	{
-		QuadNode adj_node = g_render_list[top_adj_index];
-		float scale = adj_node.length / quad_node.length * (g_MeshDim >> quad_node.lod) / (g_MeshDim >> adj_node.lod);
-		if (scale > 3.999f)
-			top_type = 2;
-		else if (scale > 1.999f)
-			top_type = 1;
-	}
-
-	// Check lookup table, [L][R][B][T]
-	return g_mesh_patterns[quad_node.lod][left_type][right_type][bottom_type][top_type];
-}
-
-// Return value: if successful pushed into the list, return the position. If failed, return -1.
-int FFT_ocean::buildNodeList(QuadNode& quad_node)
-{
-	// Check against view frustum
-	if (!checkNodeVisibility(quad_node))
-		return -1;
-
-	// Estimate the min grid coverage
-	UINT num_vps = 1;
-	D3D11_VIEWPORT vp;
-	//DXUTGetD3D11DeviceContext()->RSGetViewports(&num_vps, &vp);
-	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->RSGetViewports(&num_vps, &vp);
-	float min_coverage = estimateGridCoverage(quad_node, (float)vp.Width * vp.Height);
-
-	// Recursively attatch sub-nodes.
-	bool visible = true;
-	if (min_coverage > g_UpperGridCoverage && quad_node.length > g_PatchLength)
-	{
-		// Recursive rendering for sub-quads.
-		QuadNode sub_node_0 = { quad_node.bottom_left, quad_node.length / 2, 0,{ -1, -1, -1, -1 } };
-		quad_node.sub_node[0] = buildNodeList(sub_node_0);
-
-		QuadNode sub_node_1 = { engine_basic::engine_mathmatic::vec2_plus(quad_node.bottom_left , DirectX::XMFLOAT2(quad_node.length / 2, 0)), quad_node.length / 2, 0,{ -1, -1, -1, -1 } };
-		quad_node.sub_node[1] = buildNodeList(sub_node_1);
-
-		QuadNode sub_node_2 = { engine_basic::engine_mathmatic::vec2_plus(quad_node.bottom_left , DirectX::XMFLOAT2(quad_node.length / 2, quad_node.length / 2)), quad_node.length / 2, 0,{ -1, -1, -1, -1 } };
-		quad_node.sub_node[2] = buildNodeList(sub_node_2);
-
-		QuadNode sub_node_3 = { engine_basic::engine_mathmatic::vec2_plus(quad_node.bottom_left , DirectX::XMFLOAT2(0, quad_node.length / 2)), quad_node.length / 2, 0,{ -1, -1, -1, -1 } };
-		quad_node.sub_node[3] = buildNodeList(sub_node_3);
-
-		visible = !isLeaf(quad_node);
-	}
-
-	if (visible)
-	{
-		// Estimate mesh LOD
-		int lod = 0;
-		for (lod = 0; lod < g_Lods - 1; lod++)
-		{
-			if (min_coverage > g_UpperGridCoverage)
-				break;
-			min_coverage *= 4;
-		}
-
-		// We don't use 1x1 and 2x2 patch. So the highest level is g_Lods - 2.
-		quad_node.lod = min(lod, g_Lods - 2);
-	}
-	else
-		return -1;
-
-	// Insert into the list
-	int position = (int)g_render_list.size();
-	g_render_list.push_back(quad_node);
-
-	return position;
-}
-
-void FFT_ocean::renderShaded(ID3D11ShaderResourceView* displacemnet_map, ID3D11ShaderResourceView* gradient_map, float time, ID3D11DeviceContext* pd3dContext)
-{
-	// Build rendering list
-	g_render_list.clear();
-	float ocean_extent = g_PatchLength * (1 << g_FurthestCover);
-	QuadNode root_node = { XMFLOAT2(-ocean_extent * 0.5f, -ocean_extent * 0.5f), ocean_extent, 0,{ -1,-1,-1,-1 } };
-	buildNodeList(root_node);
-
-	// Matrices
-	XMFLOAT4X4 matView;
-	pancy_camera::get_instance()->count_view_matrix(&matView);
-	XMStoreFloat4x4(&matView, XMLoadFloat4x4(&XMFLOAT4X4(1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1)) * XMLoadFloat4x4(&matView));
-	XMFLOAT4X4 matProj = engine_basic::perspective_message::get_instance()->get_proj_matrix();
-	//D3DXMATRIX matView = D3DXMATRIX(1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1) * *camera.GetViewMatrix();
-	//D3DXMATRIX matProj = *camera.GetProjMatrix();
-
-	engine_basic::engine_fail_reason check_error;
-	auto shader_ocean_render = shader_control::GetInstance()->get_shader_oceanrender_vps(check_error);
-
-
-	shader_ocean_render->set_texture_displayment(displacemnet_map);
-	shader_ocean_render->set_texture_Perlin(g_pSRV_Perlin);
-	shader_ocean_render->set_texture_gradient(gradient_map);
-	shader_ocean_render->set_texture_Fresnel(g_pSRV_Fresnel);
-	shader_ocean_render->set_texture_ReflectCube(g_pSRV_ReflectCube);
-	/*
-	// VS & PS
-	pd3dContext->VSSetShader(g_pOceanSurfVS, NULL, 0);
-	pd3dContext->PSSetShader(g_pOceanSurfPS, NULL, 0);
-
-	// Textures
-	ID3D11ShaderResourceView* vs_srvs[2] = { displacemnet_map, g_pSRV_Perlin };
-	pd3dContext->VSSetShaderResources(0, 2, &vs_srvs[0]);
-
-	ID3D11ShaderResourceView* ps_srvs[4] = { g_pSRV_Perlin, gradient_map, g_pSRV_Fresnel, g_pSRV_ReflectCube };
-	pd3dContext->PSSetShaderResources(1, 4, &ps_srvs[0]);
-
-	// Samplers
-	ID3D11SamplerState* vs_samplers[2] = { g_pHeightSampler, g_pPerlinSampler };
-	pd3dContext->VSSetSamplers(0, 2, &vs_samplers[0]);
-
-	ID3D11SamplerState* ps_samplers[4] = { g_pPerlinSampler, g_pGradientSampler, g_pFresnelSampler, g_pCubeSampler };
-	pd3dContext->PSSetSamplers(1, 4, &ps_samplers[0]);
-
-	// IA setup
-	pd3dContext->IASetIndexBuffer(g_pMeshIB, DXGI_FORMAT_R32_UINT, 0);
-
-	ID3D11Buffer* vbs[1] = { g_pMeshVB };
-	UINT strides[1] = { sizeof(ocean_vertex) };
-	UINT offsets[1] = { 0 };
-	pd3dContext->IASetVertexBuffers(0, 1, &vbs[0], &strides[0], &offsets[0]);
-
-	pd3dContext->IASetInputLayout(g_pMeshLayout);
-	*/
-	// State blocks
-	pd3dContext->RSSetState(g_pRSState_Solid);
-	/*
-	// Constants
-	ID3D11Buffer* cbs[1] = { g_pShadingCB };
-	pd3dContext->VSSetConstantBuffers(2, 1, cbs);
-	pd3dContext->PSSetConstantBuffers(2, 1, cbs);
-	*/
-	shader_ocean_render->set_Constant_Buffer_Shading(g_pShadingCB);
-	pd3dContext->IASetIndexBuffer(g_pMeshIB, DXGI_FORMAT_R32_UINT, 0);
-
-	ID3D11Buffer* vbs[1] = { g_pMeshVB };
-	UINT strides[1] = { sizeof(ocean_vertex) };
-	UINT offsets[1] = { 0 };
-	pd3dContext->IASetVertexBuffers(0, 1, &vbs[0], &strides[0], &offsets[0]);
-
-	//pd3dContext->IASetInputLayout(g_pMeshLayout);
-
-	// We assume the center of the ocean surface at (0, 0, 0).
-	for (int i = 0; i < (int)g_render_list.size(); i++)
-	{
-		QuadNode& node = g_render_list[i];
-
-		if (!isLeaf(node))
-			continue;
-
-		// Check adjacent patches and select mesh pattern
-		QuadRenderParam& render_param = selectMeshPattern(node);
-
-		// Find the right LOD to render
-		int level_size = g_MeshDim;
-		for (int lod = 0; lod < node.lod; lod++)
-			level_size >>= 1;
-
-		// Matrices and constants
-		Const_Per_Call call_consts;
-
-		// Expand of the local coordinate to world space patch size
-		XMMATRIX matScale;
-		matScale = XMMatrixScaling(node.length / level_size, node.length / level_size, 0);
-		XMStoreFloat4x4(&call_consts.g_matLocal, XMMatrixTranspose(matScale));
-
-		// WVP matrix
-		XMMATRIX matWorld;
-		matWorld = XMMatrixTranslation(node.bottom_left.x, node.bottom_left.y, 0);
-		XMMATRIX matWVP = matWorld * XMLoadFloat4x4(&matView) * XMLoadFloat4x4(&matProj);
-		XMStoreFloat4x4(&call_consts.g_matWorldViewProj, XMMatrixTranspose(matWVP));
-
-		// Texcoord for perlin noise
-		XMFLOAT2 uv_base;
-		uv_base.x = node.bottom_left.x / g_PatchLength * g_PerlinSize;
-		uv_base.y = node.bottom_left.y / g_PatchLength * g_PerlinSize;
-		call_consts.g_UVBase = uv_base;
-
-		// Constant g_PerlinSpeed need to be adjusted mannually
-		XMFLOAT2 perlin_move;
-		perlin_move.x = -g_WindDir.x * time * g_PerlinSpeed;
-		perlin_move.y = -g_WindDir.y * time * g_PerlinSpeed;
-		call_consts.g_PerlinMovement = perlin_move;
-
-		// Eye point
-		XMMATRIX matInvWV = matWorld * XMLoadFloat4x4(&matView);
-		matInvWV = XMMatrixInverse(NULL, matInvWV);
-		XMFLOAT3 vLocalEye(0, 0, 0);
-		pancy_camera::get_instance()->get_view_position(&vLocalEye);
-		//XMStoreFloat3(&vLocalEye, XMVector3TransformCoord(XMLoadFloat3(&vLocalEye), matInvWV));
-
-		call_consts.g_LocalEye = vLocalEye;
-
-		// Update constant buffer
-		D3D11_MAPPED_SUBRESOURCE mapped_res;
-		pd3dContext->Map(g_pPerCallCB, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_res);
-		assert(mapped_res.pData);
-		*(Const_Per_Call*)mapped_res.pData = call_consts;
-		pd3dContext->Unmap(g_pPerCallCB, 0);
-
-		//cbs[0] = g_pPerCallCB;
-		//pd3dContext->VSSetConstantBuffers(4, 1, cbs);
-		//pd3dContext->PSSetConstantBuffers(4, 1, cbs);
-		shader_ocean_render->set_Constant_Buffer_PerCall(g_pPerCallCB);
-		// Perform draw call
-		if (render_param.num_inner_faces > 0)
-		{
-			// Inner mesh of the patch
-			pd3dContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-			ID3DX11EffectTechnique *teque_pancy;
-			shader_ocean_render->get_technique(&teque_pancy, "ocean_shading");
-			D3DX11_TECHNIQUE_DESC techDesc;
-			teque_pancy->GetDesc(&techDesc);
-			for (UINT i = 0; i < techDesc.Passes; ++i)
-			{
-				teque_pancy->GetPassByIndex(i)->Apply(0, d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex());
-				pd3dContext->DrawIndexed(render_param.num_inner_faces + 2, render_param.inner_start_index, 0);
-			}
-
-		}
-		if (render_param.num_boundary_faces > 0)
-		{
-			// Boundary mesh of the patch
-			pd3dContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-			ID3DX11EffectTechnique *teque_pancy;
-			shader_ocean_render->get_technique(&teque_pancy, "ocean_shading");
-			D3DX11_TECHNIQUE_DESC techDesc;
-			teque_pancy->GetDesc(&techDesc);
-			for (UINT i = 0; i < techDesc.Passes; ++i)
-			{
-				teque_pancy->GetPassByIndex(i)->Apply(0, d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex());
-				pd3dContext->DrawIndexed(render_param.num_boundary_faces * 3, render_param.boundary_start_index, 0);
-			}
-
-		}
-	}
-
-	// Unbind
-	ID3D11ShaderResourceView* vs_srvs[2];
-
-	ID3D11ShaderResourceView* ps_srvs[4];
-	vs_srvs[0] = NULL;
-	vs_srvs[1] = NULL;
-	pd3dContext->VSSetShaderResources(0, 2, &vs_srvs[0]);
-
-	ps_srvs[0] = NULL;
-	ps_srvs[1] = NULL;
-	ps_srvs[2] = NULL;
-	ps_srvs[3] = NULL;
-	pd3dContext->PSSetShaderResources(1, 4, &ps_srvs[0]);
-}
 void FFT_ocean::renderdraw(ID3D11ShaderResourceView* displacemnet_map, ID3D11ShaderResourceView* gradient_map, float time, ID3D11DeviceContext* pd3dContext)
 {
 	pd3dContext->RSSetState(g_pRSState_Solid);
@@ -2013,13 +1182,18 @@ void FFT_ocean::renderdraw(ID3D11ShaderResourceView* displacemnet_map, ID3D11Sha
 	//int level_size = 64, length_need = 128000;
 	//matWorld = XMMatrixScaling(length_need / level_size, length_need / level_size, 0);
 
-	XMMATRIX matWVP = XMMatrixScaling(0.1f / 64 * 15, 0.1f / 64 * 15, 0.1f / 64 * 15) * XMLoadFloat4x4(&matView) * XMLoadFloat4x4(&matProj);
+	XMFLOAT4X4 mat_world;
+	XMStoreFloat4x4(&mat_world, XMMatrixScaling(0.1f / 64 * 15, 0.1f / 64 * 15, 0.1f / 64 * 15));
+	shader_oceandraw->set_trans_world(&mat_world);
+	XMMATRIX matWVP = XMLoadFloat4x4(&mat_world) * XMLoadFloat4x4(&matView) * XMLoadFloat4x4(&matProj);
+	
+	/*
 	XMMATRIX matInvWV = XMMatrixScaling(0.1f / 64 * 15, 0.1f / 64 * 15, 0.1f / 64 * 15) * XMLoadFloat4x4(&matView);
 	matInvWV = XMMatrixInverse(NULL, matInvWV);
 	XMFLOAT3 vLocalEye(0, 0, 0);
 	XMStoreFloat3(&vLocalEye, XMVector3TransformCoord(XMLoadFloat3(&vLocalEye), matInvWV));
 	shader_oceandraw->set_view_pos(vLocalEye);
-
+	*/
 
 	XMFLOAT4X4 final_mat;
 	XMStoreFloat4x4(&final_mat, matWVP);

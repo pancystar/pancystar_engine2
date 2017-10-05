@@ -19,11 +19,10 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{7B7ABE59-B76A-4DEA-B1C5-82FD09928DAE}</ProjectGuid>
+    <ProjectGuid>{79E9041F-6015-4E46-ADFC-78B77C51A6A2}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
-    <RootNamespace>pancystar_engine</RootNamespace>
+    <RootNamespace>IBL_CubeGen</RootNamespace>
     <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
-    <ProjectName>pancystar_engine2</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -72,16 +71,12 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>F:\vs2015_lib\dx11\include;$(IncludePath)</IncludePath>
-    <LibraryPath>F:\vs2015_lib\dx11\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>F:\vs2015_lib\dx11\include;$(IncludePath)</IncludePath>
-    <LibraryPath>F:\vs2015_lib\dx11\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
@@ -93,19 +88,11 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>DirectXTK.lib;Effects11.lib;DirectXMeshd.lib;DirectXTexd.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
-    <FxCompile>
-      <ShaderType>Effect</ShaderType>
-    </FxCompile>
-    <FxCompile>
-      <ShaderModel>5.0</ShaderModel>
-    </FxCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -129,21 +116,13 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>DirectXTKR.lib;Effects11R.lib;DirectXMesh.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
-    <FxCompile>
-      <ShaderType>Effect</ShaderType>
-    </FxCompile>
-    <FxCompile>
-      <ShaderModel>5.0</ShaderModel>
-    </FxCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -163,75 +142,6 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="pancy_atmosphere.h" />
-    <ClInclude Include="geometry.h" />
-    <ClInclude Include="PancyCamera.h" />
-    <ClInclude Include="PancyInput.h" />
-    <ClInclude Include="pancystar_engine_basic.h" />
-    <ClInclude Include="pancy_d3d11_basic.h" />
-    <ClInclude Include="pancy_FFT_ocean.h" />
-    <ClInclude Include="pancy_lighting.h" />
-    <ClInclude Include="pancy_model_control.h" />
-    <ClInclude Include="pancy_pretreatment.h" />
-    <ClInclude Include="pancy_scene_design.h" />
-    <ClInclude Include="pancy_ssao.h" />
-    <ClInclude Include="pancy_posttreatment.h" />
-    <ClInclude Include="shader_pancy.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="pancy_atmosphere.cpp" />
-    <ClCompile Include="geometry.cpp" />
-    <ClCompile Include="main.cpp" />
-    <ClCompile Include="PancyCamera.cpp" />
-    <ClCompile Include="PancyInput.cpp" />
-    <ClCompile Include="pancystar_engine_basic.cpp" />
-    <ClCompile Include="pancy_d3d11_basic.cpp" />
-    <ClCompile Include="pancy_FFT_ocean.cpp" />
-    <ClCompile Include="pancy_lighting.cpp" />
-    <ClCompile Include="pancy_model_control.cpp" />
-    <ClCompile Include="pancy_posttreatment.cpp" />
-    <ClCompile Include="pancy_pretreatment.cpp" />
-    <ClCompile Include="pancy_scene_design.cpp" />
-    <ClCompile Include="pancy_ssao.cpp" />
-    <ClCompile Include="shader_pancy.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <FxCompile Include="atmosphere_define.hlsli" />
-    <FxCompile Include="atmosphere_function.hlsli" />
-    <FxCompile Include="atmosphere_precompute.fx" />
-    <FxCompile Include="atmosphere_render.fx" />
-    <FxCompile Include="color_test.fx" />
-    <FxCompile Include="fft_512x512_c2c.fx" />
-    <FxCompile Include="gbuffer_pretreat.fx" />
-    <FxCompile Include="HDR_average_pass.fx" />
-    <FxCompile Include="HDR_blur_pass.fx" />
-    <FxCompile Include="HDR_final.fx" />
-    <FxCompile Include="HDR_preblur_pass.fx" />
-    <FxCompile Include="IBL_diffuse.fx" />
-    <FxCompile Include="light_buffer_pretreat.fx" />
-    <FxCompile Include="light_deffered.fx" />
-    <FxCompile Include="ocean_draw.fx" />
-    <FxCompile Include="ocean_shading.fx" />
-    <FxCompile Include="ocean_simulator_cs.fx" />
-    <FxCompile Include="ocean_simulator_vs_ps.fx" />
-    <FxCompile Include="IBL_gen.fx" />
-    <FxCompile Include="reflect_blur.fx" />
-    <FxCompile Include="reflect_final.fx" />
-    <FxCompile Include="render_brdf_list.fx" />
-    <FxCompile Include="ResolveMSAAdepthstencil.fx" />
-    <FxCompile Include="RTGR.fx" />
-    <FxCompile Include="save_cube_depthstencil.fx" />
-    <FxCompile Include="shadowmap.fx" />
-    <FxCompile Include="show_pic.fx" />
-    <FxCompile Include="skycube.fx" />
-    <FxCompile Include="ssao_blur_map.fx" />
-    <FxCompile Include="ssao_draw_aomap.fx" />
-    <FxCompile Include="virtual_light.fx" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="atmosphere_renderfunc.hlsli" />
-    <None Include="HDR_define.hlsli" />
-    <None Include="light_count.hlsli" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

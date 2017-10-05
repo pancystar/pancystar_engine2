@@ -36,6 +36,13 @@ void engine_fail_reason::show_failed_reason()
 	MessageBox(0, data_output,L"error",MB_OK);
 }
 // ˝—ß‘ÀÀ„
+DirectX::XMFLOAT2 engine_mathmatic::vec2_mul(DirectX::XMFLOAT2 vec1_in, DirectX::XMFLOAT2 vec2_in)
+{
+	DirectX::XMFLOAT2 vec_out;
+	vec_out.x = vec1_in.x * vec2_in.x;
+	vec_out.y = vec1_in.y * vec2_in.y;
+	return vec_out;
+}
 DirectX::XMFLOAT2 engine_mathmatic::vec2_plus(DirectX::XMFLOAT2 vec1_in, DirectX::XMFLOAT2 vec2_in)
 {
 	DirectX::XMFLOAT2 vec_out;

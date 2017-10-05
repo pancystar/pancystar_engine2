@@ -265,23 +265,6 @@ class FFT_ocean
 	XMFLOAT3 g_SunDir = XMFLOAT3(0.936016f, -0.343206f, 0.0780013f);
 	XMFLOAT3 g_SunColor = XMFLOAT3(1.0f, 1.0f, 0.6f);
 	float g_Shineness = 400.0f;
-	//ËÄ²æÊ÷Êý¾Ý
-	// Quad-tree LOD, 0 to 9 (1x1 ~ 512x512) 
-	int g_Lods = 0;
-	// Pattern lookup array. Filled at init time.
-	QuadRenderParam g_mesh_patterns[9][3][3][3][3];
-	// Pick a proper mesh pattern according to the adjacent patches.
-
-
-	// Rendering list
-	vector<QuadNode> g_render_list;
-
-
-	// D3D11 buffers and layout
-	ID3D11Buffer* g_pMeshVB = NULL;
-	ID3D11Buffer* g_pMeshIB = NULL;
-	ID3D11InputLayout* g_pMeshLayout = NULL;
-
 	// Color look up 1D texture
 	ID3D11Texture1D* g_pFresnelMap = NULL;
 	ID3D11ShaderResourceView* g_pSRV_Fresnel = NULL;
@@ -292,17 +275,6 @@ class FFT_ocean
 	// Environment maps
 	ID3D11ShaderResourceView* g_pSRV_ReflectCube = NULL;
 
-	// HLSL shaders
-	ID3D11VertexShader* g_pOceanSurfVS = NULL;
-	ID3D11PixelShader* g_pOceanSurfPS = NULL;
-	ID3D11PixelShader* g_pWireframePS = NULL;
-
-	// Samplers
-	ID3D11SamplerState* g_pHeightSampler = NULL;
-	ID3D11SamplerState* g_pGradientSampler = NULL;
-	ID3D11SamplerState* g_pFresnelSampler = NULL;
-	ID3D11SamplerState* g_pPerlinSampler = NULL;
-	ID3D11SamplerState* g_pCubeSampler = NULL;
 	ID3D11Buffer* g_pPerCallCB = NULL;
 	ID3D11Buffer* g_pPerFrameCB = NULL;
 	ID3D11Buffer* g_pShadingCB = NULL;
@@ -315,30 +287,12 @@ class FFT_ocean
 
 public:
 	FFT_ocean();
-	QuadRenderParam& selectMeshPattern(const QuadNode& quad_node);
-	int buildNodeList(QuadNode& quad_node);
-	// init & cleanup
-	void initRenderResource(const OceanParameter& ocean_param, ID3D11Device* pd3dDevice, const DXGI_SURFACE_DESC* pBackBufferSurfaceDesc);
-	void cleanupRenderResource();
-	// create a triangle strip mesh for ocean surface.
-	void createSurfaceMesh(ID3D11Device* pd3dDevice);
-	// create color/fresnel lookup table.
-	void createFresnelMap(ID3D11Device* pd3dDevice);
-	// create perlin noise texture for far-sight rendering
-	void loadTextures(ID3D11Device* pd3dDevice);
-	// Rendering routines
-	void renderShaded(ID3D11ShaderResourceView* displacemnet_map, ID3D11ShaderResourceView* gradient_map, float time, ID3D11DeviceContext* pd3dContext);
+	void release();
+	engine_basic::engine_fail_reason create(const OceanParameter& ocean_param, ID3D11Device* pd3dDevice, const DXGI_SURFACE_DESC* pBackBufferSurfaceDesc);
 	void renderdraw(ID3D11ShaderResourceView* displacemnet_map, ID3D11ShaderResourceView* gradient_map, float time, ID3D11DeviceContext* pd3dContext);
-	int generateBoundaryMesh(int left_degree, int right_degree, int bottom_degree, int top_degree, RECT vert_rect, DWORD* output);
-	int generateInnerMesh(RECT vert_rect, DWORD* output);
-	bool checkNodeVisibility(const QuadNode& quad_node);
-	float estimateGridCoverage(const QuadNode& quad_node, float screen_area);
-	bool isLeaf(const QuadNode& quad_node);
-	int searchLeaf(const vector<QuadNode>& node_list, const XMFLOAT2& point);
-	// Shader compilation
-	//void release();
-
 private:
+	engine_basic::engine_fail_reason createFresnelMap(ID3D11Device* pd3dDevice);
+	engine_basic::engine_fail_reason loadTextures(ID3D11Device* pd3dDevice);
 	template<class T>
 	void SAFE_RELEASE(T t)
 	{

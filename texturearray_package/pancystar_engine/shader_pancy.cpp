@@ -3256,6 +3256,32 @@ engine_basic::engine_fail_reason shader_ocean_draw::set_trans_scal(XMFLOAT4X4 *m
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
+engine_basic::engine_fail_reason shader_ocean_draw::set_trans_world(XMFLOAT4X4 *mat_need)
+{
+	XMVECTOR x_delta;
+	XMMATRIX world_need = XMLoadFloat4x4(mat_need);
+	XMMATRIX coordtrans = XMLoadFloat4x4(&XMFLOAT4X4(1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1));
+	XMMATRIX normal_need = DirectX::XMMatrixTranspose(DirectX::XMMatrixInverse(&x_delta, world_need));
+	normal_need.r[0].m128_f32[3] = 0;
+	normal_need.r[1].m128_f32[3] = 0;
+	normal_need.r[2].m128_f32[3] = 0;
+	normal_need.r[3].m128_f32[3] = 1;
+	HRESULT hr;
+	hr = world_mat_handle->SetMatrix(reinterpret_cast<float*>(&(world_need*coordtrans)));
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set world matrix error in ocean draw part");
+		return error_message;
+	}
+	hr = normal_mat_handle->SetMatrix(reinterpret_cast<float*>(&(normal_need*coordtrans)));
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set normal matrix error in ocean draw part");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
 engine_basic::engine_fail_reason shader_ocean_draw::set_Constant_Buffer_Shading(ID3D11Buffer *buffer_input)
 {
 	HRESULT hr;
@@ -3302,6 +3328,9 @@ void shader_ocean_draw::init_handle()
 	view_pos_handle = fx_need->GetVariableByName("g_LocalEye");
 	scal_mat_handle = fx_need->GetVariableByName("scal_matrix")->AsMatrix();
 	final_mat_handle = fx_need->GetVariableByName("final_matrix")->AsMatrix();
+	world_mat_handle = fx_need->GetVariableByName("world_matrix")->AsMatrix();
+	normal_mat_handle = fx_need->GetVariableByName("normal_matrix")->AsMatrix();
+
 	SRV_tex_displayment = fx_need->GetVariableByName("g_texDisplacement")->AsShaderResource();
 	SRV_tex_Perlin = fx_need->GetVariableByName("g_texPerlin")->AsShaderResource();
 	SRV_tex_gradient = fx_need->GetVariableByName("g_texGradient")->AsShaderResource();
@@ -3313,6 +3342,71 @@ void shader_ocean_draw::init_handle()
 	//constent_buffer_Shading = fx_need->GetVariableByName("cbShading")->AsConstantBuffer();
 	//constent_buffer_PerCall = fx_need->GetVariableByName("cbChangePerCall")->AsConstantBuffer();
 }
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~IBL镜面反射烘焙~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+shader_IBL_specular::shader_IBL_specular(LPCWSTR filename) : shader_basic(filename)
+{
+}
+engine_basic::engine_fail_reason shader_IBL_specular::set_input_CubeTex(ID3D11ShaderResourceView *tex_input)
+{
+	HRESULT hr = tex_cube_handle->SetResource(tex_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "an error when setting IBL_specular Cube SRV");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_IBL_specular::set_input_message(XMFLOAT2 HalfPixel, float face_cube, float mip_level)
+{
+	HRESULT hr = HalfPixel_handle->SetRawValue((void*)&HalfPixel, 0, sizeof(HalfPixel));
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set input_message error in IBL_specular");
+		return error_message;
+	}
+	hr = Face_handle->SetRawValue((void*)&face_cube, 0, sizeof(face_cube));
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set input_message error in IBL_specular");
+		return error_message;
+	}
+	hr = MipIndex_handle->SetRawValue((void*)&mip_level, 0, sizeof(mip_level));
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set input_message error in IBL_specular");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+void shader_IBL_specular::release()
+{
+	release_basic();
+}
+void shader_IBL_specular::init_handle()
+{
+	HalfPixel_handle = fx_need->GetVariableByName("HalfPixel");
+	Face_handle = fx_need->GetVariableByName("Face");
+	MipIndex_handle = fx_need->GetVariableByName("MipIndex");
+	tex_cube_handle = fx_need->GetVariableByName("Cubemap")->AsShaderResource();
+}
+void shader_IBL_specular::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member)
+{
+	//设置顶点声明
+	D3D11_INPUT_ELEMENT_DESC rec[] =
+	{
+		//语义名    语义索引      数据格式          输入槽 起始地址     输入槽的格式 
+		{ "POSITION",0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,0  ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TEXCOORD",0  ,DXGI_FORMAT_R32G32_FLOAT      ,0    ,12 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 }
+	};
+	*num_member = sizeof(rec) / sizeof(D3D11_INPUT_ELEMENT_DESC);
+	for (UINT i = 0; i < *num_member; ++i)
+	{
+		member_point[i] = rec[i];
+	}
+}
+
 //shader管理器
 shader_control *shader_control::shadercontrol_pInstance = NULL;
 shader_control::shader_control() 
@@ -3782,6 +3876,18 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
+	std::shared_ptr<shader_IBL_specular> shader_IBL_spec = std::make_shared<shader_IBL_specular>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\IBL_gen.cso");
+	check_error = shader_IBL_spec->shder_create();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = add_a_new_shader(std::type_index(typeid(shader_IBL_specular)), shader_IBL_spec);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
@@ -4082,7 +4188,17 @@ std::shared_ptr<shader_ocean_draw> shader_control::get_shader_oceandraw_tess(eng
 	auto out_pointer = std::dynamic_pointer_cast<shader_ocean_draw>(shader_vlight);
 	return out_pointer;
 }
-
+std::shared_ptr<shader_IBL_specular> shader_control::get_shader_IBL_specular(engine_basic::engine_fail_reason &if_succeed)
+{
+	std::string name_need = std::type_index(typeid(shader_IBL_specular)).name();
+	auto shader_vlight = get_shader_by_type(std::type_index(typeid(shader_IBL_specular)).name(), if_succeed);
+	if (!if_succeed.check_if_failed())
+	{
+		return std::shared_ptr<shader_IBL_specular>();
+	}
+	auto out_pointer = std::dynamic_pointer_cast<shader_IBL_specular>(shader_vlight);
+	return out_pointer;
+}
 std::shared_ptr<shader_basic> shader_control::get_shader_by_type(std::string type_name, engine_basic::engine_fail_reason &if_succeed)
 {
 	auto shader_out = shader_list.find(type_name)->second;

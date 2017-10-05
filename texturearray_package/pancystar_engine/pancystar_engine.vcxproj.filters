@@ -193,6 +193,12 @@
     <FxCompile Include="ocean_draw.fx">
       <Filter>源文件</Filter>
     </FxCompile>
+    <FxCompile Include="IBL_diffuse.fx">
+      <Filter>源文件</Filter>
+    </FxCompile>
+    <FxCompile Include="IBL_gen.fx">
+      <Filter>源文件</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="light_count.hlsli">

@@ -79,6 +79,8 @@ public:
 	engine_basic::engine_fail_reason create();
 	void display();
 	void display_lbuffer(bool if_shadow);
+	void display(XMFLOAT4X4 view_matrix);
+	void display_lbuffer(XMFLOAT4X4 view_matrix, XMFLOAT4X4 invview_matrix, bool if_shadow);
 	void release();
 	ID3D11ShaderResourceView *get_gbuffer_normalspec() { return normalspec_tex; };
 	ID3D11ShaderResourceView *get_gbuffer_specrough() { return specroughness_tex; };
@@ -111,7 +113,9 @@ private:
 	void set_resolvdepth_target();
 	
 	void render_gbuffer();
+	void render_gbuffer(XMFLOAT4X4 view_matrix);
 	void render_lbuffer(XMFLOAT4X4 view_matrix, XMFLOAT4X4 invview_matrix, bool if_shadow);
+	void render_lbuffer_cube(XMFLOAT4X4 view_matrix, XMFLOAT4X4 invview_matrix, bool if_shadow);
 	void resolve_depth_render(ID3DX11EffectTechnique* tech);
 	void light_buffer_render(ID3DX11EffectTechnique* tech);
 

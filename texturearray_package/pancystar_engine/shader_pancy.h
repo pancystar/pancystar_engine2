@@ -736,6 +736,8 @@ class shader_ocean_draw : public shader_basic
 	ID3DX11EffectVariable                 *view_pos_handle;          //视点位置
 	ID3DX11EffectMatrixVariable              *final_mat_handle;
 	ID3DX11EffectMatrixVariable              *scal_mat_handle;
+	ID3DX11EffectMatrixVariable              *world_mat_handle;
+	ID3DX11EffectMatrixVariable              *normal_mat_handle;
 
 	ID3DX11EffectShaderResourceVariable      *SRV_tex_displayment;
 	ID3DX11EffectShaderResourceVariable      *SRV_tex_Perlin;
@@ -756,9 +758,26 @@ public:
 
 	engine_basic::engine_fail_reason set_trans_all(XMFLOAT4X4 *mat_need);
 	engine_basic::engine_fail_reason set_trans_scal(XMFLOAT4X4 *mat_need);
+	engine_basic::engine_fail_reason set_trans_world(XMFLOAT4X4 *mat_need);
+
 	engine_basic::engine_fail_reason set_Constant_Buffer_Shading(ID3D11Buffer *buffer_input);
 	engine_basic::engine_fail_reason set_Constant_Buffer_PerCall(ID3D11Buffer *buffer_input);
 
+	void release();
+private:
+	void init_handle();//注册shader中所有全局变量的句柄
+	void set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member);
+};
+class shader_IBL_specular : public shader_basic
+{
+	ID3DX11EffectVariable                    *HalfPixel_handle;
+	ID3DX11EffectVariable                    *Face_handle;
+	ID3DX11EffectVariable                    *MipIndex_handle;
+	ID3DX11EffectShaderResourceVariable      *tex_cube_handle;
+public:
+	shader_IBL_specular(LPCWSTR filename);
+	engine_basic::engine_fail_reason set_input_message(XMFLOAT2 HalfPixel, float face_cube, float mip_level);
+	engine_basic::engine_fail_reason set_input_CubeTex(ID3D11ShaderResourceView *tex_input);
 	void release();
 private:
 	void init_handle();//注册shader中所有全局变量的句柄
@@ -822,6 +841,7 @@ public:
 	std::shared_ptr<shader_ocean_simulateVPS> get_shader_oceansimulate_vps(engine_basic::engine_fail_reason &if_succeed);
 	std::shared_ptr<shader_ocean_render> get_shader_oceanrender_vps(engine_basic::engine_fail_reason &if_succeed);
 	std::shared_ptr<shader_ocean_draw> get_shader_oceandraw_tess(engine_basic::engine_fail_reason &if_succeed);
+	std::shared_ptr<shader_IBL_specular> get_shader_IBL_specular(engine_basic::engine_fail_reason &if_succeed);
 
 	void release();
 private:

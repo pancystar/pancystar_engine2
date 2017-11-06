@@ -12,7 +12,8 @@ cbuffer perobject
 	float4x4         ssao_matrix;      //ssao变换
 	float4x4         world_matrix_array[300];
 	float4x4         view_proj_matrix;
-	
+	float4x4         gBoneTransforms[100];     //世界变换
+	uint             bone_num;
 };
 cbuffer perframe
 {
@@ -20,7 +21,7 @@ cbuffer perframe
 	float4x4         invview_matrix; //取景变换逆变换
 };
 
-
+StructuredBuffer<float4x4> input_buffer;
 Texture2D        texture_light_diffuse;      //漫反射光照贴图
 Texture2D        texture_light_specular;     //镜面反射光照贴图
 Texture2DArray        texture_pack_array;         //纹理打包贴图
@@ -62,7 +63,29 @@ struct Vertex_IN_instance
 	float4  tex2    : TEXOTHER;     //顶点纹理坐标(其它纹理)
 	uint InstanceId : SV_InstanceID;//instace索引号
 };
-
+struct Vertex_IN_bone
+{
+	float3	pos 	: POSITION;     //顶点位置
+	float3	normal 	: NORMAL;       //顶点法向量
+	float3	tangent : TANGENT;      //顶点切向量
+	uint4   texid   : TEXINDICES;   //纹理索引
+	float4  tex1    : TEXDIFFNORM;  //顶点纹理坐标(漫反射及法线纹理)
+	float4  tex2    : TEXOTHER;     //顶点纹理坐标(其它纹理)
+	uint4   bone_id     : BONEINDICES;  //骨骼ID号
+	float4  bone_weight : WEIGHTS;      //骨骼权重
+};
+struct Vertex_IN_bone_instance
+{
+	float3	pos 	: POSITION;     //顶点位置
+	float3	normal 	: NORMAL;       //顶点法向量
+	float3	tangent : TANGENT;      //顶点切向量
+	uint4   texid   : TEXINDICES;   //纹理索引
+	float4  tex1    : TEXDIFFNORM;  //顶点纹理坐标(漫反射及法线纹理)
+	float4  tex2    : TEXOTHER;     //顶点纹理坐标(其它纹理)
+	uint4   bone_id     : BONEINDICES;  //骨骼ID号
+	float4  bone_weight : WEIGHTS;      //骨骼权重
+	uint InstanceId : SV_InstanceID;//instace索引号
+};
 struct VertexOut
 {
 	float3 position_before : POSITION;
@@ -78,7 +101,34 @@ struct PixelOut
 	float4 final_color;
 	float4 reflect_message;
 };
+VertexOut VS_bone(Vertex_IN_bone vin)
+{
+	VertexOut vout;
+	float3 posL = float3(0.0f, 0.0f, 0.0f);
+	float3 normalL = float3(0.0f, 0.0f, 0.0f);
+	float3 tangentL = float3(0.0f, 0.0f, 0.0f);
+	float weights[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	weights[0] = vin.bone_weight.x;
+	weights[1] = vin.bone_weight.y;
+	weights[2] = vin.bone_weight.z;
+	weights[3] = vin.bone_weight.w;
+	for (int i = 0; i < 4; ++i)
+	{
+		// 骨骼变换一般不存在不等缩放的情况，所以可以不做法线的逆转置操作
+		posL += weights[i] * mul(float4(vin.pos, 1.0f), gBoneTransforms[vin.bone_id[i]]).xyz;
+		normalL += weights[i] * mul(vin.normal, (float3x3)gBoneTransforms[vin.bone_id[i]]);
+		tangentL += weights[i] * mul(vin.tangent.xyz, (float3x3)gBoneTransforms[vin.bone_id[i]]);
+	}
 
+	vout.position_before = mul(float4(posL,1.0f), world_matrix).xyz;
+	vout.position_view = mul(float4(vout.position_before, 1.0f), view_matrix).xyz;
+	vout.position = mul(float4(posL, 1.0f), final_matrix);
+	vout.texid = vin.texid;
+	vout.tex1 = vin.tex1;
+	vout.tex2 = vin.tex2;
+	vout.pos_ssao = mul(float4(vout.position_before, 1.0f), ssao_matrix);
+	return vout;
+}
 VertexOut VS(Vertex_IN vin)
 {
 	VertexOut vout;
@@ -97,6 +147,36 @@ VertexOut VS_instance(Vertex_IN_instance vin)
 	vout.position_before = mul(float4(vin.pos, 1.0f), world_matrix_array[vin.InstanceId]).xyz;
 	vout.position_view = mul(float4(vout.position_before, 1.0f), view_matrix).xyz;
 	vout.position = mul(float4(vout.position_before, 1.0f), view_proj_matrix);
+	vout.texid = vin.texid;
+	vout.tex1 = vin.tex1;
+	vout.tex2 = vin.tex2;
+	vout.pos_ssao = mul(float4(vout.position_before, 1.0f), ssao_matrix);
+	return vout;
+}
+VertexOut VS_bone_instance(Vertex_IN_bone_instance vin)
+{
+	VertexOut vout;
+	float3 posL = float3(0.0f, 0.0f, 0.0f);
+	float3 normalL = float3(0.0f, 0.0f, 0.0f);
+	float3 tangentL = float3(0.0f, 0.0f, 0.0f);
+	float weights[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	weights[0] = vin.bone_weight.x;
+	weights[1] = vin.bone_weight.y;
+	weights[2] = vin.bone_weight.z;
+	weights[3] = vin.bone_weight.w;
+	for (int i = 0; i < 4; ++i)
+	{
+		// 骨骼变换一般不存在不等缩放的情况，所以可以不做法线的逆转置操作
+		int instance_bone = vin.InstanceId * bone_num + vin.bone_id[i];
+		posL += weights[i] * mul(float4(vin.pos, 1.0f), input_buffer[instance_bone]).xyz;
+		normalL += weights[i] * mul(vin.normal, (float3x3)input_buffer[instance_bone]);
+		tangentL += weights[i] * mul(vin.tangent.xyz, (float3x3)input_buffer[instance_bone]);
+	}
+
+	vout.position_before = mul(float4(posL, 1.0f), world_matrix_array[vin.InstanceId]).xyz;
+	vout.position_view = mul(float4(vout.position_before, 1.0f), view_matrix).xyz;
+	vout.position = mul(float4(vout.position_before, 1.0f), view_proj_matrix);
+	//vout.position = mul(float4(posL, 1.0f), final_matrix);
 	vout.texid = vin.texid;
 	vout.tex1 = vin.tex1;
 	vout.tex2 = vin.tex2;
@@ -190,6 +270,15 @@ PixelOut PS_withputao(VertexOut pin) :SV_TARGET
 	ans_pix.reflect_message = material_need.reflect;
 	return ans_pix;
 }
+PixelOut PS_withbone(VertexOut pin) :SV_TARGET
+{
+	float texID_data_diffuse = pin.texid.x;
+	float4 tex_color = texture_pack_array.Sample(samTex_liner, float3(pin.tex1.xy, texID_data_diffuse));
+	PixelOut ans_pix;
+	ans_pix.final_color = tex_color;
+	ans_pix.reflect_message = material_need.reflect;
+	return ans_pix;
+}
 technique11 LightTech
 {
 	pass P0
@@ -224,5 +313,23 @@ technique11 LightTech_instance_withoutao
 		SetVertexShader(CompileShader(vs_5_0, VS_instance()));
 		SetGeometryShader(NULL);
 		SetPixelShader(CompileShader(ps_5_0, PS_withputao()));
+	}
+}
+technique11 LightTech_bone
+{
+	pass P0
+	{
+		SetVertexShader(CompileShader(vs_5_0, VS_bone()));
+		SetGeometryShader(NULL);
+		SetPixelShader(CompileShader(ps_5_0, PS_withbone()));
+	}
+}
+technique11 LightTech_instance_bone
+{
+	pass P0
+	{
+		SetVertexShader(CompileShader(vs_5_0, VS_bone_instance()));
+		SetGeometryShader(NULL);
+		SetPixelShader(CompileShader(ps_5_0, PS_withbone()));
 	}
 }

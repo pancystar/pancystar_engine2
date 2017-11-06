@@ -79,6 +79,10 @@ private:
 
 class scene_test_square : public scene_root 
 {
+	XMFLOAT4X4 offset_matrix[100];
+	skin_tree *bone_read;
+	animation_set *anim_read;
+	bool if_have_bone;
 	//µ„ª˜µ„—∞’“Œ∆¿Ì
 
 	ID3D11Texture2D          *clipTex0;
@@ -110,15 +114,18 @@ class scene_test_square : public scene_root
 
 	ID3D11BlendState       *AlphaToCoverageBS;
 	ofstream out_stream;
+	ifstream in_stream;
 	int picture_type_width;
 	int picture_type_height;
 	float rec;
 	mesh_ball *ballmesh_need;
 	mesh_cube *mesh_need;
 	mesh_square *picture_buf;
-	mesh_model<point_common> *model_out_test;
+	//mesh_model<point_common> *model_out_test;
+	Geometry_basic *model_out_test;
 	//texture_combine *texture_deal;
-	model_reader_assimp<point_common> *mesh_model_need;
+	//model_reader_assimp<point_common> *mesh_model_need;
+	assimp_basic *mesh_model_need;
 	ID3D11ShaderResourceView *tex_floor;
 	std::map<std::string, ID3D11ShaderResourceView*> rec_texture_packmap;
 	std::vector<pbr_material> pbr_list;
@@ -161,9 +168,14 @@ private:
 
 	engine_basic::engine_fail_reason load_model(string filename,string tex_path);
 	engine_basic::engine_fail_reason export_model(string filepath,string filename);
+	void save_bone_tree(skin_tree *bone_data);
+	void read_bone_tree(skin_tree *now);
+	void free_tree(skin_tree *now);
+	void save_anim_data(animation_set *anim_data);
+	void read_anim_data();
 	engine_basic::engine_fail_reason read_texture_from_file(std::vector<string> file_name_list);
 	void change_model_texcoord(texture_combine *texture_deal,point_common *vertex_need, int point_num);
-
+	void change_model_texcoord(texture_combine *texture_deal, point_skincommon *vertex_need, int point_num);
 	HRESULT CreateCPUaccessBuf(D3D11_TEXTURE2D_DESC texDesc, ID3D11Texture2D **resource_out);
 	void CreateAndCopyToDebugBuf(ID3D11Resource *dest_res, ID3D11Resource *source_res);
 	engine_basic::engine_fail_reason init_clip_texture();

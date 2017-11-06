@@ -106,6 +106,7 @@ class virtual_light_shader : public shader_basic
 	ID3DX11EffectMatrixVariable           *world_matrix_handle;      //世界变换句柄
 	ID3DX11EffectMatrixVariable           *normal_matrix_handle;      //法线变换句柄
 	ID3DX11EffectMatrixVariable           *project_matrix_handle;      //全套几何变换句柄
+	ID3DX11EffectMatrixVariable           *BoneTransforms;             //骨骼变换矩阵
 
 	ID3DX11EffectShaderResourceVariable   *texture_diffuse_handle;      //漫反射贴图句柄
 	ID3DX11EffectShaderResourceVariable   *texture_normal_handle;       //法线贴图纹理
@@ -122,6 +123,7 @@ public:
 	engine_basic::engine_fail_reason set_view_pos(XMFLOAT3 eye_pos);
 	engine_basic::engine_fail_reason set_trans_world(XMFLOAT4X4 *mat_world);//设置总变换
 	engine_basic::engine_fail_reason set_trans_all(XMFLOAT4X4 *mat_need);//设置总变换
+	engine_basic::engine_fail_reason set_bone_matrix(const XMFLOAT4X4* M, int cnt);		     //设置骨骼变换矩阵
 
 	engine_basic::engine_fail_reason set_tex_diffuse(ID3D11ShaderResourceView *tex_in);//设置漫反射纹理
 	engine_basic::engine_fail_reason set_tex_normal(ID3D11ShaderResourceView *tex_in);//设置法线纹理

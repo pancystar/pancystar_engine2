@@ -1,11 +1,10 @@
 #include"pancy_scene_design.h"
 #include<math.h>
+
 scene_root::scene_root()
 {
 	time_game = 0.0f;
 }
-
-
 
 
 scene_test_square::scene_test_square()
@@ -400,6 +399,7 @@ void scene_test_square::release()
 
 scene_test_environment::scene_test_environment(Pretreatment_gbuffer *pretreat_in, render_posttreatment_HDR  *HDR_in)
 {
+	test_model = new model_reader_PancySkinMesh("yuriskin\\yuri.pancyskinmesh", "yuriskin\\yuri.pancymat", "yuriskin\\yuri.pancyskin");
 	pretreat_render = pretreat_in;
 	HDR_tonemapping = HDR_in;
 	quality_reflect = 0.5f;
@@ -435,8 +435,18 @@ engine_basic::engine_fail_reason scene_test_environment::create()
 	{
 		return check_error;
 	}
+	check_error = test_model->create();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	model_reader_PancySkinMesh *pt = dynamic_cast<model_reader_PancySkinMesh*>(test_model);
+	pt->load_animation_list("yuriskin\\yuri.pancyanimation", animation_id);
+	pt->set_animation_byindex(0);
+	pt->update_animation(1 / 100.0f);
 	XMFLOAT4X4 mat_world;
 	XMStoreFloat4x4(&mat_world, XMMatrixIdentity());
+	//加载天空
 	check_error = pancy_geometry_control_singleton::get_instance()->load_a_model_type("ballmodel\\outmodel.pancymesh", "ballmodel\\outmodel.pancymat", false, model_ID_sky);
 	if (!check_error.check_if_failed())
 	{
@@ -450,6 +460,35 @@ engine_basic::engine_fail_reason scene_test_environment::create()
 	geometry_resource_view *data_view = NULL;
 	pancy_geometry_control_singleton::get_instance()->get_a_model_type(&data_view, model_ID_sky);
 	data_view->set_cull_front();
+	//加载测试模型
+	check_error = pancy_geometry_control_singleton::get_instance()->load_a_skinmodel_type("yuriskin\\yuri.pancyskinmesh", "yuriskin\\yuri.pancymat", "yuriskin\\yuri.pancyskin", false, model_ID_skin,100);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = pancy_geometry_control_singleton::get_instance()->load_a_skinmodel_animation(model_ID_skin, "yuriskin\\yuri.pancyanimation", animation_id);
+
+	check_error = pancy_geometry_control_singleton::get_instance()->add_a_model_instance(model_ID_skin, mat_world, ID_model_skin);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = pancy_geometry_control_singleton::get_instance()->add_a_model_instance(model_ID_skin, mat_world, ID_model_skin2);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = pancy_geometry_control_singleton::get_instance()->set_a_instance_animation(ID_model_skin, animation_id);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = pancy_geometry_control_singleton::get_instance()->set_a_instance_animation(ID_model_skin2, animation_id);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+
 	HRESULT hr_need = CreateDDSTextureFromFileEx(d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device(), d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex(), L"Texture_cube1.dds", 0, D3D11_USAGE_DEFAULT, D3D11_BIND_SHADER_RESOURCE, 0, 0, false, NULL, &tex_cubesky);
 	check_error = create_cubemap();
 	if (!check_error.check_if_failed())
@@ -461,6 +500,7 @@ engine_basic::engine_fail_reason scene_test_environment::create()
 }
 void scene_test_environment::display()
 {
+	show_animation_test();
 	show_sky_single();
 	//show_sky_cube();
 }
@@ -548,6 +588,7 @@ void scene_test_environment::release()
 		RTV_diffusecube[i]->Release();
 	}
 	fullscreen_buffer->release();
+	test_model->release();
 }
 void scene_test_environment::show_sky_single()
 {
@@ -660,14 +701,14 @@ void scene_test_environment::show_sky_cube()
 	MIPMAP_VP.Height = 1024.0f * quality_reflect;
 	MIPMAP_VP.MinDepth = 0.0f;
 	MIPMAP_VP.MaxDepth = 1.0f;
-	
+
 	for (int i = 0; i < 7; ++i)
 	{
 		for (int j = 0; j < 6; ++j)
 		{
 			d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->RSSetViewports(1, &MIPMAP_VP);
 			//设置渲染路径
-			ID3D11RenderTargetView* renderTargets[1] = { RTV_cube[i*6 + j] };
+			ID3D11RenderTargetView* renderTargets[1] = { RTV_cube[i * 6 + j] };
 			d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetRenderTargets(1, renderTargets, NULL);
 			float clearColor[] = { 0.0f, 0.0f, 0.0f, 1e5f };
 			d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearRenderTargetView(RTV_cube[i * 6 + j], clearColor);
@@ -684,7 +725,7 @@ void scene_test_environment::show_sky_cube()
 		MIPMAP_VP.Width /= 2;
 		MIPMAP_VP.Height /= 2;
 	}
-	for (int i = 0; i< 6; ++i)
+	for (int i = 0; i < 6; ++i)
 	{
 		D3D11_VIEWPORT Diffuse_VP;
 		Diffuse_VP.TopLeftX = 0.0f;
@@ -702,13 +743,82 @@ void scene_test_environment::show_sky_cube()
 		//正式渲染
 		engine_basic::engine_fail_reason check_error;
 		auto shader_IBL_spec = shader_control::GetInstance()->get_shader_IBL_specular(check_error);
-		shader_IBL_spec->set_input_message(XMFLOAT2(0, 0),0, i);
+		shader_IBL_spec->set_input_message(XMFLOAT2(0, 0), 0, i);
 		shader_IBL_spec->set_input_CubeTex(tex_cubesky);
 		ID3DX11EffectTechnique *teque_need;
 		shader_IBL_spec->get_technique(&teque_need, "IBL_Diffuse");
 		fullscreen_buffer->get_teque(teque_need);
 		fullscreen_buffer->show_mesh();
 	}
+}
+void scene_test_environment::show_animation_test()
+{
+	engine_basic::engine_fail_reason check_error;
+	auto shader_need = shader_control::GetInstance()->get_shader_lightdeffered(check_error);
+
+
+	XMFLOAT4X4 world_mat, world_mat2, view_mat, final_mat;
+
+	pancy_camera::get_instance()->count_view_matrix(&view_mat);
+	XMMATRIX proj;
+	proj = XMLoadFloat4x4(&engine_basic::perspective_message::get_instance()->get_proj_matrix());
+	XMStoreFloat4x4(&world_mat, XMMatrixTranslation(2.0f, 0.0f, 0.0f));
+	XMStoreFloat4x4(&world_mat2, XMMatrixIdentity());
+	XMMATRIX rec_world = XMMatrixIdentity() * XMLoadFloat4x4(&view_mat) * proj;
+	//XMMATRIX rec_world2 = XMMatrixTranslation(1.0f,0.0f,0.0f) * XMLoadFloat4x4(&view_mat) * proj;
+	XMStoreFloat4x4(&final_mat, rec_world);
+
+
+	shader_need->set_trans_world(&world_mat);
+	//shader_need->set_trans_all(&final_mat);
+	shader_need->set_trans_viewproj(&final_mat);
+	shader_need->set_tex_diffuse_array(test_model->get_texture());
+
+
+
+
+	geometry_resource_view *data_view = NULL;
+	pancy_geometry_control_singleton::get_instance()->get_a_model_type(&data_view, model_ID_skin);
+	data_view->update(ID_model_skin.model_instance, world_mat, 0.2f);
+	data_view->update(ID_model_skin2.model_instance, world_mat, 0.1f);
+	auto data_bone_matlist = data_view->get_bone_matrix_list();
+	//XMFLOAT4X4 bone_mat[100];
+	XMFLOAT4X4 world_mat_list[] = { world_mat ,world_mat2};
+	int bone_size = 0;
+	/*
+	for (auto data_test = data_bone_matlist.begin(); data_test != data_bone_matlist.end(); ++data_test) 
+	{
+		bone_mat[bone_size++] = *data_test._Ptr;
+	}
+	shader_need->set_bone_matrix(bone_mat, bone_size);
+	*/
+	shader_need->set_bonemat_buffer(data_view->get_bone_matrix_list());
+	shader_need->set_world_matrix_array(world_mat_list,2);
+	shader_need->set_bone_num(data_view->get_bone_mat_num());
+	ID3DX11EffectTechnique *teque_need;
+	//model_reader_PancySkinMesh *pt = dynamic_cast<model_reader_PancySkinMesh*>(test_model);
+	//pt->update_animation(0.02f);
+	//shader_need->set_bone_matrix(pt->get_bone_matrix(), pt->get_bone_num());
+	//设置顶点声明
+	D3D11_INPUT_ELEMENT_DESC rec_inputdesc[] =
+	{
+		//语义名    语义索引      数据格式          输入槽 起始地址     输入槽的格式 
+		{ "POSITION",0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,0  ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "NORMAL"  ,0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,12 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TANGENT" ,0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,24 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TEXINDICES" ,0  ,DXGI_FORMAT_R32G32B32A32_UINT  ,0    ,36 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TEXDIFFNORM",0  ,DXGI_FORMAT_R32G32B32A32_FLOAT      ,0    ,52 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TEXOTHER",0  ,DXGI_FORMAT_R32G32B32A32_FLOAT      ,0    ,68 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "BONEINDICES" ,0  ,DXGI_FORMAT_R32G32B32A32_UINT  ,0    ,84 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "WEIGHTS"     ,0  ,DXGI_FORMAT_R32G32B32A32_FLOAT ,0    ,100 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+	};
+	UINT num_member = sizeof(rec_inputdesc) / sizeof(D3D11_INPUT_ELEMENT_DESC);
+	shader_need->get_technique(rec_inputdesc, num_member, &teque_need, "LightTech_instance_bone");
+
+	data_view->get_technique(teque_need);
+	data_view->draw(false);
+	//test_model->get_technique(teque_need);
+	//test_model->draw_mesh();
 }
 engine_basic::engine_fail_reason scene_test_environment::create_cubemap()
 {

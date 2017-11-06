@@ -64,6 +64,11 @@ private:
 };
 class scene_test_environment : public scene_root
 {
+	pancy_model_ID ID_model_skin;
+	pancy_model_ID ID_model_skin2;
+	int model_ID_skin;
+	int animation_id;
+	model_reader_pancymesh   *test_model;
 	Geometry_basic           *fullscreen_buffer;
 	XMFLOAT3                 up_cube_reflect[6];
 	XMFLOAT3                 look_cube_reflect[6];
@@ -95,6 +100,7 @@ public:
 private:
 	void show_sky_single();
 	void show_sky_cube();
+	void show_animation_test();
 	engine_basic::engine_fail_reason create_cubemap();
 };
 

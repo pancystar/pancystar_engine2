@@ -249,14 +249,17 @@ class light_defered_lightbuffer : public shader_basic
 	ID3DX11EffectShaderResourceVariable      *single_mie_scattering_texture;           //单层米氏散射
 	ID3DX11EffectShaderResourceVariable      *irradiance_texture;                      //亮度纹理
 	ID3DX11EffectShaderResourceVariable      *mask_texture;                            //掩码图
+	
 	//一次设置参数
 	ID3DX11EffectVariable                    *white_point;    //白平衡最亮点
 	ID3DX11EffectVariable                    *earth_center;   //地心位置
 	ID3DX11EffectVariable                    *sun_size;       //太阳大小
 	ID3DX11EffectMatrixVariable              *view_from_clip; //反投影光线追踪
+	
 	//逐帧设置参数
 	ID3DX11EffectVariable                    *camera;         //摄像机位置
 	ID3DX11EffectVariable                    *exposure;       //曝光系数
+	
 	//光照信息
 	ID3DX11EffectVariable                 *light_sun;                  //太阳光
 	ID3DX11EffectVariable                 *sunlight_num;               //太阳光分级数量
@@ -275,6 +278,7 @@ class light_defered_lightbuffer : public shader_basic
 	ID3DX11EffectShaderResourceVariable   *SpecRoughnessMap;           //镜面光粗糙度纹理资源句柄
 	ID3DX11EffectShaderResourceVariable   *DepthMap;                   //深度纹理资源句柄
 	ID3DX11EffectShaderResourceVariable   *texture_shadow;             //阴影纹理资源句柄
+	
 public:
 	light_defered_lightbuffer(LPCWSTR filename);
 	//纹理设置
@@ -311,6 +315,8 @@ public:
 	engine_basic::engine_fail_reason set_DepthMap_tex(ID3D11ShaderResourceView *tex_in);		//设置深度纹理
 	engine_basic::engine_fail_reason set_shadow_tex(ID3D11ShaderResourceView *tex_in);		//设置阴影纹理
 	engine_basic::engine_fail_reason set_projmessage(XMFLOAT3 proj_message);
+
+	
 	void release();
 private:
 	void init_handle();                 //注册全局变量句柄
@@ -324,9 +330,11 @@ class light_defered_draw : public shader_basic
 	ID3DX11EffectMatrixVariable           *view_matrix_handle;       //取景变换句柄
 	ID3DX11EffectMatrixVariable           *invview_matrix_handle;    //取景变换逆变换句柄
 	ID3DX11EffectMatrixVariable           *final_matrix_handle;      //全套几何变换句柄
+	ID3DX11EffectMatrixVariable           *BoneTransforms;           //骨骼变换矩阵
 	ID3DX11EffectMatrixVariable           *ssao_matrix_handle;       //ssao矩阵变换句柄
 	ID3DX11EffectMatrixVariable           *world_matrix_array_handle;//世界变换组矩阵
 	ID3DX11EffectMatrixVariable           *viewproj_matrix_handle;   //取景*投影变换矩阵
+
 	ID3DX11EffectShaderResourceVariable   *tex_light_diffuse_handle; //漫反射光纹理资源句柄
 	ID3DX11EffectShaderResourceVariable   *tex_light_specular_handle;//镜面光纹理资源句柄
 	ID3DX11EffectShaderResourceVariable   *texture_ssao_handle;      //环境光纹理资源句柄
@@ -335,6 +343,9 @@ class light_defered_draw : public shader_basic
 	ID3DX11EffectShaderResourceVariable   *texture_ibl_handle;       //环境光纹理资源句柄
 	ID3DX11EffectShaderResourceVariable   *tex_specroughness;        //镜面光&粗糙度
 	ID3DX11EffectShaderResourceVariable   *tex_brdf_list;            //brdf表
+
+	ID3DX11EffectShaderResourceVariable   *bone_matrix_buffer;        //骨骼矩阵缓冲区资源句柄
+	ID3DX11EffectVariable                 *bone_num_handle;                 //骨骼数量
 public:
 	light_defered_draw(LPCWSTR filename);
 	engine_basic::engine_fail_reason set_view_pos(XMFLOAT3 eye_pos);
@@ -344,6 +355,8 @@ public:
 	engine_basic::engine_fail_reason set_trans_invview(XMFLOAT4X4 *mat_need);                                //设置取景变换逆变换
 	engine_basic::engine_fail_reason set_trans_all(XMFLOAT4X4 *mat_need);                                    //设置总变换
 	engine_basic::engine_fail_reason set_trans_viewproj(XMFLOAT4X4 *mat_need);                               //设置取景*投影变换
+	engine_basic::engine_fail_reason set_bone_matrix(const XMFLOAT4X4* M, int cnt);		                     //设置骨骼变换矩阵
+
 	engine_basic::engine_fail_reason set_material(pancy_material material_in);				                 //设置材质
 	engine_basic::engine_fail_reason set_ssaotex(ID3D11ShaderResourceView *tex_in);			                 //设置ssaomap
 	engine_basic::engine_fail_reason set_tex_diffuse_array(ID3D11ShaderResourceView *tex_in);	             //设置漫反射纹理
@@ -354,6 +367,9 @@ public:
 	engine_basic::engine_fail_reason set_tex_specroughness_resource(ID3D11ShaderResourceView *buffer_input); //设置镜面光&粗糙度纹理
 	engine_basic::engine_fail_reason set_tex_brdflist_resource(ID3D11ShaderResourceView *buffer_input);      //设置brdf查找表
 	engine_basic::engine_fail_reason set_world_matrix_array(const XMFLOAT4X4* M, int cnt);	                 //设置世界变换组矩阵
+
+	engine_basic::engine_fail_reason set_bonemat_buffer(ID3D11ShaderResourceView *buffer_in);		//设置骨骼矩阵缓冲区
+	engine_basic::engine_fail_reason set_bone_num(UINT bone_num);                                   //设置骨骼数量
 	void release();
 private:
 	void init_handle();                 //注册全局变量句柄

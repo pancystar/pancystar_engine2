@@ -58,7 +58,7 @@ public:
 	int get_texnum() { return material_optimization; };
 	virtual void get_texture(material_list *texture_need, int i);
 	virtual void get_texture_byindex(material_list *texture_need, int index);
-
+	bool check_if_anim();
 	virtual void release();
 	virtual void draw_part(int i);
 	std::string get_mesh_name_bypart(int mesh_id);
@@ -73,6 +73,7 @@ protected:
 template<typename T>
 class model_reader_assimp : public assimp_basic
 {
+protected:
 	T *point_pack_list;
 	UINT *index_pack_list;
 	int vertex_final_num;
@@ -230,3 +231,115 @@ void model_reader_assimp<T>::get_model_pack_data(T *point_data, UINT *index_data
 		index_data[i] = index_pack_list[i];
 	}
 }
+
+
+struct skin_tree
+{
+	char bone_ID[128];
+	int bone_number;
+	XMFLOAT4X4 basic_matrix;
+	XMFLOAT4X4 animation_matrix;
+	XMFLOAT4X4 now_matrix;
+	skin_tree *brother;
+	skin_tree *son;
+	skin_tree()
+	{
+		bone_ID[0] = '\0';
+		bone_number = -1;
+		brother = NULL;
+		son = NULL;
+		XMStoreFloat4x4(&basic_matrix, XMMatrixIdentity());
+		XMStoreFloat4x4(&animation_matrix, XMMatrixIdentity());
+		XMStoreFloat4x4(&now_matrix, XMMatrixIdentity());
+	}
+};
+//变换向量
+struct vector_animation
+{
+	float time;               //帧时间
+	float main_key[3];        //帧数据
+};
+//变换四元数
+struct quaternion_animation
+{
+	float time;               //帧时间
+	float main_key[4];        //帧数据
+};
+//变换矩阵
+struct matrix_animation
+{
+	float time;               //帧时间
+	float main_key[16];       //帧数据
+};
+struct animation_data
+{
+	char bone_name[128];                                //本次变换数据对应的骨骼名称
+	skin_tree *bone_point;                              //本次变换数据对应的骨骼的指针
+
+	DWORD number_translation;                           //平移变换的数量
+	vector_animation *translation_key;                  //各个平移变换数据
+
+	DWORD number_scaling;                               //放缩变换的数量
+	vector_animation *scaling_key;                      //各个放缩变换数据
+
+	DWORD number_rotation;                              //旋转变换的数量
+	quaternion_animation *rotation_key;                 //各个旋转变换的数据
+
+	DWORD number_transform;                             //混合变换的数量
+	matrix_animation *transform_key;                    //各个混合变换的数据	
+
+	struct animation_data *next;                        //下一个变换数据
+};
+struct animation_set
+{
+	char  animation_name[128];                          //该动画的名字
+	float animation_length;                             //动画的长度
+	DWORD number_animation;                             //动画包含的变换数量
+	animation_data *head_animition;                     //该动画的数据
+	animation_set *next;                                //指向下一个动画的指针
+};
+class model_reader_skin :public model_reader_assimp<point_skincommon> 
+{
+	skin_tree *root_skin;
+	animation_set *first_animation;
+	float time_all;
+	int bone_num;
+	XMFLOAT4X4 bone_matrix_array[100];
+	XMFLOAT4X4 offset_matrix_array[100];
+	XMFLOAT4X4 final_matrix_array[100];
+	int tree_node_num[100][100];
+	int hand_matrix_number;
+public:
+	model_reader_skin(const char* filename, const char* texture_path);
+	void update_root(skin_tree *root, XMFLOAT4X4 matrix_parent);
+	void update_mesh_offset(int i);
+	void update_mesh_offset();
+	void update_animation(float delta_time);
+	void specify_animation_time(float animation_time);
+	XMFLOAT4X4* get_bone_matrix(int i, int &num_bone);
+	XMFLOAT4X4* get_bone_matrix();
+	XMFLOAT4X4 get_hand_matrix();
+	XMFLOAT4X4* get_offset_mat() { return offset_matrix_array; };
+	skin_tree* get_bone_tree() { return root_skin; };
+	animation_set* get_animation_data() { return first_animation; };
+	float get_animation_length() { return first_animation->animation_length; };
+	int get_bone_num() { return bone_num; };
+	void release_all();
+private:
+	engine_basic::engine_fail_reason init_mesh(bool if_adj);
+	aiNode *find_skinroot(aiNode *now_node, char root_name[]);
+	HRESULT build_skintree(aiNode *now_node, skin_tree *now_root);
+	HRESULT build_animation_list();
+	bool check_ifsame(char a[], char b[]);
+	void set_matrix(XMFLOAT4X4 &out, aiMatrix4x4 *in);
+	skin_tree* find_tree(skin_tree* p, char name[]);
+	skin_tree* find_tree(skin_tree* p, int num);
+	void free_tree(skin_tree *now);
+	void update_anim_data(animation_data *now);
+	void find_anim_sted(int &st, int &ed, quaternion_animation *input, int num_animation);
+	void find_anim_sted(int &st, int &ed, vector_animation *input, int num_animation);
+	void Interpolate(quaternion_animation& pOut, quaternion_animation pStart, quaternion_animation pEnd, float pFactor);
+	void Interpolate(vector_animation& pOut, vector_animation pStart, vector_animation pEnd, float pFactor);
+	void Get_quatMatrix(XMFLOAT4X4 &resMatrix, quaternion_animation& pOut);
+	int find_min(float x1, float x2, float x3, float x4);
+};

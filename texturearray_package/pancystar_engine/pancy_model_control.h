@@ -4,7 +4,7 @@
 #include"PancyCamera.h"
 #include<map>
 using namespace std;
-
+#define MAX_BONE_NUM 100
 class model_reader_pancymesh
 {
 protected:
@@ -24,6 +24,7 @@ protected:
 template<typename T>
 class model_reader_pancymesh_build : public model_reader_pancymesh
 {
+protected:
 	string mesh_file_name;
 	string mat_file_name;
 	mesh_model<T> *model_out_test;
@@ -32,7 +33,10 @@ public:
 	engine_basic::engine_fail_reason create();
 	void draw_mesh();
 	void draw_mesh_instance(int copy_num);
-	void release();
+	virtual void release();
+protected:
+	virtual engine_basic::engine_fail_reason load_model();
+	engine_basic::engine_fail_reason load_model_mesh();
 };
 template<typename T>
 model_reader_pancymesh_build<T>::model_reader_pancymesh_build(string file_name_mesh, string file_name_mat)
@@ -42,6 +46,16 @@ model_reader_pancymesh_build<T>::model_reader_pancymesh_build(string file_name_m
 }
 template<typename T>
 engine_basic::engine_fail_reason model_reader_pancymesh_build<T>::create()
+{
+	return load_model();
+}
+template<typename T>
+engine_basic::engine_fail_reason model_reader_pancymesh_build<T>::load_model()
+{
+	return load_model_mesh();
+}
+template<typename T>
+engine_basic::engine_fail_reason model_reader_pancymesh_build<T>::load_model_mesh()
 {
 	T *data_point_need;
 	UINT *data_index_need;
@@ -100,15 +114,143 @@ void model_reader_pancymesh_build<T>::release()
 	model_out_test->release();
 	test_resource->Release();
 }
+//~~~~~~~~~~~~~~~~~~~~~~~~骨骼动画数据~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+struct skin_tree
+{
+	char bone_ID[128];
+	int bone_number;
+	XMFLOAT4X4 basic_matrix;
+	XMFLOAT4X4 animation_matrix;
+	XMFLOAT4X4 now_matrix;
+	skin_tree *brother;
+	skin_tree *son;
+	skin_tree()
+	{
+		bone_ID[0] = '\0';
+		bone_number = -1;
+		brother = NULL;
+		son = NULL;
+		XMStoreFloat4x4(&basic_matrix, XMMatrixIdentity());
+		XMStoreFloat4x4(&animation_matrix, XMMatrixIdentity());
+		XMStoreFloat4x4(&now_matrix, XMMatrixIdentity());
+	}
+};
+//变换向量
+struct vector_animation
+{
+	float time;               //帧时间
+	float main_key[3];        //帧数据
+};
+//变换四元数
+struct quaternion_animation
+{
+	float time;               //帧时间
+	float main_key[4];        //帧数据
+};
+//变换矩阵
+struct matrix_animation
+{
+	float time;               //帧时间
+	float main_key[16];       //帧数据
+};
+struct animation_data
+{
+	char bone_name[128];                                //本次变换数据对应的骨骼名称
+	skin_tree *bone_point;                              //本次变换数据对应的骨骼的指针
 
+	DWORD number_translation;                           //平移变换的数量
+	vector_animation *translation_key;                  //各个平移变换数据
+
+	DWORD number_scaling;                               //放缩变换的数量
+	vector_animation *scaling_key;                      //各个放缩变换数据
+
+	DWORD number_rotation;                              //旋转变换的数量
+	quaternion_animation *rotation_key;                 //各个旋转变换的数据
+
+	DWORD number_transform;                             //混合变换的数量
+	matrix_animation *transform_key;                    //各个混合变换的数据	
+
+	//struct animation_data *next;                        //下一个变换数据
+};
+struct animation_set
+{
+	char  animation_name[128];                          //该动画的名字
+	float animation_length;                             //动画的长度
+	DWORD number_animation;                             //动画包含的变换数量
+	std::vector<animation_data> animation_datalist;     //该动画的数据
+	//animation_data *head_animition;                     
+	//animation_set *next;                                //指向下一个动画的指针
+};
+class model_reader_PancySkinMesh : public model_reader_pancymesh_build<point_skincommon>
+{
+	string bone_file_name;
+	int now_animation_choose;
+	//输入流
+	ifstream skin_instream;
+	//骨骼信息
+	skin_tree *root_skin;
+	std::vector<animation_set> animation_list;
+	float time_all;
+	int bone_num;
+	XMFLOAT4X4 bone_matrix_array[MAX_BONE_NUM];
+	XMFLOAT4X4 offset_matrix_array[MAX_BONE_NUM];
+	XMFLOAT4X4 final_matrix_array[MAX_BONE_NUM];
+	int hand_matrix_number;
+public:
+	engine_basic::engine_fail_reason load_model();
+	engine_basic::engine_fail_reason set_animation_byname(string name);
+	engine_basic::engine_fail_reason set_animation_byindex(int index);
+	model_reader_PancySkinMesh(string file_name_mesh, string file_name_mat, string file_name_bone);
+	void update_root(skin_tree *root, XMFLOAT4X4 matrix_parent);
+	void update_animation(float delta_time);
+	void specify_animation_time(float animation_time);
+	XMFLOAT4X4* get_bone_matrix();
+	XMFLOAT4X4* get_offset_mat() { return offset_matrix_array; };
+	float get_animation_length() 
+	{
+		return animation_list[now_animation_choose].animation_length; 
+	};
+	int get_bone_num() { return bone_num; };
+	engine_basic::engine_fail_reason load_animation_list(string file_name_animation, int &anim_ID);
+	void release();
+private:
+	void free_animation();
+	//加载骨骼及动画
+	engine_basic::engine_fail_reason load_skintree(string filename);
+	void read_bone_tree(skin_tree *now);
+	
+	bool check_ifsame(char a[], char b[]);
+	//查找骨骼信息
+	skin_tree* find_tree(skin_tree* p, char name[]);
+	skin_tree* find_tree(skin_tree* p, int num);
+	void free_tree(skin_tree *now);
+	void update_anim_data();
+	//寻找动画时间对应的关键帧时间
+	void find_anim_sted(int &st, int &ed, quaternion_animation *input, int num_animation);
+	void find_anim_sted(int &st, int &ed, vector_animation *input, int num_animation);
+	//四元数与向量的插值函数
+	void Interpolate(quaternion_animation& pOut, quaternion_animation pStart, quaternion_animation pEnd, float pFactor);
+	void Interpolate(vector_animation& pOut, vector_animation pStart, vector_animation pEnd, float pFactor);
+	//四元数转矩阵
+	void Get_quatMatrix(XMFLOAT4X4 &resMatrix, quaternion_animation& pOut);
+	
+};
 
 class geometry_instance_view
 {
 	bool if_show;
+	bool if_skin;
 	int instance_ID;
+	float animation_time;
+	int now_animation_use;
+	model_reader_PancySkinMesh *skindata;
+	XMFLOAT4X4 bone_matrix[MAX_BONE_NUM];
 	XMFLOAT4X4 world_matrix;
 public:
 	geometry_instance_view(int ID_need);
+	geometry_instance_view(int ID_need, model_reader_PancySkinMesh *skin_data_in);
+	engine_basic::engine_fail_reason get_bone_matrix(XMFLOAT4X4** mat_out, int &bone_num);
+	engine_basic::engine_fail_reason Set_AnimationUse_ByID(int anim_ID);
 	XMFLOAT4X4 get_world_matrix() { return world_matrix; };
 	bool check_if_show() { return if_show; };
 	void sleep() { if_show = false; };
@@ -120,24 +262,38 @@ class geometry_resource_view
 	int resource_view_ID;
 	int ID_instance_index;//自增ID号
 	bool if_cull_front;
-	bool if_dynamic;
+	bool if_dynamic;//是否在全局反射中显示
+	bool if_skin;//是否拥有骨骼动画
+	int max_instance_num;//最大实例数量
 	model_reader_pancymesh *model_data;
 	std::unordered_map<int, geometry_instance_view> instance_list;
-	std::vector<XMFLOAT4X4> world_matrix_array;
+	std::vector<XMFLOAT4X4> world_matrix_array;//实例变换矩阵簇
+	//std::vector<XMFLOAT4X4> bone_matrix_array;//骨骼变换矩阵簇
+	
+	ID3D11ShaderResourceView *bone_matrix_buffer_SRV;
 public:
-	geometry_resource_view(model_reader_pancymesh *model_data_in,int ID_need,bool if_dynamic_in);
+	geometry_resource_view(model_reader_pancymesh *model_data_in,int ID_need,bool if_dynamic_in,bool if_skin_in);
+	engine_basic::engine_fail_reason create(int max_instance_num_in);
+	engine_basic::engine_fail_reason Load_Animation_FromFile(string file_mame, int &anim_ID);
+
 	std::vector<XMFLOAT4X4> get_matrix_list();
+	ID3D11ShaderResourceView * get_bone_matrix_list();
+	int get_bone_mat_num();
 	int add_an_instance(XMFLOAT4X4 world_matrix);
 	engine_basic::engine_fail_reason get_technique(ID3DX11EffectTechnique *teque_need) { return model_data->get_technique(teque_need); };
 	engine_basic::engine_fail_reason delete_an_instance(int instance_ID);
 	engine_basic::engine_fail_reason sleep_a_instance(int instance_ID);
+	engine_basic::engine_fail_reason set_a_instance_anim(int instance_ID, int animation_ID);
 	engine_basic::engine_fail_reason wakeup_a_instance(int instance_ID);
 	engine_basic::engine_fail_reason update(int instance_ID, XMFLOAT4X4 mat_world, float delta_time);
 	void set_cull_front() { if_cull_front = true; };
 	bool check_if_cullfront() { return if_cull_front; };
+	bool check_if_skin() { return if_skin; };
 	ID3D11ShaderResourceView *get_texture() { return model_data->get_texture(); }
 	void draw(bool if_static);
 	void release();
+private:
+	engine_basic::engine_fail_reason create_buffer();
 };
 
 template<typename T>
@@ -362,9 +518,12 @@ public:
 	}
 	//加载和删除一个模型种类
 	engine_basic::engine_fail_reason load_a_model_type(string file_name_mesh, string file_name_mat, bool if_dynamic, int &model_type_ID);
+	engine_basic::engine_fail_reason load_a_skinmodel_type(string file_name_mesh, string file_name_mat, string file_name_bone, bool if_dynamic, int &model_type_ID,int max_instance_num);
+	engine_basic::engine_fail_reason load_a_skinmodel_animation(int model_type_ID, string file_name_animation, int& animition_ID);
 	engine_basic::engine_fail_reason delete_a_model_type(int model_type_ID);
 	//添加和删除一个模型实例
 	engine_basic::engine_fail_reason add_a_model_instance(int model_type_ID, XMFLOAT4X4 world_Matrix,pancy_model_ID &model_ID);
+	engine_basic::engine_fail_reason set_a_instance_animation(pancy_model_ID model_ID,int animation_ID);
 	engine_basic::engine_fail_reason delete_a_model_instance(pancy_model_ID model_ID);
 	engine_basic::engine_fail_reason update_a_model_instance(pancy_model_ID model_ID, XMFLOAT4X4 world_Matrix, float delta_time);
 	engine_basic::engine_fail_reason sleep_a_model_instance(pancy_model_ID model_ID);

@@ -37,6 +37,17 @@ struct point_common
 	XMFLOAT4 tex;
 	XMFLOAT4 tex2;
 };
+struct point_skincommon
+{
+	XMFLOAT3 position;
+	XMFLOAT3 normal;
+	XMFLOAT3 tangent;
+	XMUINT4  tex_id;
+	XMFLOAT4 tex;
+	XMFLOAT4 tex2;
+	XMUINT4  bone_id;
+	XMFLOAT4 bone_weight;
+};
 struct point_terrain
 {
 	XMFLOAT3 position;
@@ -319,7 +330,7 @@ private:
 	engine_basic::engine_fail_reason find_point(T *vertex, UINT *index, int &num_vertex, int &num_index);
 };
 template<typename T>
-mesh_model<T>::mesh_model(T* point_input, UINT* index_input, int vertex_num_need, int index_num_need, bool if_adj) : Geometry<point_common>(if_adj)
+mesh_model<T>::mesh_model(T* point_input, UINT* index_input, int vertex_num_need, int index_num_need, bool if_adj) : Geometry<T>(if_adj)
 {
 	//point_data = point_input;
 	//index_data = index_input;

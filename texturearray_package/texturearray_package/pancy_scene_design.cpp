@@ -250,6 +250,9 @@ void texture_combine::releae()
 
 scene_test_square::scene_test_square()
 {
+	anim_read = NULL;
+	bone_read = NULL;
+	if_have_bone = false;
 	mesh_model_need = NULL;
 	now_show_part = 0;
 	model_out_test = NULL;
@@ -259,8 +262,8 @@ scene_test_square::scene_test_square()
 	if_button_down = false;
 	if_click = false;
 	if_have_model = false;
-	picture_type_width = 1024;
-	picture_type_height = 1024;
+	picture_type_width = 2048;
+	picture_type_height = 2048;
 	rec = 0.0f;
 	ballmesh_need = new mesh_ball(false, 50, 50);
 	mesh_need = new mesh_cube(false);
@@ -407,11 +410,177 @@ engine_basic::engine_fail_reason scene_test_square::init_clip_texture()
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
+void scene_test_square::save_bone_tree(skin_tree *bone_data)
+{
+	out_stream.write("*heaphead*", sizeof("*heaphead*"));
+	out_stream.write((char *)bone_data, sizeof(*bone_data));
+	if (bone_data->son != NULL)
+	{
+		save_bone_tree(bone_data->son);
+	}
+	out_stream.write("*heaptail*", sizeof("*heaptail*"));
+	if (bone_data->brother != NULL)
+	{
+		save_bone_tree(bone_data->brother);
+	}
+}
+void scene_test_square::read_bone_tree(skin_tree *now)
+{
+	char data[11];
+	in_stream.read(reinterpret_cast<char*>(now), sizeof(*now));
+	now->brother = NULL;
+	now->son = NULL;
+	in_stream.read(data, sizeof(data));
+	while (strcmp(data, "*heaphead*") == 0) 
+	{
+		//入栈符号，代表子节点
+		skin_tree *now_point = new skin_tree();
+		read_bone_tree(now_point);
+		now_point->brother = now->son;
+		now->son = now_point;
+		in_stream.read(data, sizeof(data));
+	}
+	/*
+	if (strcmp(data, "*heaphead*") == 0)
+	{
+		//入栈符号，代表子节点
+		now->son = new skin_tree();
+		read_bone_tree(now->son);
+	}
+	if (strcmp(data, "*heaptail*") == 0)
+	{
+		if (strcmp(data, "*heaphead*") == 0)
+		{
+			//出栈符号，代表兄弟节点
+			now->brother = new skin_tree();
+			read_bone_tree(now->brother);
+		}
+	}
+	*/
+
+}
+void scene_test_square::free_tree(skin_tree *now)
+{
+	if (now != NULL)
+	{
+		if (now->brother != NULL)
+		{
+			free_tree(now->brother);
+		}
+		if (now->son != NULL)
+		{
+			free_tree(now->son);
+		}
+		free(now);
+	}
+}
+void scene_test_square::save_anim_data(animation_set *anim_data) 
+{
+	int anim_set_num = 0,animdata_num = 0;
+	animation_set *now_anim = anim_data;
+	while(now_anim != NULL)
+	{
+		anim_set_num++;
+		out_stream.write(now_anim->animation_name, sizeof(now_anim->animation_name));
+		out_stream.write(reinterpret_cast<char*>(&now_anim->animation_length), sizeof(now_anim->animation_length));
+		out_stream.write(reinterpret_cast<char*>(&now_anim->number_animation), sizeof(now_anim->number_animation));
+		animation_data *now_animdata = now_anim->head_animition;
+		while (now_animdata != NULL)
+		{
+			animdata_num++;
+			//骨骼名称
+			out_stream.write(now_animdata->bone_name, sizeof(now_animdata->bone_name));
+			//旋转四元数
+			out_stream.write(reinterpret_cast<char*>(&now_animdata->number_rotation), sizeof(now_animdata->number_rotation));
+			if (now_animdata->number_rotation != 0) 
+			{
+				out_stream.write(reinterpret_cast<char*>(now_animdata->rotation_key), now_animdata->number_rotation * sizeof(quaternion_animation));
+			}
+			//缩放向量
+			out_stream.write(reinterpret_cast<char*>(&now_animdata->number_scaling), sizeof(now_animdata->number_scaling));
+			if (now_animdata->number_scaling != 0)
+			{
+				out_stream.write(reinterpret_cast<char*>(now_animdata->scaling_key), now_animdata->number_scaling * sizeof(vector_animation));
+			}
+			//平移向量
+			out_stream.write(reinterpret_cast<char*>(&now_animdata->number_translation), sizeof(now_animdata->number_translation));
+			if (now_animdata->number_translation != 0)
+			{
+				out_stream.write(reinterpret_cast<char*>(now_animdata->translation_key), now_animdata->number_translation * sizeof(vector_animation));
+			}
+			/*
+			//其他变换矩阵
+			out_stream.write(reinterpret_cast<char*>(&now_animdata->number_transform), sizeof(now_animdata->number_transform));
+			if (now_animdata->number_transform != 0)
+			{
+				out_stream.write(reinterpret_cast<char*>(&now_animdata->transform_key), now_animdata->number_transform * sizeof(matrix_animation));
+			}
+			*/
+			now_animdata = now_animdata->next;
+		}
+		now_anim = now_anim->next;
+	}
+}
+void scene_test_square::read_anim_data() 
+{
+	anim_read = new animation_set();
+	animation_set *now_anim = anim_read;
+	if (now_anim != NULL)
+	{
+		in_stream.read(now_anim->animation_name, sizeof(now_anim->animation_name));
+		in_stream.read(reinterpret_cast<char*>(&now_anim->animation_length), sizeof(now_anim->animation_length));
+		in_stream.read(reinterpret_cast<char*>(&now_anim->number_animation), sizeof(now_anim->number_animation));
+		now_anim->head_animition = new animation_data();
+		animation_data *now_animdata = now_anim->head_animition;
+		for (int i = 0; i < now_anim->number_animation;++i)
+		{
+			//骨骼名称
+			in_stream.read(now_animdata->bone_name, sizeof(now_animdata->bone_name));
+			//旋转四元数
+			in_stream.read(reinterpret_cast<char*>(&now_animdata->number_rotation), sizeof(now_animdata->number_rotation));
+			if (now_animdata->number_rotation != 0)
+			{
+				now_animdata->rotation_key = new quaternion_animation[now_animdata->number_rotation];
+				in_stream.read(reinterpret_cast<char*>(now_animdata->rotation_key), now_animdata->number_rotation * sizeof(quaternion_animation));
+			}
+			//缩放向量
+			in_stream.read(reinterpret_cast<char*>(&now_animdata->number_scaling), sizeof(now_animdata->number_scaling));
+			if (now_animdata->number_scaling != 0)
+			{
+				now_animdata->scaling_key = new vector_animation[now_animdata->number_scaling];
+				in_stream.read(reinterpret_cast<char*>(now_animdata->scaling_key), now_animdata->number_scaling * sizeof(vector_animation));
+			}
+			//平移向量
+			in_stream.read(reinterpret_cast<char*>(&now_animdata->number_translation), sizeof(now_animdata->number_translation));
+			if (now_animdata->number_translation != 0)
+			{
+				now_animdata->translation_key = new vector_animation[now_animdata->number_translation];
+				in_stream.read(reinterpret_cast<char*>(now_animdata->translation_key), now_animdata->number_translation * sizeof(vector_animation));
+			}
+			if (i != now_anim->number_animation - 1) 
+			{
+				now_animdata->next = new animation_data();
+				now_animdata = now_animdata->next;
+			}
+
+		}
+	}
+}
 
 engine_basic::engine_fail_reason scene_test_square::load_model(string filename, string tex_path)
 {
-	model_reader_assimp<point_common> *rec = new model_reader_assimp<point_common>(filename.c_str(), tex_path.c_str());
+	assimp_basic *rec = new model_reader_assimp<point_common>(filename.c_str(), tex_path.c_str());
 	engine_basic::engine_fail_reason check_error = rec->model_create(false, 0, NULL);
+	if_have_bone = false;
+	if (rec->check_if_anim())
+	{
+		if_have_bone = true;
+		rec->release();
+		rec = new model_reader_skin(filename.c_str(), tex_path.c_str());
+		check_error = rec->model_create(false, 0, NULL);
+		model_reader_skin*rec1 = dynamic_cast<model_reader_skin*>(rec);
+		rec1->update_mesh_offset();
+	}
 	if (!check_error.check_if_failed())
 	{
 		return check_error;
@@ -581,7 +750,7 @@ engine_basic::engine_fail_reason scene_test_square::export_model(string filepath
 			height_list[rec_texture_packmap.size() - 1] = desc_tex.Height;
 			resource_rec->Release();
 		}
-		
+
 		//粗糙度贴图
 		std::pair<string, ID3D11ShaderResourceView*> data_need_roughness(pbr_list[i].roughness_name, pbr_list[i].roughness);
 		check_iferror = rec_texture_packmap.insert(data_need_roughness);
@@ -596,9 +765,9 @@ engine_basic::engine_fail_reason scene_test_square::export_model(string filepath
 			height_list[rec_texture_packmap.size() - 1] = desc_tex.Height;
 			resource_rec->Release();
 		}
-		
+
 	}
-	auto texture_deal = new texture_combine(rec_texture_packmap.size(), width_list, height_list, 1024, 1024);
+	auto texture_deal = new texture_combine(rec_texture_packmap.size(), width_list, height_list, picture_type_width, picture_type_height);
 	engine_basic::engine_fail_reason error_message = texture_deal->create();
 	if (!error_message.check_if_failed())
 	{
@@ -606,29 +775,96 @@ engine_basic::engine_fail_reason scene_test_square::export_model(string filepath
 	}
 
 	//转换顶点数据
-	mesh_model_need->get_model_pack_num(vertex_num, index_num);
-	data_point_need = new point_common[vertex_num];
-	data_index_need = new UINT[index_num];
-	mesh_model_need->get_model_pack_data(data_point_need, data_index_need);
-	//ifstream in_stream;
-	out_stream.open(filename + ".pancymesh", ios::binary);
-	out_stream.write((char *)&vertex_num, sizeof(vertex_num));
-	out_stream.write((char *)&index_num, sizeof(index_num));
-	int texture_num = texture_deal->get_texture_num();
-	out_stream.write((char *)&texture_num, sizeof(texture_num));
-	change_model_texcoord(texture_deal, data_point_need, vertex_num);
-	for (int i = 0; i < index_num; ++i)
+	if (!if_have_bone)
 	{
-		out_stream.write((char *)&data_index_need[i], sizeof(data_index_need[i]));
+		model_reader_assimp<point_common> *rec_data = dynamic_cast<model_reader_assimp<point_common>*>(mesh_model_need);
+		rec_data->get_model_pack_num(vertex_num, index_num);
+		data_point_need = new point_common[vertex_num];
+		data_index_need = new UINT[index_num];
+		rec_data->get_model_pack_data(data_point_need, data_index_need);
+		//ifstream in_stream;
+		out_stream.open(filename + ".pancymesh", ios::binary);
+		out_stream.write((char *)&vertex_num, sizeof(vertex_num));
+		out_stream.write((char *)&index_num, sizeof(index_num));
+		int texture_num = texture_deal->get_texture_num();
+		out_stream.write((char *)&texture_num, sizeof(texture_num));
+		change_model_texcoord(texture_deal, data_point_need, vertex_num);
+		for (int i = 0; i < index_num; ++i)
+		{
+			out_stream.write((char *)&data_index_need[i], sizeof(data_index_need[i]));
+		}
+		out_stream.close();
+		model_out_test = new mesh_model<point_common>(data_point_need, data_index_need, vertex_num, index_num, false);
+		error_message = model_out_test->create_object();
+		if (!error_message.check_if_failed())
+		{
+			return error_message;
+		}
 	}
-	out_stream.close();
+	else
+	{
+		model_reader_skin *rec_data = dynamic_cast<model_reader_skin*>(mesh_model_need);
+		rec_data->get_model_pack_num(vertex_num, index_num);
+		point_skincommon *data_point = new point_skincommon[vertex_num];
+		data_index_need = new UINT[index_num];
+		rec_data->get_model_pack_data(data_point, data_index_need);
+		//ifstream in_stream;
+		out_stream.open(filename + ".pancyskinmesh", ios::binary);
+		out_stream.write((char *)&vertex_num, sizeof(vertex_num));
+		out_stream.write((char *)&index_num, sizeof(index_num));
+		int texture_num = texture_deal->get_texture_num();
+		out_stream.write((char *)&texture_num, sizeof(texture_num));
+		change_model_texcoord(texture_deal, data_point, vertex_num);
+		for (int i = 0; i < index_num; ++i)
+		{
+			out_stream.write((char *)&data_index_need[i], sizeof(data_index_need[i]));
+		}
+		//~~~~~~~~~~~~~~存储骨骼信息~~~~~~~~~~~~~~~~~~~~~~
+		out_stream.close();
+		out_stream.open(filename + ".pancyskin", ios::binary);
 
-	model_out_test = new mesh_model<point_common>(data_point_need, data_index_need, vertex_num, index_num, false);
-	error_message = model_out_test->create_object();
-	if (!error_message.check_if_failed())
-	{
-		return error_message;
+		//偏移矩阵
+		int bone_num_rec = rec_data->get_bone_num();
+		out_stream.write((char *)(&bone_num_rec), sizeof(int));
+		XMFLOAT4X4* offset_mat = rec_data->get_offset_mat();
+		out_stream.write((char *)(offset_mat), bone_num_rec * sizeof(XMFLOAT4X4));
+
+		//骨骼树
+		save_bone_tree(rec_data->get_bone_tree());
+		out_stream.close();
+		//~~~~~~~~~~~~~~存储动画信息~~~~~~~~~~~~~~~~~~~~~~
+		out_stream.open(filename + ".pancyanimation", ios::binary);
+		animation_set *anim_data = rec_data->get_animation_data();
+		save_anim_data(anim_data);
+		out_stream.close();
+		//~~~~~~~~~~~~~读取并检验骨骼信息~~~~~~~~~~~~~~~~~
+		in_stream.open(filename + ".pancyskin", ios::binary);
+		free_tree(bone_read);
+		bone_read = NULL;
+		//读取偏移矩阵
+		int bone_num_need;
+		in_stream.read(reinterpret_cast<char*>(&bone_num_need), sizeof(bone_num_need));
+		in_stream.read(reinterpret_cast<char*>(offset_matrix), bone_num_need*sizeof(XMFLOAT4X4));
+		//先读取第一个入栈符
+		char data[11];
+		in_stream.read(reinterpret_cast<char*>(data), sizeof(data));
+		bone_read = new skin_tree();
+		read_bone_tree(bone_read);
+		in_stream.close();
+		//~~~~~~~~~~~~~读取并检验动画信息~~~~~~~~~~~~~~~~~
+		in_stream.open(filename + ".pancyanimation", ios::binary);
+		read_anim_data();
+		in_stream.close();
+		/*
+		model_out_test = new mesh_model<point_skincommon>(data_point, data_index_need, vertex_num, index_num, false);
+		error_message = model_out_test->create_object();
+		if (!error_message.check_if_failed())
+		{
+			return error_message;
+		}
+		*/
 	}
+
 	//存储纹理数据
 	show_square(texture_deal);
 	auto rendertarget = texture_deal->get_SRV_texarray();
@@ -1142,6 +1378,219 @@ void scene_test_square::change_model_texcoord(texture_combine *texture_deal, poi
 		*/
 	}
 }
+void scene_test_square::change_model_texcoord(texture_combine *texture_deal, point_skincommon *vertex_need, int point_num)
+{
+	string lastname;
+	texture_rebuild_data last_data;
+
+	string last_normal_name;
+	texture_rebuild_data last_normal_data;
+
+	string last_metallic_name;
+	texture_rebuild_data last_metallic_data;
+
+	string last_roughness_name;
+	texture_rebuild_data last_roughness_data;
+
+
+	texture_rebuild_data texture_message;
+	//freopen("testerror.dat","wb",stdout);
+	for (int i = 0; i < point_num; ++i)
+	{
+		//暂时存储顶点的原始纹理坐标
+		//纹理坐标归一化
+		while (vertex_need[i].tex.x < 0.0f)
+		{
+			vertex_need[i].tex.x += 1.0f;
+		}
+		while (vertex_need[i].tex.x > 1.0f)
+		{
+			vertex_need[i].tex.x -= 1.0f;
+		}
+		while (vertex_need[i].tex.y < 0.0f)
+		{
+			vertex_need[i].tex.y += 1.0f;
+		}
+		while (vertex_need[i].tex.y > 1.0f)
+		{
+			vertex_need[i].tex.y -= 1.0f;
+		}
+
+		float tex_coord_x_rec = vertex_need[i].tex.x;
+		float tex_coord_y_rec = vertex_need[i].tex.y;
+		//先获取顶点对应的纹理名
+		int id_pre_need = vertex_need[i].tex_id.x;
+		material_list rec_need;
+		mesh_model_need->get_texture(&rec_need, id_pre_need);
+
+		//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~更新漫反射纹理坐标~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+		string name_texture = rec_need.texture_diffuse;
+
+		if (name_texture == lastname)
+		{
+			texture_message = last_data;
+		}
+		else
+		{
+			//查找该纹理名对应的纹理ID
+			int index_check;
+			for (int i = 0; i < picture_namelist.size(); ++i)
+			{
+				if (picture_namelist[i] == name_texture)
+				{
+					index_check = i;
+					lastname = name_texture;
+					break;
+				}
+			}
+			//寻找其位置及ID
+			texture_message = texture_deal->get_diffusetexture_data_byID(index_check);
+			last_data = texture_message;
+		}
+		vertex_need[i].tex_id.x = texture_message.now_index;
+		//更新纹理坐标位置
+		vertex_need[i].tex.x = tex_coord_x_rec * static_cast<float>(texture_message.pic_width) / static_cast<float>(picture_type_width);
+		vertex_need[i].tex.y = tex_coord_y_rec * static_cast<float>(texture_message.pic_height) / static_cast<float>(picture_type_height);
+
+		vertex_need[i].tex.x += static_cast<float>(texture_message.place_data.x_st) / static_cast<float>(picture_type_width);
+		vertex_need[i].tex.y += static_cast<float>(texture_message.place_data.y_st) / static_cast<float>(picture_type_height);
+		auto texture_message1 = texture_message;
+		//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~更新法线贴图纹理坐标~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+		string name_normal = rec_need.texture_normal;
+		if (rec_need.texture_normal_resource == NULL)
+		{
+			vertex_need[i].tex_id.y = -1;
+		}
+		else
+		{
+			if (name_normal == last_normal_name)
+			{
+				texture_message = last_normal_data;
+			}
+			else
+			{
+				//查找该纹理名对应的纹理ID
+				int index_check;
+				for (int i = 0; i < picture_namelist.size(); ++i)
+				{
+					if (picture_namelist[i] == name_normal)
+					{
+						index_check = i;
+						last_normal_name = name_normal;
+						break;
+					}
+				}
+				//寻找其位置及ID
+				texture_message = texture_deal->get_diffusetexture_data_byID(index_check);
+				last_normal_data = texture_message;
+			}
+			vertex_need[i].tex_id.y = texture_message.now_index;
+			//更新纹理坐标位置
+			vertex_need[i].tex.z = tex_coord_x_rec * static_cast<float>(texture_message.pic_width) / static_cast<float>(picture_type_width);
+			vertex_need[i].tex.w = tex_coord_y_rec * static_cast<float>(texture_message.pic_height) / static_cast<float>(picture_type_height);
+			vertex_need[i].tex.z += static_cast<float>(texture_message.place_data.x_st) / static_cast<float>(picture_type_width);
+			vertex_need[i].tex.w += static_cast<float>(texture_message.place_data.y_st) / static_cast<float>(picture_type_height);
+		}
+		//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~更新金属度贴图纹理坐标~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+		string name_metallic = pbr_list[id_pre_need].metallic_name;
+
+		if (name_metallic == last_metallic_name)
+		{
+			texture_message = last_metallic_data;
+		}
+		else
+		{
+			//查找该纹理名对应的纹理ID
+			int index_check;
+			for (int i = 0; i < picture_namelist.size(); ++i)
+			{
+				if (picture_namelist[i] == name_metallic)
+				{
+					index_check = i;
+					last_metallic_name = name_metallic;
+					break;
+				}
+			}
+			//寻找其位置及ID
+			texture_message = texture_deal->get_diffusetexture_data_byID(index_check);
+			last_metallic_data = texture_message;
+		}
+		vertex_need[i].tex_id.z = texture_message.now_index;
+		//更新纹理坐标位置
+		vertex_need[i].tex2.x = tex_coord_x_rec * static_cast<float>(texture_message.pic_width) / static_cast<float>(picture_type_width);
+		vertex_need[i].tex2.y = tex_coord_y_rec * static_cast<float>(texture_message.pic_height) / static_cast<float>(picture_type_height);
+		vertex_need[i].tex2.x += static_cast<float>(texture_message.place_data.x_st) / static_cast<float>(picture_type_width);
+		vertex_need[i].tex2.y += static_cast<float>(texture_message.place_data.y_st) / static_cast<float>(picture_type_height);
+		//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~更新粗糙度贴图纹理坐标~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+		string name_roughness = pbr_list[id_pre_need].roughness_name;
+		if (name_roughness == last_roughness_name)
+		{
+			texture_message = last_roughness_data;
+		}
+		else
+		{
+			//查找该纹理名对应的纹理ID
+			int index_check;
+			for (int i = 0; i < picture_namelist.size(); ++i)
+			{
+				if (picture_namelist[i] == name_roughness)
+				{
+					index_check = i;
+					last_roughness_name = name_roughness;
+					break;
+				}
+			}
+			//寻找其位置及ID
+			texture_message = texture_deal->get_diffusetexture_data_byID(index_check);
+			last_roughness_data = texture_message;
+		}
+		vertex_need[i].tex_id.w = texture_message.now_index;
+		//更新纹理坐标位置
+		vertex_need[i].tex2.z = tex_coord_x_rec * static_cast<float>(texture_message.pic_width) / static_cast<float>(picture_type_width);
+		vertex_need[i].tex2.w = tex_coord_y_rec * static_cast<float>(texture_message.pic_height) / static_cast<float>(picture_type_height);
+		vertex_need[i].tex2.z += static_cast<float>(texture_message.place_data.x_st) / static_cast<float>(picture_type_width);
+		vertex_need[i].tex2.w += static_cast<float>(texture_message.place_data.y_st) / static_cast<float>(picture_type_height);
+
+
+		out_stream.write((char *)&vertex_need[i], sizeof(vertex_need[i]));
+		/*
+		out_stream.write((char *)&vertex_need[i].position.x, sizeof(vertex_need[i].position.x));
+		out_stream.write((char *)&vertex_need[i].position.y, sizeof(vertex_need[i].position.y));
+		out_stream.write((char *)&vertex_need[i].position.z, sizeof(vertex_need[i].position.z));
+
+		out_stream.write((char *)&vertex_need[i].normal.x, sizeof(vertex_need[i].normal.x));
+		out_stream.write((char *)&vertex_need[i].normal.y, sizeof(vertex_need[i].normal.y));
+		out_stream.write((char *)&vertex_need[i].normal.z, sizeof(vertex_need[i].normal.z));
+
+		out_stream.write((char *)&vertex_need[i].tangent.x, sizeof(vertex_need[i].tangent.x));
+		out_stream.write((char *)&vertex_need[i].tangent.y, sizeof(vertex_need[i].tangent.y));
+		out_stream.write((char *)&vertex_need[i].tangent.z, sizeof(vertex_need[i].tangent.z));
+
+		out_stream.write((char *)&vertex_need[i].tex_id.x, sizeof(vertex_need[i].tex_id.x));
+		out_stream.write((char *)&vertex_need[i].tex_id.y, sizeof(vertex_need[i].tex_id.y));
+		out_stream.write((char *)&vertex_need[i].tex_id.z, sizeof(vertex_need[i].tex_id.z));
+		out_stream.write((char *)&vertex_need[i].tex_id.w, sizeof(vertex_need[i].tex_id.z));
+
+		out_stream.write((char *)&vertex_need[i].tex.x, sizeof(vertex_need[i].tex.x));
+		out_stream.write((char *)&vertex_need[i].tex.y, sizeof(vertex_need[i].tex.y));
+		out_stream.write((char *)&vertex_need[i].tex.z, sizeof(vertex_need[i].tex.z));
+		out_stream.write((char *)&vertex_need[i].tex.w, sizeof(vertex_need[i].tex.z));
+
+		out_stream.write((char *)&vertex_need[i].tex2.x, sizeof(vertex_need[i].tex2.x));
+		out_stream.write((char *)&vertex_need[i].tex2.y, sizeof(vertex_need[i].tex2.y));
+		out_stream.write((char *)&vertex_need[i].tex2.z, sizeof(vertex_need[i].tex2.z));
+		out_stream.write((char *)&vertex_need[i].tex2.w, sizeof(vertex_need[i].tex2.z));
+		*/
+		/*
+		printf("%.4f %.4f %.4f ", vertex_need[i].position.x, vertex_need[i].position.y, vertex_need[i].position.z);
+		printf("%.4f %.4f %.4f ", vertex_need[i].normal.x, vertex_need[i].normal.y, vertex_need[i].normal.z);
+		printf("%.4f %.4f %.4f ", vertex_need[i].tangent.x, vertex_need[i].tangent.y, vertex_need[i].tangent.z);
+		printf("%d %d %d %d ", vertex_need[i].tex_id.x, vertex_need[i].tex_id.y, vertex_need[i].tex_id.z, vertex_need[i].tex_id.w);
+		printf("%.4f %.4f %.4f %.4f ", vertex_need[i].tex.x, vertex_need[i].tex.y, vertex_need[i].tex.z, vertex_need[i].tex.w);
+		printf("%.4f %.4f %.4f %.4f ", vertex_need[i].tex2.x, vertex_need[i].tex2.y, vertex_need[i].tex2.z, vertex_need[i].tex2.w);
+		*/
+	}
+}
 void scene_test_square::display()
 {
 	//draw_brdfdata();
@@ -1231,9 +1680,37 @@ void scene_test_square::show_model()
 		shader_need->set_tex_metallic(pbr_list[i].metallic);
 		shader_need->set_tex_roughness(pbr_list[i].roughness);
 
-		shader_need->get_technique(&teque_need, "light_tech_pbr");
-		mesh_model_need->get_technique(teque_need);
-		mesh_model_need->draw_part(i);
+		if (!if_have_bone)
+		{
+			shader_need->get_technique(&teque_need, "light_tech_pbr");
+			mesh_model_need->get_technique(teque_need);
+			mesh_model_need->draw_part(i);
+		}
+		else
+		{
+			auto skin_ptr = dynamic_cast<model_reader_skin*>(mesh_model_need);
+			skin_ptr->update_animation(0.002f);
+
+			shader_need->set_bone_matrix(skin_ptr->get_bone_matrix(), skin_ptr->get_bone_num());
+			//设置顶点声明
+			D3D11_INPUT_ELEMENT_DESC rec_inputdesc[] =
+			{
+				//语义名    语义索引      数据格式          输入槽 起始地址     输入槽的格式 
+				{ "POSITION",0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,0  ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+				{ "NORMAL"  ,0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,12 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+				{ "TANGENT" ,0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,24 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+				{ "TEXINDICES" ,0  ,DXGI_FORMAT_R32G32B32A32_UINT  ,0    ,36 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+				{ "TEXDIFFNORM",0  ,DXGI_FORMAT_R32G32B32A32_FLOAT      ,0    ,52 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+				{ "TEXOTHER",0  ,DXGI_FORMAT_R32G32B32A32_FLOAT      ,0    ,68 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+				{ "BONEINDICES" ,0  ,DXGI_FORMAT_R32G32B32A32_UINT  ,0    ,84 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+				{ "WEIGHTS"     ,0  ,DXGI_FORMAT_R32G32B32A32_FLOAT ,0    ,100 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+			};
+			UINT num_member = sizeof(rec_inputdesc) / sizeof(D3D11_INPUT_ELEMENT_DESC);
+			shader_need->get_technique(rec_inputdesc, num_member, &teque_need, "light_tech_pbr_withbone");
+			mesh_model_need->get_technique(teque_need);
+			mesh_model_need->draw_part(i);
+		}
+
 	}
 }
 void scene_test_square::show_model_single()

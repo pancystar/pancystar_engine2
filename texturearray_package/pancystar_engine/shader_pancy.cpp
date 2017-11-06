@@ -1087,6 +1087,8 @@ engine_basic::engine_fail_reason light_defered_lightbuffer::set_tex_mask(ID3D11S
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
+
+
 //矩阵设置
 engine_basic::engine_fail_reason light_defered_lightbuffer::set_view_from_clip(XMFLOAT4X4 view_from_clip_in)
 {
@@ -1193,6 +1195,7 @@ void light_defered_lightbuffer::init_handle()
 	SpecRoughnessMap = fx_need->GetVariableByName("gSpecRoughnessMap")->AsShaderResource();  //shader中的纹理资源句柄
 	DepthMap = fx_need->GetVariableByName("gdepth_map")->AsShaderResource();  //shader中的纹理资源句柄
 	texture_shadow = fx_need->GetVariableByName("texture_shadow")->AsShaderResource();  //shader中的纹理资源句柄
+	
 }
 void light_defered_lightbuffer::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member)
 {
@@ -1281,6 +1284,17 @@ engine_basic::engine_fail_reason light_defered_draw::set_trans_viewproj(XMFLOAT4
 	if (!check_error.check_if_failed())
 	{
 		return check_error;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason light_defered_draw::set_bone_matrix(const XMFLOAT4X4* M, int cnt)
+{
+	HRESULT hr = BoneTransforms->SetMatrixArray(reinterpret_cast<const float*>(M), 0, cnt);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "deffered light draw error when setting bone_matrix");
+		return error_message;
 	}
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
@@ -1397,7 +1411,29 @@ engine_basic::engine_fail_reason light_defered_draw::set_IBL_tex(ID3D11ShaderRes
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
-
+engine_basic::engine_fail_reason light_defered_draw::set_bonemat_buffer(ID3D11ShaderResourceView *buffer_in)
+{
+	HRESULT hr;
+	hr = bone_matrix_buffer->SetResource(buffer_in);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set bone_matrix_buffer error in deffered drawing");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason light_defered_draw::set_bone_num(UINT bone_num)
+{
+	HRESULT hr = bone_num_handle->SetRawValue((void*)&bone_num, 0, sizeof(bone_num));
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason error_message(hr, "deffered light draw error when setting bone_num_handle");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
 void light_defered_draw::release()
 {
 	release_basic();
@@ -1440,7 +1476,11 @@ void light_defered_draw::init_handle()
 	ssao_matrix_handle = fx_need->GetVariableByName("ssao_matrix")->AsMatrix();
 	world_matrix_array_handle = fx_need->GetVariableByName("world_matrix_array")->AsMatrix();
 	viewproj_matrix_handle = fx_need->GetVariableByName("view_proj_matrix")->AsMatrix();
+	BoneTransforms = fx_need->GetVariableByName("gBoneTransforms")->AsMatrix();
 	material_need = fx_need->GetVariableByName("material_need");
+
+	bone_matrix_buffer = fx_need->GetVariableByName("input_buffer")->AsShaderResource();
+	bone_num_handle = fx_need->GetVariableByName("bone_num");
 }
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~记录cubemap方向到alpha像素~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 shader_reflect_save_depth::shader_reflect_save_depth(LPCWSTR filename) :shader_basic(filename)

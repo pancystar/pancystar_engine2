@@ -4,6 +4,8 @@ float4x4         world_matrix;     //世界变换
 float4x4         normal_matrix;    //法线变换
 float4x4         final_matrix;     //总变换
 
+float4x4 gBoneTransforms[100];//骨骼变换矩阵
+
 Texture2D        texture_diffuse;      //漫反射贴图
 Texture2D        texture_specular;     //镜面反射贴图
 Texture2D        texturet_normal;      //法线贴图
@@ -24,6 +26,17 @@ SamplerState samTex_liner
 	AddressV = Wrap;
 };
 
+struct Vertex_IN_bone
+{
+	float3	pos 	: POSITION;     //顶点位置
+	float3	normal 	: NORMAL;       //顶点法向量
+	float3	tangent : TANGENT;      //顶点切向量
+	uint4   texid   : TEXINDICES;   //纹理索引
+	float4  tex1    : TEXDIFFNORM;  //顶点纹理坐标(漫反射及法线纹理)
+	float4  tex2    : TEXOTHER;     //顶点纹理坐标(其它纹理)
+	uint4   bone_id     : BONEINDICES;  //骨骼ID号
+	float4  bone_weight : WEIGHTS;      //骨骼权重
+};
 struct Vertex_IN
 {
 	float3	pos 	: POSITION;     //顶点位置
@@ -63,8 +76,8 @@ void count_pbr_reflect(
 	//float diffuse_angle = dot(light_dir_in, normal); //漫反射夹角
 	float view_angle = dot(direction_view, normal);//视线夹角
 	float cos_vh = dot(direction_view, h_vec);
-	float4 fresnel = F0 + (float4(1.0f,1.0f,1.0f,1.0f) - F0)*(1.0f - pow(cos_vh, 5.0f));//菲涅尔项;
-	
+	float4 fresnel = F0 + (float4(1.0f, 1.0f, 1.0f, 1.0f) - F0)*(1.0f - pow(cos_vh, 5.0f));//菲涅尔项;
+
 	//float4 fresnel = F0 + (float4(1.0f, 1.0f, 1.0f, 1.0f) - F0) * pow(2, ((-5.55473*cos_vh - 6.98316)*cos_vh));
 	//NDF法线扰乱项
 	float alpha = tex_roughness * tex_roughness;
@@ -73,13 +86,13 @@ void count_pbr_reflect(
 	float divide_ndf2 = pi * divide_ndf1 *divide_ndf1;
 	float ndf = (alpha*alpha) / divide_ndf2;
 	//GGX遮挡项
-	
+
 	float ggx_k = (tex_roughness + 1.0f) * (tex_roughness + 1.0f) / 8.0f;
 	float ggx_v = view_angle / (view_angle*(1 - ggx_k) + ggx_k);
 	float ggx_l = diffuse_angle / (diffuse_angle*(1 - ggx_k) + ggx_k);
 	float ggx = ggx_v * ggx_l;
 	float3 v = reflect(light_dir_in, normal);
-	float blin_phong = pow(max(dot(v, direction_view), 0.0f),10);
+	float blin_phong = pow(max(dot(v, direction_view), 0.0f), 10);
 	//最终的镜面反射项
 	specular_out = (fresnel * ndf * ggx) / (4 * view_angle * diffuse_angle);
 	//specular_out = fresnel * ndf *blin_phong / (4 * view_angle * diffuse_angle);
@@ -100,10 +113,10 @@ void compute_dirlight_2(
 
 	float4 SpecularColor = lerp(0.04, tex_albedo_in, tex_matallic);
 	//float4 SpecularColor = float4(tex_matallic, tex_matallic, tex_matallic,1.0f);
-	
-	float NoV = saturate(dot(normal, direction_view)-0.01);
-	float4 EnvBRDF = texture_rdfluv.Sample(samTex_liner,float2(tex_roughness,NoV));
-	
+
+	float NoV = saturate(dot(normal, direction_view) - 0.01);
+	float4 EnvBRDF = texture_rdfluv.Sample(samTex_liner, float2(tex_roughness, NoV));
+
 	//texture_rdfluv
 	float diffuse_angle = dot(-light_dir.dir, normal); //漫反射夹角
 	count_pbr_reflect(tex_albedo_in, tex_matallic, tex_roughness, -light_dir.dir, normal, direction_view, diffuse_angle, mat_diffuse, mat_specular_pre);
@@ -114,12 +127,12 @@ void compute_dirlight_2(
 	uint index = tex_roughness * 6;
 	float4 enviornment_color = texture_environment.SampleLevel(samTex_liner, map_direct, index);
 
-	ambient =0 ;
+	ambient = 0;
 	//ambient *= 0.5f;
 	//ambient = enviornment_color * tex_albedo_in * (EnvBRDF.x + EnvBRDF.y);         //环境光
 	float4 ambient_diffuse = 0.8f*(1.0f - tex_matallic) * tex_albedo_in;
 	//float4 ambient_diffuse = enviornment_color*0.3f * tex_albedo_in;
-	float4 ambient_specular = (0.6f*enviornment_color+ 0.4f*tex_albedo_in) * (SpecularColor * EnvBRDF.x + EnvBRDF.y);
+	float4 ambient_specular = (0.6f*enviornment_color + 0.4f*tex_albedo_in) * (SpecularColor * EnvBRDF.x + EnvBRDF.y);
 	ambient = (ambient_diffuse + ambient_specular);
 	if (diffuse_angle > 0.0f)
 	{
@@ -147,6 +160,34 @@ VertexOut VS(Vertex_IN vin)
 	vout.position_bef = mul(float4(vin.pos, 1.0f), world_matrix).xyz;
 	return vout;
 }
+VertexOut VS_bone(Vertex_IN_bone vin)
+{
+	VertexOut vout;
+	float3 posL = float3(0.0f, 0.0f, 0.0f);
+	float3 normalL = float3(0.0f, 0.0f, 0.0f);
+	float3 tangentL = float3(0.0f, 0.0f, 0.0f);
+	float weights[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	weights[0] = vin.bone_weight.x;
+	weights[1] = vin.bone_weight.y;
+	weights[2] = vin.bone_weight.z;
+	weights[3] = vin.bone_weight.w;
+	for (int i = 0; i < 4; ++i)
+	{
+		// 骨骼变换一般不存在不等缩放的情况，所以可以不做法线的逆转置操作
+		posL += weights[i] * mul(float4(vin.pos, 1.0f), gBoneTransforms[vin.bone_id[i]]).xyz;
+		normalL += weights[i] * mul(vin.normal, (float3x3)gBoneTransforms[vin.bone_id[i]]);
+		tangentL += weights[i] * mul(vin.tangent.xyz, (float3x3)gBoneTransforms[vin.bone_id[i]]);
+	}
+	
+	vout.position = mul(float4(posL, 1.0f), final_matrix);
+	vout.normal = mul(float4(normalL, 0.0f), normal_matrix).xyz;
+	vout.tangent = mul(float4(tangentL, 0.0f), normal_matrix).xyz;
+	vout.texid = vin.texid;
+	vout.tex1 = vin.tex1;
+	vout.tex2 = vin.tex2;
+	vout.position_bef = mul(float4(vin.pos, 1.0f), world_matrix).xyz;
+	return vout;
+}
 float4 PS_pbr(VertexOut pin) :SV_TARGET
 {
 	float4 A,D,S;
@@ -156,15 +197,15 @@ float4 PS_pbr(VertexOut pin) :SV_TARGET
 	light_dir.specular = float4(1.5f, 1.5f, 1.5f, 1.0f);
 	light_dir.dir = normalize(float3(1.0f,0.0f, 0.0f));
 
-	float4 tex_albedo =   texture_diffuse.Sample(samTex_liner, pin.tex1.xy);
-	float tex_metallic =  texture_metallic.Sample(samTex_liner, pin.tex1.xy).r;
+	float4 tex_albedo = texture_diffuse.Sample(samTex_liner, pin.tex1.xy);
+	float tex_metallic = texture_metallic.Sample(samTex_liner, pin.tex1.xy).r;
 	float tex_roughness = texturet_roughness.Sample(samTex_liner, pin.tex1.xy).r;
 
 	float3 normal_need = normalize(pin.normal);
 	float3 view_dir = normalize(position_view - pin.position_bef);
 
 	compute_dirlight_2(tex_albedo, tex_metallic, tex_roughness, light_dir, normal_need, view_dir,A,D,S);
-	float4 final_color =A + D + S;
+	float4 final_color = A + D + S;
 
 	/*
 	light_dir.ambient = light_dir.ambient;
@@ -173,7 +214,7 @@ float4 PS_pbr(VertexOut pin) :SV_TARGET
 	light_dir.dir = normalize(float3(-1.0f, 0.0f, 0.0f));
 	compute_dirlight_2(tex_albedo, tex_metallic, tex_roughness, light_dir, normal_need, view_dir, A, D, S);
 	final_color += A + D + S;
-	
+
 	light_dir.dir = normalize(float3(0.0f, 0.0f, 1.0f));
 	compute_dirlight_2(tex_albedo, tex_metallic, tex_roughness, light_dir, normal_need, view_dir, A, D, S);
 	final_color += A + D + S;
@@ -234,18 +275,18 @@ float4 PS_array(VertexOut pin) :SV_TARGET
 	float3 view_dir = float3(0.0f, 0.0f, 1.0f);
 	compute_dirlight(material_need, light_dir, normal_need, view_dir,A,D,S);
 	float texID_data = pin.texid.y;
-	if (texID_data > 1.0f) 
+	if (texID_data > 1.0f)
 	{
 		texID_data *= 1.001;
 	}
 	float4 tex_color = texture_pack_diffuse.Sample(samTex_liner, float3(pin.tex1.zw, texID_data));
-//	if (texID_data < 1.5f) 
-//	{
-//		tex_color = float4(0.0f, 0.0f, 0.0f, 0.0f);
-//	}
-	
-	float4 final_color = tex_color *(A + D) + S;
-	return final_color;
+	//	if (texID_data < 1.5f) 
+	//	{
+	//		tex_color = float4(0.0f, 0.0f, 0.0f, 0.0f);
+	//	}
+
+		float4 final_color = tex_color *(A + D) + S;
+		return final_color;
 }
 technique11 light_tech
 {
@@ -261,6 +302,15 @@ technique11 light_tech_pbr
 	pass P0
 	{
 		SetVertexShader(CompileShader(vs_5_0, VS()));
+		SetGeometryShader(NULL);
+		SetPixelShader(CompileShader(ps_5_0, PS_pbr()));
+	}
+}
+technique11 light_tech_pbr_withbone
+{
+	pass P0
+	{
+		SetVertexShader(CompileShader(vs_5_0, VS_bone()));
 		SetGeometryShader(NULL);
 		SetPixelShader(CompileShader(ps_5_0, PS_pbr()));
 	}

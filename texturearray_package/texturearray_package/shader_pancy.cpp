@@ -175,6 +175,7 @@ void virtual_light_shader::init_handle()
 	world_matrix_handle = fx_need->GetVariableByName("world_matrix")->AsMatrix();
 	normal_matrix_handle = fx_need->GetVariableByName("normal_matrix")->AsMatrix();
 	project_matrix_handle = fx_need->GetVariableByName("final_matrix")->AsMatrix();
+	BoneTransforms = fx_need->GetVariableByName("gBoneTransforms")->AsMatrix();
 
 	texture_diffuse_handle = fx_need->GetVariableByName("texture_diffuse")->AsShaderResource();
 	texture_normal_handle = fx_need->GetVariableByName("texture_specular")->AsShaderResource();
@@ -326,7 +327,17 @@ engine_basic::engine_fail_reason virtual_light_shader::set_tex_environment(ID3D1
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
-
+engine_basic::engine_fail_reason virtual_light_shader::set_bone_matrix(const XMFLOAT4X4* M, int cnt)
+{
+	HRESULT hr = BoneTransforms->SetMatrixArray(reinterpret_cast<const float*>(M), 0, cnt);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "bone matrix error when setting virtual light");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
 void virtual_light_shader::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member)
 {
 	//…Ë÷√∂•µ„…˘√˜
@@ -552,7 +563,7 @@ void find_clip::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT
 		{ "TANGENT" ,0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,24 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
 		{ "TEXINDICES" ,0  ,DXGI_FORMAT_R32G32B32A32_UINT  ,0    ,36 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
 		{ "TEXDIFFNORM",0  ,DXGI_FORMAT_R32G32B32A32_FLOAT      ,0    ,52 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
-		{ "TEXOTHER",0  ,DXGI_FORMAT_R32G32B32A32_FLOAT      ,0    ,64 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 }
+		{ "TEXOTHER",0  ,DXGI_FORMAT_R32G32B32A32_FLOAT      ,0    ,68 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 }
 	};
 	*num_member = sizeof(rec) / sizeof(D3D11_INPUT_ELEMENT_DESC);
 	for (UINT i = 0; i < *num_member; ++i)

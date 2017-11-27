@@ -101,6 +101,25 @@ HRESULT engine_windows_main::game_create()
 	}
 	d3d_pancy_basic_singleton::GetInstance()->attach(engine_basic::perspective_message::get_instance());
 	d3d_pancy_basic_singleton::GetInstance()->notify(window_width, window_hight);
+	//创建渲染管线算法
+	fail_message = Pretreatment_gbuffer::get_instance()->create();
+	if (!fail_message.check_if_failed())
+	{
+		fail_message.show_failed_reason();
+		return E_FAIL;
+	}
+	fail_message = render_posttreatment_RTGR::get_instance()->create();
+	if (!fail_message.check_if_failed())
+	{
+		fail_message.show_failed_reason();
+		return E_FAIL;
+	}
+	fail_message = render_posttreatment_HDR::get_instance()->create();
+	if (!fail_message.check_if_failed())
+	{
+		fail_message.show_failed_reason();
+		return E_FAIL;
+	}
 	//创建输入输出
 	fail_message = pancy_input::single_create(hwnd, hInstance);
 	if (!fail_message.check_if_failed())
@@ -130,8 +149,8 @@ HRESULT engine_windows_main::game_create()
 		fail_message.show_failed_reason();
 		return E_FAIL;
 	}
-	//
-	scene_root *test_scene = new scene_test_environment(scene_main->get_pretreat(), scene_main->get_post_hdr());
+	//scene_root *test_scene = new scene_test_square();
+	scene_root *test_scene = new scene_test_environment();
 	fail_message = test_scene->create();
 	if (!fail_message.check_if_failed())
 	{
@@ -169,6 +188,9 @@ WPARAM engine_windows_main::game_end()
 	d3d_pancy_basic_singleton::GetInstance()->release();
 	shader_control::GetInstance()->release();
 	light_control_singleton::GetInstance()->release();
+	Pretreatment_gbuffer::get_instance()->release();
+	render_posttreatment_RTGR::get_instance()->release();
+	render_posttreatment_HDR::get_instance()->release();
 	scene_main->release();
 	return msg.wParam;
 }

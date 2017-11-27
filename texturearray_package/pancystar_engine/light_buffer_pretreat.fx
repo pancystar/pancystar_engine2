@@ -139,15 +139,12 @@ float3 count_normal_sphereradiance(float pz,VertexOut pin, float render_check, f
 	float3 rec_dir = sun_light.dir;
 	rec_dir.x = -rec_dir.x;
 	rec_dir.y = -rec_dir.y;
-
 	float minus_hack = 1.0f;
 	if (rec_dir.y < 0.0f)
 	{
 		minus_hack = max(0.0f, 0.2f + rec_dir.y);
 		rec_dir.y = 0.0f;
 	}
-
-
 	float3 sun_irradiance = GetSunAndSkyIrradiance(point_in - earth_center, normal, rec_dir, sky_irradiance);
 	//sphere_radiance = sun_irradiance;
 
@@ -159,6 +156,7 @@ float3 count_normal_sphereradiance(float pz,VertexOut pin, float render_check, f
 	in_scatter = GetSkyRadianceToPoint(camera - earth_center, point_in - earth_center, shadow_length, rec_dir, transmittance);
 	//sphere_radiance = sphere_radiance * transmittance + in_scatter;
 	return minus_hack * sphere_radiance * render_check;
+	
 }
 float3 count_sky_radiance(float3 view_direction)
 {
@@ -367,6 +365,7 @@ PixelOut_high count_pbr_lighting(VertexOut pin, float pz,float shadow_mask)
 	rec_sunlight.diffuse.rgb = count_normal_sphereradiance(pz,pin, render_check, fragment_angular_size, sphere_alpha, transmittance_out, in_scatter_out);
 	
 	pout.atmosphereblend.rgb = count_sky_radiance(view_direction);
+	//pout.atmosphereblend.rgb = view_direction;
 	pout.atmosphereblend.a = sphere_alpha;
 
 	rec_sunlight.diffuse.a = 1.0f;

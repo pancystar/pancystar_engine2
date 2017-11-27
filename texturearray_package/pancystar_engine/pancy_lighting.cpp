@@ -299,10 +299,11 @@ engine_basic::engine_fail_reason spotlight_with_shadowmap::reset_texture(ID3D11T
 
 
 
-void spotlight_with_shadowmap::draw_shadow()
+void spotlight_with_shadowmap::draw_shadow(pancy_geometry_control *geometry_list)
 {
 	shadowmap_deal->set_renderstate_spot(light_data.position, light_data.dir);
-	pancy_geometry_control_singleton::get_instance()->render_shadowmap(shadowmap_deal->get_shadow_build_matrix(),false);
+	//pancy_geometry_control_singleton::get_instance()->render_shadowmap(shadowmap_deal->get_shadow_build_matrix(),false);
+	geometry_list->render_shadowmap(shadowmap_deal->get_shadow_build_matrix(), false);
 }
 void spotlight_with_shadowmap::release()
 {
@@ -374,12 +375,12 @@ engine_basic::engine_fail_reason sunlight_with_shadowmap::create()
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
-void sunlight_with_shadowmap::draw_shadow()
+void sunlight_with_shadowmap::draw_shadow(pancy_geometry_control *geometry_list)
 {
 	divide_view_frustum(sunlight_lamda_log, shadow_devide);
 	for (int i = 0; i < shadow_devide; ++i)
 	{
-		draw_shadow_basic(i);
+		draw_shadow_basic(geometry_list,i);
 	}
 	engine_basic::engine_fail_reason check_error;
 	auto shader_deffered = shader_control::GetInstance()->get_shader_lightbuffer(check_error);
@@ -400,12 +401,13 @@ void sunlight_with_shadowmap::draw_shadow()
 	shader_deffered->set_sunshadow_matrix(mat_sun_2tex, shadow_devide);
 	shader_deffered->set_sunlight(light_data);
 }
-void sunlight_with_shadowmap::draw_shadow_basic(int count)
+void sunlight_with_shadowmap::draw_shadow_basic(pancy_geometry_control *geometry_list,int count)
 {
 	//更新渲染状态
 	shadowmap_array[count]->set_renderstate(mat_sunlight_pssm[count]);
 	//绘制阴影
-	pancy_geometry_control_singleton::get_instance()->render_shadowmap(shadowmap_array[count]->get_shadow_build_matrix(),false);
+	//pancy_geometry_control_singleton::get_instance()->render_shadowmap(shadowmap_array[count]->get_shadow_build_matrix(),false);
+	geometry_list->render_shadowmap(shadowmap_array[count]->get_shadow_build_matrix(), false);
 }
 void sunlight_with_shadowmap::divide_view_frustum(float lamda_log, int divide_num)
 {
@@ -714,18 +716,18 @@ void light_control_singleton::update_sunlight(XMFLOAT3 dir)
 		data_now->second.set_light_dir(dir.x, dir.y, dir.z);
 	}
 }
-void light_control_singleton::draw_shadow()
+void light_control_singleton::draw_shadow(pancy_geometry_control *geometry_list)
 {
 	int count_light = 0;
 	for (auto rec_shadow_light = shadowmap_light_list.begin(); rec_shadow_light != shadowmap_light_list.end(); ++rec_shadow_light)
 	{
 		rec_shadow_light._Ptr->reset_texture(ShadowTextureArray, count_light++);
-		rec_shadow_light._Ptr->draw_shadow();
+		rec_shadow_light._Ptr->draw_shadow(geometry_list);
 	}
 	auto data_now = sun_pssmshadow_light.find(sunlight_use);
 	if (data_now != sun_pssmshadow_light.end())
 	{
-		data_now->second.draw_shadow();
+		data_now->second.draw_shadow(geometry_list);
 	}
 	update_and_setlight();
 }

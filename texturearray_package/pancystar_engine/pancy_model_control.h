@@ -500,12 +500,13 @@ struct pancy_model_ID
 	int model_type;
 	int model_instance;
 };
-class pancy_geometry_control_singleton
+class pancy_geometry_control
 {
 	geometry_ResourceView_list<geometry_resource_view> *model_view_list;
 private:
-	pancy_geometry_control_singleton();
+	
 public:
+	/*
 	//单例
 	static pancy_geometry_control_singleton* get_instance()
 	{
@@ -516,6 +517,8 @@ public:
 		}
 		return this_instance;
 	}
+	*/
+	pancy_geometry_control();
 	//加载和删除一个模型种类
 	engine_basic::engine_fail_reason load_a_model_type(string file_name_mesh, string file_name_mat, bool if_dynamic, int &model_type_ID);
 	engine_basic::engine_fail_reason load_a_skinmodel_type(string file_name_mesh, string file_name_mat, string file_name_bone, bool if_dynamic, int &model_type_ID,int max_instance_num);

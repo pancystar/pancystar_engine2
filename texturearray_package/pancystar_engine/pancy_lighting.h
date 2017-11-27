@@ -64,7 +64,7 @@ public:
 	spotlight_with_shadowmap(int width_shadow, int height_shadow);
 	//engine_basic::engine_fail_reason create(ID3D11Texture2D* depthMap_array, int index_need);
 	engine_basic::engine_fail_reason reset_texture(ID3D11Texture2D* depthMap_array, int index_need);
-	void draw_shadow();
+	void draw_shadow(pancy_geometry_control *geometry_list);
 	ID3D11ShaderResourceView* get_mapresource() { return shadowmap_deal->get_mapresource(); };
 	XMFLOAT4X4 get_shadow_rebuild_matrix() { return shadowmap_deal->get_shadow_rebuild_matrix(); };
 	void release();
@@ -84,7 +84,7 @@ class sunlight_with_shadowmap : public basic_point_lighting
 public:
 	sunlight_with_shadowmap(int width_need, int height_need, int shadow_divide_num);
 	engine_basic::engine_fail_reason create();
-	void draw_shadow();
+	void draw_shadow(pancy_geometry_control *geometry_list);
 	void update_view_space(XMFLOAT4X4 mat_sunlight_view, int count) { mat_sunlight_pssm[count] = mat_sunlight_view; };
 	ID3D11ShaderResourceView* get_mapresource() { return sunlight_pssm_Shadowresource; };
 	XMFLOAT4X4 get_shadow_rebuild_matrix(int count) { return shadowmap_array[count]->get_shadow_rebuild_matrix(); };
@@ -94,7 +94,7 @@ public:
 	void build_AABB_box(XMFLOAT4 near_point[4], XMFLOAT4 far_point[4], XMFLOAT3 &min_pos, XMFLOAT3 &max_pos);
 	void release();
 private:
-	void draw_shadow_basic(int count);
+	void draw_shadow_basic(pancy_geometry_control *geometry_list,int count);
 };
 
 //¹âÔ´¿ØÖÆÆ÷
@@ -139,7 +139,7 @@ public:
 	void add_light_without_shadow(light_type type_need_light);
 	void add_spotlight_with_shadow_map();
 	engine_basic::engine_fail_reason add_sunlight_with_shadow_map(int width_shadow, int height_shadow, int shadow_num,int &sunlight_ID);
-	void draw_shadow();
+	void draw_shadow(pancy_geometry_control *geometry_list);
 	void set_sunlight(int sunlight_ID) { sunlight_use = sunlight_ID; };
 	engine_basic::engine_fail_reason create();
 	void update_sunlight(XMFLOAT3 dir);

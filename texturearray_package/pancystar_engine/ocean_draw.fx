@@ -115,7 +115,7 @@ struct domin_out_Water
 	float2 pos_uv          : TEXCOORD;
 	float4 pos_before      : POSITIONB;       //光栅顶点坐标
 	float4 pos_ssao        : POSITIONS;       //光栅顶点坐标
-	float  blend_fact      : BLENDFACT;
+	//float  blend_fact      : BLENDFACT;
 };
 struct PixelOut
 {
@@ -237,7 +237,7 @@ domin_out_Water DS(
 	//float3 position_before = mul(float4(tex1_need, 0,1 ),scal_matrix).xyz;
 	//float2 uv_local = position_before.xy * g_UVScale + g_UVOffset;
 	//采样位移贴图
-	float3 sample_Displacement;
+	float3 sample_Displacement = float3(0,0,0);
 	if (blend_factor > 0) 
 	{
 		sample_Displacement = g_texDisplacement.SampleLevel(g_samplerDisplacement, uv_local,0).xyz;
@@ -339,9 +339,9 @@ PixelOut PS_Water(domin_out_Water pin) :SV_TARGET
 	float cos_spec = clamp(dot(reflect_vec, g_SunDir), 0, 1);
 	float sun_spot = pow(cos_spec, g_Shineness);
 	water_color += g_SunColor * sun_spot;
-
+	//water_color *= 0.3f;
 	//water_color = g_WaterbodyColor+ dot(normal, g_SunDir)* g_WaterbodyColor*4;
-	water_color = pow(water_color.rgb, float3(2.2, 2.2, 2.2));
+	//water_color = pow(water_color.rgb, float3(2.2, 2.2, 2.2));
 	//water_color = normal;
 	PixelOut ans_pix;
 	ans_pix.final_color = float4(water_color,1);

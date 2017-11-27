@@ -48,6 +48,7 @@ public:
 	engine_basic::engine_fail_reason set_render_target(ID3D11RenderTargetView  *render_target, ID3D11DepthStencilView *depthstencil_target);
 	engine_basic::engine_fail_reason set_render_target(ID3D11RenderTargetView  *render_target);
 	engine_basic::engine_fail_reason set_render_target(ID3D11RenderTargetView  **render_target,int size);
+	ID3D11RenderTargetView *get_back_buffer() { return RTV_back_buffer; };
 	engine_basic::engine_fail_reason restore_render_target();
 	engine_basic::engine_fail_reason clear_basicrender_target();
 	engine_basic::engine_fail_reason end_draw();

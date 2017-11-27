@@ -72,7 +72,8 @@ float4 PS(VertexOut Input) : SV_TARGET
 	//return input_texcolor;
 	//finalcolor = float4(float3(1.0, 1.0, 1.0) - exp(-input_texcolor.rgb / 1 * 10),1.0f);
 	//gammaÐ£Õý
-	return float4(pow(finalcolor.rgb,float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2)),1.0f);
+	return finalcolor;
+	//return float4(pow(input_texcolor.rgb, float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2)), 1.0f);
 }
 technique11 draw_HDRfinal
 {
@@ -81,6 +82,6 @@ technique11 draw_HDRfinal
 		SetVertexShader(CompileShader(vs_5_0, VS()));
 		SetGeometryShader(NULL);
 		SetPixelShader(CompileShader(ps_5_0, PS()));
-		SetDepthStencilState(NoDepthWrites, 0);
+		//SetDepthStencilState(NoDepthWrites, 0);
 	}
 }

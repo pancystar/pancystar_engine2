@@ -102,7 +102,7 @@ PixelOut_pbr PS_withnormal(VertexOut pin, uniform float mask) : SV_Target
 	float roughness_color = texture_pack_array.Sample(samTex_liner, float3(pin.tex2.zw, texID_data_roughness)).r;
 
 	//gamma校正
-	tex_color = float4(pow(tex_color.rgb, float3(2.2f, 2.2f, 2.2f)), tex_color.a);
+	//tex_color = float4(pow(tex_color.rgb, float3(2.2f, 2.2f, 2.2f)), tex_color.a);
 	//metallic_color = pow(metallic_color,2.2f);
 	//roughness_color = pow(roughness_color, 2.2f);
 	//计算镜面反射光最高强度

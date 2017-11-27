@@ -371,7 +371,11 @@ float4 PS_cube(VertexOut pin) : SV_Target
 
 	float4 final_color = texture_cube.SampleLevel(samTex_liner, cube_ray2, 0);
 	final_color.a = alpha_fade;
-
+	if (distance_minus > 0.05f)
+	{
+		final_color = float4(0, 0, 0, 0);
+		final_color.a = 0.0f;
+	}
 	//final_color = (1.0f - rec_ifuse) * final_color + rec_ifuse * color_ssr_map;
 
 

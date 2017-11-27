@@ -189,7 +189,7 @@ PixelOut PS(VertexOut pin) :SV_TARGET
 	float texID_data_diffuse = pin.texid.x;
 	float4 tex_color = texture_pack_array.Sample(samTex_liner, float3(pin.tex1.xy, texID_data_diffuse));
 	//gamma校正
-	tex_color = float4(pow(tex_color.rgb, float3(2.2f, 2.2f, 2.2f)), tex_color.a);
+	//tex_color = float4(pow(tex_color.rgb, float3(2.2f, 2.2f, 2.2f)), tex_color.a);
 	//float4 tex_color = texture_diffuse.Sample(samTex_liner, pin.tex);
 	clip(tex_color.a - 0.6f);
 	//float4 ambient = 0.4f* texture_ssao.Sample(samTex_liner, pin.pos_ssao.xy, 0.0f).r;
@@ -249,17 +249,53 @@ PixelOut PS(VertexOut pin) :SV_TARGET
 	//float3 view_dir = normalize(position_view_sun - pin.position_view);
 
 	ans_pix.reflect_message.rgb = tex_color.rgb;
-	ans_pix.reflect_message.r = 1.0;
+	ans_pix.reflect_message.r = 0.0;
 	return ans_pix;
 }
 PixelOut PS_withputao(VertexOut pin) :SV_TARGET
 {
+	/*
 	pin.pos_ssao /= pin.pos_ssao.w;
 	float texID_data_diffuse = pin.texid.x;
 	float4 tex_color = texture_pack_array.Sample(samTex_liner, float3(pin.tex1.xy, texID_data_diffuse));
 	//float4 tex_color = texture_diffuse.Sample(samTex_liner, pin.tex);
 	clip(tex_color.a - 0.6f);
-	float4 ambient = 0.8f*float4(1.0f, 1.0f, 1.0f, 0.0f);
+	//float4 ambient = 0.8f*float4(1.0f, 1.0f, 1.0f, 0.0f);
+	*/
+	pin.pos_ssao /= pin.pos_ssao.w;
+	float texID_data_diffuse = pin.texid.x;
+	float4 tex_color = texture_pack_array.Sample(samTex_liner, float3(pin.tex1.xy, texID_data_diffuse));
+	//gamma校正
+	//tex_color = float4(pow(tex_color.rgb, float3(2.2f, 2.2f, 2.2f)), tex_color.a);
+	//float4 tex_color = texture_diffuse.Sample(samTex_liner, pin.tex);
+	clip(tex_color.a - 0.6f);
+	//float4 ambient = 0.4f* texture_ssao.Sample(samTex_liner, pin.pos_ssao.xy, 0.0f).r;
+	float tex_ao = texture_ssao.Sample(samTex_liner, pin.pos_ssao.xy, 0.0f).r;
+
+	//采集法线与金属度
+	float4 normalmetallic = gNormalspecMap.Sample(samTex_liner, pin.pos_ssao.xy, 0.0f);
+	float3 normal_dir = normalize(normalmetallic.rgb);
+	float tex_matallic = normalmetallic.a;
+	//将法线变换到世界空间
+	normal_dir = mul(float4(normal_dir, 0.0f), invview_matrix);
+	//计算反射线
+	float3 view_dir = normalize(position_view - pin.position_before);
+	float NoV = dot(view_dir, normal_dir);
+	float3 reflect_dir = normalize(reflect(-view_dir, normal_dir));
+	//采集镜面光与粗糙度
+	float4 specular_roughness = gInputspecular_roughness.SampleLevel(samTex_liner, pin.pos_ssao.xy, 0);
+	float4 SpecularColor = float4(specular_roughness.rgb, 1.0f);
+	float  tex_roughness = specular_roughness.a;
+	//采集brdf
+	float4 EnvBRDF = gInputbrdf.Sample(samTex_liner, float2(tex_roughness, NoV));
+	//采样环境光
+	uint index = tex_roughness * 6;
+	float4 enviornment_color = IBL_cube.SampleLevel(samTex_liner, reflect_dir, index);
+	//计算环境光反射
+	float4 ambient_diffuse = 0.2f*2.0f*(1.0f - tex_matallic) * tex_color;
+	float4 ambient_specular = 0.2f * 2.0f*(0.6f * enviornment_color + 0.4f*tex_color) * (SpecularColor * EnvBRDF.x + EnvBRDF.y);
+	float4 ambient = ambient_diffuse + ambient_specular;
+
 	float4 diffuse = material_need.diffuse * texture_light_diffuse.Sample(samTex_liner, pin.pos_ssao.xy, 0.0f);      //漫反射光
 	float4 spec = material_need.specular * texture_light_specular.Sample(samTex_liner, pin.pos_ssao.xy, 0.0f);       //镜面反射光
 	float4 final_color = tex_color *(ambient + diffuse) + spec;

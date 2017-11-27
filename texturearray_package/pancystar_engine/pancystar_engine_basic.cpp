@@ -142,6 +142,57 @@ DirectX::XMFLOAT3 engine_mathmatic::vec3_nilinear_inter(DirectX::XMFLOAT3 vec1_i
 	return vec_out;
 }
 //透视投影
+extra_perspective_message::extra_perspective_message(int wind_width_need, int wind_height_need, float near_plane, float far_plane, float angle)
+{
+	width_project = static_cast<float>(wind_width_need);
+	height_project = static_cast<float>(wind_height_need);
+	perspective_near_plane = near_plane;
+	perspective_far_plane = far_plane;
+	perspective_angle = angle;
+	BuildFrustumNearFarCorners(perspective_angle, perspective_far_plane);
+}
+DirectX::XMFLOAT4X4 extra_perspective_message::get_proj_matrix()
+{
+	DirectX::XMMATRIX perspective_matrix = DirectX::XMMatrixPerspectiveFovLH(perspective_angle, width_project / height_project, perspective_near_plane, perspective_far_plane);
+	DirectX::XMFLOAT4X4 mat_out;
+	DirectX::XMStoreFloat4x4(&mat_out, perspective_matrix);
+	return mat_out;
+}
+void extra_perspective_message::BuildFrustumNearFarCorners(float fovy, float farZ)
+{
+	float aspect = (float)width_project / (float)height_project;
+
+	float halfHeight = perspective_far_plane * tanf(0.5f*perspective_angle);
+	float halfWidth = aspect * halfHeight;
+
+	FrustumFarCorner[0] = DirectX::XMFLOAT4(-halfWidth, -halfHeight, perspective_far_plane, 1.0f);
+	FrustumFarCorner[1] = DirectX::XMFLOAT4(-halfWidth, +halfHeight, perspective_far_plane, 1.0f);
+	FrustumFarCorner[2] = DirectX::XMFLOAT4(+halfWidth, +halfHeight, perspective_far_plane, 1.0f);
+	FrustumFarCorner[3] = DirectX::XMFLOAT4(+halfWidth, -halfHeight, perspective_far_plane, 1.0f);
+
+	//近截面的四个角点
+	halfHeight = perspective_near_plane * tanf(0.5f*perspective_angle);
+	halfWidth = aspect * halfHeight;
+	FrustumNearCorner[0] = DirectX::XMFLOAT4(-halfWidth, -halfHeight, perspective_near_plane, 1.0f);
+	FrustumNearCorner[1] = DirectX::XMFLOAT4(-halfWidth, +halfHeight, perspective_near_plane, 1.0f);
+	FrustumNearCorner[2] = DirectX::XMFLOAT4(+halfWidth, +halfHeight, perspective_near_plane, 1.0f);
+	FrustumNearCorner[3] = DirectX::XMFLOAT4(+halfWidth, -halfHeight, perspective_near_plane, 1.0f);
+}
+void extra_perspective_message::get_FrustumFarCorner(DirectX::XMFLOAT4 *FrustumFarCorner_out)
+{
+	for (int i = 0; i < 4; ++i)
+	{
+		FrustumFarCorner_out[i] = FrustumFarCorner[i];
+	}
+}
+void extra_perspective_message::get_FrustumNearCorner(DirectX::XMFLOAT4 *FrustumNearCorner_out)
+{
+	for (int i = 0; i < 4; ++i)
+	{
+		FrustumNearCorner_out[i] = FrustumNearCorner[i];
+	}
+}
+//透视投影
 perspective_message::perspective_message() 
 {
 	reset_perpective_message(800,600,0.1f,1000.0f, DirectX::XM_PIDIV4);

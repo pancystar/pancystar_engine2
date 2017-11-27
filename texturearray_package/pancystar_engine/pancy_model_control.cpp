@@ -640,9 +640,9 @@ void geometry_instance_view::update(XMFLOAT4X4 mat_in, float delta_time)
 		for (int i = 0; i < skindata->get_bone_num(); ++i)
 		{
 			bone_matrix[i] = bonemat_ptr[i];
-		}
-		world_matrix = mat_in;
+		}	
 	}
+	world_matrix = mat_in;
 }
 
 
@@ -949,11 +949,11 @@ void geometry_resource_view::release()
 }
 
 
-pancy_geometry_control_singleton::pancy_geometry_control_singleton()
+pancy_geometry_control::pancy_geometry_control()
 {
 	model_view_list = new geometry_ResourceView_list<geometry_resource_view>();
 }
-engine_basic::engine_fail_reason pancy_geometry_control_singleton::load_a_model_type(string file_name_mesh, string file_name_mat, bool if_dynamic, int &model_type_ID)
+engine_basic::engine_fail_reason pancy_geometry_control::load_a_model_type(string file_name_mesh, string file_name_mat, bool if_dynamic, int &model_type_ID)
 {
 	//从文件中导入模型资源
 	model_reader_pancymesh *model_common = new model_reader_pancymesh_build<point_common>(file_name_mesh, file_name_mat);
@@ -976,7 +976,7 @@ engine_basic::engine_fail_reason pancy_geometry_control_singleton::load_a_model_
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
-engine_basic::engine_fail_reason pancy_geometry_control_singleton::load_a_skinmodel_type(string file_name_mesh, string file_name_mat, string file_name_bone, bool if_dynamic, int &model_type_ID, int max_instance_num)
+engine_basic::engine_fail_reason pancy_geometry_control::load_a_skinmodel_type(string file_name_mesh, string file_name_mat, string file_name_bone, bool if_dynamic, int &model_type_ID, int max_instance_num)
 {
 	//从文件中导入模型资源
 	model_reader_pancymesh *model_common = new model_reader_PancySkinMesh(file_name_mesh, file_name_mat, file_name_bone);
@@ -1005,7 +1005,7 @@ engine_basic::engine_fail_reason pancy_geometry_control_singleton::load_a_skinmo
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
-engine_basic::engine_fail_reason pancy_geometry_control_singleton::load_a_skinmodel_animation(int model_type_ID, string file_name_animation, int& animition_ID)
+engine_basic::engine_fail_reason pancy_geometry_control::load_a_skinmodel_animation(int model_type_ID, string file_name_animation, int& animition_ID)
 {
 	stringstream stream;
 	stream << model_type_ID;
@@ -1024,11 +1024,11 @@ engine_basic::engine_fail_reason pancy_geometry_control_singleton::load_a_skinmo
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
-engine_basic::engine_fail_reason pancy_geometry_control_singleton::delete_a_model_type(int model_type_ID)
+engine_basic::engine_fail_reason pancy_geometry_control::delete_a_model_type(int model_type_ID)
 {
 	return model_view_list->delete_geometry_byindex(model_type_ID);
 }
-engine_basic::engine_fail_reason pancy_geometry_control_singleton::get_a_model_type(geometry_resource_view **data_out, int model_type_ID)
+engine_basic::engine_fail_reason pancy_geometry_control::get_a_model_type(geometry_resource_view **data_out, int model_type_ID)
 {
 	*data_out = model_view_list->get_geometry_byindex(model_type_ID);
 	if (data_out == NULL)
@@ -1043,7 +1043,7 @@ engine_basic::engine_fail_reason pancy_geometry_control_singleton::get_a_model_t
 	return succeed;
 }
 //加载和删除一个模型实例
-engine_basic::engine_fail_reason pancy_geometry_control_singleton::add_a_model_instance(int model_type_ID, XMFLOAT4X4 world_Matrix, pancy_model_ID &model_ID)
+engine_basic::engine_fail_reason pancy_geometry_control::add_a_model_instance(int model_type_ID, XMFLOAT4X4 world_Matrix, pancy_model_ID &model_ID)
 {
 	stringstream stream;
 	stream << model_type_ID;
@@ -1065,7 +1065,7 @@ engine_basic::engine_fail_reason pancy_geometry_control_singleton::add_a_model_i
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
-engine_basic::engine_fail_reason pancy_geometry_control_singleton::set_a_instance_animation(pancy_model_ID model_ID, int animation_ID)
+engine_basic::engine_fail_reason pancy_geometry_control::set_a_instance_animation(pancy_model_ID model_ID, int animation_ID)
 {
 	auto model_view_data = model_view_list->get_geometry_byindex(model_ID.model_type);
 	if (model_view_data == NULL)
@@ -1084,7 +1084,7 @@ engine_basic::engine_fail_reason pancy_geometry_control_singleton::set_a_instanc
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
-engine_basic::engine_fail_reason pancy_geometry_control_singleton::delete_a_model_instance(pancy_model_ID model_ID)
+engine_basic::engine_fail_reason pancy_geometry_control::delete_a_model_instance(pancy_model_ID model_ID)
 {
 	auto model_view_data = model_view_list->get_geometry_byindex(model_ID.model_type);
 	if (model_view_data == NULL)
@@ -1097,7 +1097,7 @@ engine_basic::engine_fail_reason pancy_geometry_control_singleton::delete_a_mode
 	}
 	return model_view_data->delete_an_instance(model_ID.model_instance);
 }
-engine_basic::engine_fail_reason pancy_geometry_control_singleton::update_a_model_instance(pancy_model_ID model_ID, XMFLOAT4X4 world_Matrix, float delta_time)
+engine_basic::engine_fail_reason pancy_geometry_control::update_a_model_instance(pancy_model_ID model_ID, XMFLOAT4X4 world_Matrix, float delta_time)
 {
 	auto model_view_data = model_view_list->get_geometry_byindex(model_ID.model_type);
 	if (model_view_data == NULL)
@@ -1110,7 +1110,7 @@ engine_basic::engine_fail_reason pancy_geometry_control_singleton::update_a_mode
 	}
 	return model_view_data->update(model_ID.model_instance, world_Matrix, delta_time);
 }
-engine_basic::engine_fail_reason pancy_geometry_control_singleton::sleep_a_model_instance(pancy_model_ID model_ID)
+engine_basic::engine_fail_reason pancy_geometry_control::sleep_a_model_instance(pancy_model_ID model_ID)
 {
 	auto model_view_data = model_view_list->get_geometry_byindex(model_ID.model_type);
 	if (model_view_data == NULL)
@@ -1123,7 +1123,7 @@ engine_basic::engine_fail_reason pancy_geometry_control_singleton::sleep_a_model
 	}
 	return model_view_data->sleep_a_instance(model_ID.model_instance);
 }
-engine_basic::engine_fail_reason pancy_geometry_control_singleton::wakeup_a_model_instance(pancy_model_ID model_ID)
+engine_basic::engine_fail_reason pancy_geometry_control::wakeup_a_model_instance(pancy_model_ID model_ID)
 {
 	auto model_view_data = model_view_list->get_geometry_byindex(model_ID.model_type);
 	if (model_view_data == NULL)
@@ -1136,7 +1136,7 @@ engine_basic::engine_fail_reason pancy_geometry_control_singleton::wakeup_a_mode
 	}
 	return model_view_data->wakeup_a_instance(model_ID.model_instance);
 }
-void pancy_geometry_control_singleton::release()
+void pancy_geometry_control::release()
 {
 	model_view_list->release();
 }

@@ -57,6 +57,9 @@
     <ClInclude Include="pancy_FFT_ocean.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="pancy_terrain.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="geometry.cpp">
@@ -102,6 +105,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="pancy_FFT_ocean.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="pancy_terrain.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
@@ -197,6 +203,9 @@
       <Filter>源文件</Filter>
     </FxCompile>
     <FxCompile Include="IBL_gen.fx">
+      <Filter>源文件</Filter>
+    </FxCompile>
+    <FxCompile Include="terrain_tess.fx">
       <Filter>源文件</Filter>
     </FxCompile>
   </ItemGroup>

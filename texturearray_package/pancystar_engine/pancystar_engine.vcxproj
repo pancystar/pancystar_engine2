@@ -176,6 +176,7 @@
     <ClInclude Include="pancy_scene_design.h" />
     <ClInclude Include="pancy_ssao.h" />
     <ClInclude Include="pancy_posttreatment.h" />
+    <ClInclude Include="pancy_terrain.h" />
     <ClInclude Include="shader_pancy.h" />
   </ItemGroup>
   <ItemGroup>
@@ -193,6 +194,7 @@
     <ClCompile Include="pancy_pretreatment.cpp" />
     <ClCompile Include="pancy_scene_design.cpp" />
     <ClCompile Include="pancy_ssao.cpp" />
+    <ClCompile Include="pancy_terrain.cpp" />
     <ClCompile Include="shader_pancy.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -226,6 +228,7 @@
     <FxCompile Include="skycube.fx" />
     <FxCompile Include="ssao_blur_map.fx" />
     <FxCompile Include="ssao_draw_aomap.fx" />
+    <FxCompile Include="terrain_tess.fx" />
     <FxCompile Include="virtual_light.fx" />
   </ItemGroup>
   <ItemGroup>

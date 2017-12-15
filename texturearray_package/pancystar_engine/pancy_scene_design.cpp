@@ -43,6 +43,8 @@ engine_basic::engine_fail_reason scene_root::release_basic()
 	return succeed;
 }
 
+
+
 scene_test_square::scene_test_square()
 {
 	simulate_ocean = new OceanSimulator();
@@ -918,6 +920,32 @@ engine_basic::engine_fail_reason scene_test_environment::create()
 	{
 		return check_error;
 	}
+
+	//加载测试山脉
+	terrain_file_path terrain_file;
+	terrain_file.height_rawdata_name = "terrain_data\\terrain.raw";
+	terrain_file.normal_texdata_name = "terrain_data\\terrainnorm1lk.dds";
+	terrain_file.tangent_texdata_name = "terrain_data\\terraintangent1k.dds";
+	terrain_file.blend_texdata_name = "terrain_data\\terrainblend.dds";
+
+	terrain_file.color_albe_texdata_name[0] = "terrain_data\\texdds\\ground_desertSandDuneless_2k_alb_s.dds";
+	terrain_file.color_norm_texdata_name[0] = "terrain_data\\texdds\\ground_desertSandDuneless_2k_n.dds";
+
+	terrain_file.color_albe_texdata_name[1] = "terrain_data\\texdds\\Ground_ScrubGrassField_2k_alb_s.dds";
+	terrain_file.color_norm_texdata_name[1] = "terrain_data\\texdds\\Ground_ScrubGrassField_2k_n.dds";
+
+	terrain_file.color_albe_texdata_name[2] = "terrain_data\\texdds\\Ground_MountainTerrain_2k_alb_s.dds";
+	terrain_file.color_norm_texdata_name[2] = "terrain_data\\texdds\\Ground_MountainTerrain_2k_n.dds";
+
+	terrain_file.color_albe_texdata_name[3] = "terrain_data\\texdds\\Rock_GuiMossyRock_2k_alb_s.dds";
+	terrain_file.color_norm_texdata_name[3] = "terrain_data\\texdds\\Rock_GuiMossyRock_2k_n.dds";
+
+	terrain_need = new pancy_terrain_part(2048.0f,200,100.0f,1000.0f,XMFLOAT2(0.0f,0.0f), terrain_file);
+	check_error = terrain_need->create();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
@@ -925,6 +953,7 @@ void scene_test_environment::display()
 {
 	show_animation_test();
 	show_sky_single();
+	show_terrain();
 	//show_sky_cube();
 }
 void scene_test_environment::display_environment(XMFLOAT4X4 view_matrix, XMFLOAT4X4 proj_matrix)
@@ -932,7 +961,7 @@ void scene_test_environment::display_environment(XMFLOAT4X4 view_matrix, XMFLOAT
 }
 void scene_test_environment::update(float delta_time)
 {
-	float move_speed = 0.125f;
+	float move_speed = 0.525f;
 	XMMATRIX view;
 	auto user_input = pancy_input::GetInstance();
 	auto scene_camera = pancy_camera::get_instance();
@@ -993,6 +1022,7 @@ void scene_test_environment::release()
 	release_basic();
 	//释放其他资源
 	environment_texture_data->release();
+	terrain_need->release();
 	//pancy_geometry_control_singleton::get_instance()->release();
 	tex_cubesky->Release();
 	SRV_cube->Release();
@@ -1245,6 +1275,19 @@ void scene_test_environment::show_animation_test()
 	data_view->draw(false);
 	//test_model->get_technique(teque_need);
 	//test_model->draw_mesh();
+}
+void scene_test_environment::show_terrain()
+{
+	engine_basic::engine_fail_reason check_error;
+	//设定总变换
+	XMFLOAT4X4 view_mat,proj_mat;
+	XMFLOAT3 view_pos;
+	pancy_camera::get_instance()->count_view_matrix(&view_mat);
+	pancy_camera::get_instance()->get_view_position(&view_pos);
+	XMMATRIX proj = XMLoadFloat4x4(&engine_basic::perspective_message::get_instance()->get_proj_matrix());
+	XMStoreFloat4x4(&proj_mat, proj);
+	terrain_need->render_terrain(view_pos, view_mat, proj_mat);
+
 }
 engine_basic::engine_fail_reason scene_test_environment::create_cubemap()
 {

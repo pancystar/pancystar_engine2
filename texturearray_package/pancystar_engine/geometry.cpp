@@ -235,6 +235,7 @@ engine_basic::engine_fail_reason Geometry<point_UV>::init_point(point_UV *vertex
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
+
 mesh_square_tessellation::mesh_square_tessellation(bool if_adj) :Geometry(if_adj)
 {
 	all_vertex = 4;
@@ -273,6 +274,92 @@ void mesh_square_tessellation::show_mesh()
 	{
 		teque_pancy->GetPassByIndex(i)->Apply(0, d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex());
 		d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->Draw(4, 0);
+	}
+}
+
+template <>   // 对point_terrain 型特例化  
+engine_basic::engine_fail_reason Geometry<point_terrain>::init_point(point_terrain *vertex, UINT *index)
+{
+	D3D11_BUFFER_DESC point_buffer;
+	point_buffer.Usage = D3D11_USAGE_IMMUTABLE;            //顶点是gpu只读型
+	point_buffer.BindFlags = D3D11_BIND_VERTEX_BUFFER;         //缓存类型为顶点缓存
+	point_buffer.ByteWidth = all_vertex * sizeof(point_terrain); //顶点缓存的大小
+	point_buffer.CPUAccessFlags = 0;
+	point_buffer.MiscFlags = 0;
+	point_buffer.StructureByteStride = 0;
+	D3D11_SUBRESOURCE_DATA resource_vertex;
+	resource_vertex.pSysMem = vertex;//指定顶点数据的地址
+									 //创建顶点缓冲区
+	HRESULT hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateBuffer(&point_buffer, &resource_vertex, &vertex_need);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason fail_message(hr, "create vertex buffer error");
+		return fail_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+mesh_terrain_tessellation::mesh_terrain_tessellation(bool if_adj, int divide_level_in, float map_width_in, float tex_color_scal_in) :Geometry<point_terrain>(if_adj)
+{
+	divide_level = divide_level_in;
+	map_width = map_width_in;
+	tex_color_scal = tex_color_scal_in;
+	all_vertex = 4 * divide_level*divide_level;
+	all_index = 0;
+}
+engine_basic::engine_fail_reason mesh_terrain_tessellation::find_point(point_terrain *vertex, UINT *index, int &num_vertex, int &num_index)
+{
+	XMFLOAT2 square_test[] =
+	{
+		XMFLOAT2(0.0f,1.0f),
+		XMFLOAT2(1.0f,1.0f),
+		XMFLOAT2(0.0f,0.0f),
+		XMFLOAT2(1.0f,0.0f),
+	};
+	XMFLOAT3 square_pos[] =
+	{
+		XMFLOAT3(0.0f,0.0f,1.0f),
+		XMFLOAT3(1.0f,0.0f,1.0f),
+		XMFLOAT3(0.0f,0.0f,0.0f),
+		XMFLOAT3(1.0f,0.0f,0.0f),
+	};
+	int now_count = 0;
+	XMFLOAT2 uv_scal = XMFLOAT2(1.0f / static_cast<float>(divide_level), 1.0f / static_cast<float>(divide_level));
+	for (int i = 0; i < divide_level; ++i)
+	{
+		for (int j = 0; j < divide_level; ++j)
+		{
+			XMFLOAT2 uv_offset = XMFLOAT2(uv_scal.x * i, uv_scal.y * j);
+			for (int k = 0; k < 4; ++k)
+			{
+				XMFLOAT2 scal_vec = engine_basic::engine_mathmatic::vec2_mul(square_test[k], uv_scal);
+				vertex[now_count].tex_height = engine_basic::engine_mathmatic::vec2_plus(scal_vec, uv_offset);
+				vertex[now_count].tex_diffuse.x = tex_color_scal * vertex[now_count].tex_height.x;
+				vertex[now_count].tex_diffuse.y = tex_color_scal * vertex[now_count].tex_height.y;
+				vertex[now_count].position = engine_basic::engine_mathmatic::vec3_multi(XMFLOAT3(vertex[now_count].tex_height.x, 0, vertex[now_count].tex_height.y), map_width);
+				now_count += 1;
+			}
+		}
+	}
+	num_vertex = 4 * divide_level*divide_level;
+	num_index = 0;
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+void mesh_terrain_tessellation::show_mesh()
+{
+	UINT stride_need = sizeof(point_terrain);     //顶点结构的位宽
+	UINT offset_need = 0;                       //顶点结构的首地址偏移
+												//顶点缓存，索引缓存，绘图格式
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->IASetVertexBuffers(0, 1, &vertex_need, &stride_need, &offset_need);
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST);
+	//选定绘制路径
+	D3DX11_TECHNIQUE_DESC techDesc;
+	teque_pancy->GetDesc(&techDesc);
+	for (UINT i = 0; i < techDesc.Passes; ++i)
+	{
+		teque_pancy->GetPassByIndex(i)->Apply(0, d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex());
+		d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->Draw(all_vertex, 0);
 	}
 }
 

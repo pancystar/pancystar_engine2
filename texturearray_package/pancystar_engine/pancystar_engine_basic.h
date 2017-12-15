@@ -7,6 +7,7 @@
 #include<vector>
 #include<d3dx11effect.h>
 #include<directxmath.h>
+#include<DirectXPackedVector.h>
 #include<list>
 #include<ShellScalingAPI.h>
 #include<DirectXTex.h>

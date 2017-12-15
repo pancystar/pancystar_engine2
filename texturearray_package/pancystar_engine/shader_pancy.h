@@ -799,7 +799,40 @@ private:
 	void init_handle();//注册shader中所有全局变量的句柄
 	void set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member);
 };
+class shader_terrain_render : public shader_basic
+{
+	ID3DX11EffectVariable                    *terrain_size;
+	ID3DX11EffectVariable                    *view_pos_handle;
 
+	ID3DX11EffectMatrixVariable              *world_matrix_handle;      //世界变换句柄
+	ID3DX11EffectMatrixVariable              *normal_matrix_handle;       //取景变换句柄
+	ID3DX11EffectMatrixVariable              *final_matrix_handle;      //全套几何变换句柄
+
+	ID3DX11EffectShaderResourceVariable      *tex_height_handle;
+	ID3DX11EffectShaderResourceVariable      *tex_normalt_handle;
+	ID3DX11EffectShaderResourceVariable      *tex_tangnt_handle;
+	ID3DX11EffectShaderResourceVariable      *tex_blend_handle;
+
+	ID3DX11EffectShaderResourceVariable      *tex_ColorArray_handle;
+	ID3DX11EffectShaderResourceVariable      *tex_NormalArray_handle;
+public:
+	shader_terrain_render(LPCWSTR filename);
+	engine_basic::engine_fail_reason set_view_pos(XMFLOAT3 eye_pos);
+	engine_basic::engine_fail_reason set_trans_world(XMFLOAT4X4 *mat_world);
+	engine_basic::engine_fail_reason set_trans_all(XMFLOAT4X4 *mat_world);
+
+	engine_basic::engine_fail_reason set_texture_height(ID3D11ShaderResourceView *tex_input);
+	engine_basic::engine_fail_reason set_texture_normal(ID3D11ShaderResourceView *tex_input);
+	engine_basic::engine_fail_reason set_texture_blend(ID3D11ShaderResourceView *tex_input);
+	engine_basic::engine_fail_reason set_texture_tangnt(ID3D11ShaderResourceView *tex_input);
+
+	engine_basic::engine_fail_reason set_terrain_size(float world_size,float texture_size, float height_scal);
+	engine_basic::engine_fail_reason set_texture_color(ID3D11ShaderResourceView *tex_color_in, ID3D11ShaderResourceView *tex_normal_in);
+	void release();
+private:
+	void init_handle();//注册shader中所有全局变量的句柄
+	void set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member);
+};
 class shader_control
 {
 private:
@@ -858,7 +891,7 @@ public:
 	std::shared_ptr<shader_ocean_render> get_shader_oceanrender_vps(engine_basic::engine_fail_reason &if_succeed);
 	std::shared_ptr<shader_ocean_draw> get_shader_oceandraw_tess(engine_basic::engine_fail_reason &if_succeed);
 	std::shared_ptr<shader_IBL_specular> get_shader_IBL_specular(engine_basic::engine_fail_reason &if_succeed);
-
+	std::shared_ptr<shader_terrain_render> get_shader_terrain_test(engine_basic::engine_fail_reason &if_succeed);
 	void release();
 private:
 	engine_basic::engine_fail_reason init_basic();

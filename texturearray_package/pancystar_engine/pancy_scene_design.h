@@ -12,6 +12,7 @@
 #include"pancy_posttreatment.h"
 #include"pancy_atmosphere.h"
 #include"pancy_FFT_ocean.h"
+#include"pancy_terrain.h"
 #include<map>
 #include <Shlobj.h>  
 #include <tchar.h>  
@@ -43,6 +44,9 @@ protected:
 	engine_basic::engine_fail_reason create_basic();
 	engine_basic::engine_fail_reason release_basic();
 };
+
+
+
 
 
 class scene_test_square : public scene_root
@@ -78,6 +82,7 @@ private:
 };
 class scene_test_environment : public scene_root
 {
+	pancy_terrain_part        *terrain_need;
 	gbuffer_out_message       *environment_texture_data;
 	pancy_model_ID ID_model_skin;
 	pancy_model_ID ID_model_skin2;
@@ -114,6 +119,7 @@ private:
 	void show_sky_single();
 	void show_sky_cube();
 	void show_animation_test();
+	void show_terrain();
 	engine_basic::engine_fail_reason create_cubemap();
 };
 

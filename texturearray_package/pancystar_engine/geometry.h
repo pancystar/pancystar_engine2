@@ -51,7 +51,6 @@ struct point_skincommon
 struct point_terrain
 {
 	XMFLOAT3 position;
-	XMUINT4  tex_id;
 	XMFLOAT2 tex_height;
 	XMFLOAT2 tex_diffuse;
 };
@@ -318,6 +317,18 @@ public:
 private:
 	engine_basic::engine_fail_reason find_point(point_UV *vertex, UINT *index, int &num_vertex, int &num_index);
 };
+class mesh_terrain_tessellation : public Geometry<point_terrain>
+{
+	int divide_level;
+	float map_width;
+	float tex_color_scal;
+public:
+	mesh_terrain_tessellation(bool if_adj, int divide_level_in,float map_width_in,float tex_color_scal_in);
+	void show_mesh();
+private:
+	engine_basic::engine_fail_reason find_point(point_terrain *vertex, UINT *index, int &num_vertex, int &num_index);
+};
+
 
 template<typename T>
 class mesh_model : public Geometry<T> 

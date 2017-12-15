@@ -72,7 +72,7 @@ float4 PS(VertexOut Input) : SV_TARGET
 	//return input_texcolor;
 	//finalcolor = float4(float3(1.0, 1.0, 1.0) - exp(-input_texcolor.rgb / 1 * 10),1.0f);
 	//gammaÐ£Õý
-	return finalcolor;
+	return input_texcolor;
 	//return float4(pow(input_texcolor.rgb, float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2)), 1.0f);
 }
 technique11 draw_HDRfinal

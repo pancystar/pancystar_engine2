@@ -3446,6 +3446,166 @@ void shader_IBL_specular::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_p
 		member_point[i] = rec[i];
 	}
 }
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~地形渲染~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+shader_terrain_render::shader_terrain_render(LPCWSTR filename) : shader_basic(filename)
+{
+}
+engine_basic::engine_fail_reason shader_terrain_render::set_texture_height(ID3D11ShaderResourceView *tex_input)
+{
+	HRESULT hr = tex_height_handle->SetResource(tex_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "an error when setting terrain height map");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_terrain_render::set_texture_normal(ID3D11ShaderResourceView *tex_input)
+{
+	HRESULT hr = tex_normalt_handle->SetResource(tex_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "an error when setting terrain normal map");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_terrain_render::set_texture_blend(ID3D11ShaderResourceView *tex_input)
+{
+	HRESULT hr = tex_blend_handle->SetResource(tex_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "an error when setting terrain tangent map");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_terrain_render::set_texture_tangnt(ID3D11ShaderResourceView *tex_input)
+{
+	HRESULT hr = tex_tangnt_handle->SetResource(tex_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "an error when setting terrain blend map");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+
+
+engine_basic::engine_fail_reason shader_terrain_render::set_terrain_size(float world_size, float texture_size, float height_scal) 
+{
+	XMFLOAT4 terrain_size_data(world_size, texture_size, height_scal,0.0f);
+	HRESULT hr = terrain_size->SetRawValue((void*)&terrain_size_data, 0, sizeof(terrain_size_data));
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set terrain size error in terrain shader");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_terrain_render::set_view_pos(XMFLOAT3 eye_pos)
+{
+	HRESULT hr = view_pos_handle->SetRawValue((void*)&eye_pos, 0, sizeof(eye_pos));
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason error_message(hr, "terrain draw error when setting view position");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_terrain_render::set_texture_color(ID3D11ShaderResourceView *tex_color_in, ID3D11ShaderResourceView *tex_normal_in) 
+{
+	HRESULT hr = tex_ColorArray_handle->SetResource(tex_color_in);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "an error when setting terrain color array");
+		return error_message;
+	}
+	hr = tex_NormalArray_handle->SetResource(tex_normal_in);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "an error when setting terrain normal array");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_terrain_render::set_trans_world(XMFLOAT4X4 *mat_world)
+{
+	XMVECTOR x_delta;
+	XMMATRIX world_need = XMLoadFloat4x4(mat_world);
+	XMMATRIX normal_need = DirectX::XMMatrixTranspose(DirectX::XMMatrixInverse(&x_delta, world_need));
+	normal_need.r[0].m128_f32[3] = 0;
+	normal_need.r[1].m128_f32[3] = 0;
+	normal_need.r[2].m128_f32[3] = 0;
+	normal_need.r[3].m128_f32[3] = 1;
+	XMFLOAT4X4 mat_normal;
+	XMStoreFloat4x4(&mat_normal, normal_need);
+	engine_basic::engine_fail_reason check_error = set_matrix(world_matrix_handle, mat_world);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = set_matrix(normal_matrix_handle, &mat_normal);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_terrain_render::set_trans_all(XMFLOAT4X4 *mat_final)
+{
+	engine_basic::engine_fail_reason check_error = set_matrix(final_matrix_handle, mat_final);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+void shader_terrain_render::release()
+{
+	release_basic();
+}
+void shader_terrain_render::init_handle()
+{
+	world_matrix_handle = fx_need->GetVariableByName("world_matrix")->AsMatrix();
+	normal_matrix_handle = fx_need->GetVariableByName("normal_matrix")->AsMatrix();
+	final_matrix_handle = fx_need->GetVariableByName("final_matrix")->AsMatrix();
+
+	terrain_size = fx_need->GetVariableByName("terrain_size");
+	view_pos_handle = fx_need->GetVariableByName("eye_pos");
+	tex_height_handle = fx_need->GetVariableByName("terrain_height")->AsShaderResource();
+	tex_normalt_handle = fx_need->GetVariableByName("terrain_normal")->AsShaderResource();
+	tex_tangnt_handle = fx_need->GetVariableByName("terrain_tangent")->AsShaderResource();
+	tex_blend_handle = fx_need->GetVariableByName("terrain_blend")->AsShaderResource();
+
+	tex_ColorArray_handle = fx_need->GetVariableByName("ColorTexture_pack_albedo")->AsShaderResource();
+	tex_NormalArray_handle = fx_need->GetVariableByName("ColorTexture_pack_normal")->AsShaderResource();
+}
+void shader_terrain_render::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member)
+{
+	//设置顶点声明
+	D3D11_INPUT_ELEMENT_DESC rec[] =
+	{
+		//语义名    语义索引      数据格式          输入槽 起始地址     输入槽的格式 
+		{ "POSITION",0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,0  ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TEXHEIGHT",0  ,DXGI_FORMAT_R32G32_FLOAT      ,0    ,12 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TEXDIFFUSE",0  ,DXGI_FORMAT_R32G32_FLOAT      ,0    ,20 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 }
+	};
+	*num_member = sizeof(rec) / sizeof(D3D11_INPUT_ELEMENT_DESC);
+	for (UINT i = 0; i < *num_member; ++i)
+	{
+		member_point[i] = rec[i];
+	}
+}
 
 //shader管理器
 shader_control *shader_control::shadercontrol_pInstance = NULL;
@@ -3928,6 +4088,18 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
+	std::shared_ptr<shader_terrain_render> shader_terrain_test = std::make_shared<shader_terrain_render>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\terrain_tess.cso");
+	check_error = shader_terrain_test->shder_create();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = add_a_new_shader(std::type_index(typeid(shader_terrain_render)), shader_terrain_test);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
@@ -4239,6 +4411,18 @@ std::shared_ptr<shader_IBL_specular> shader_control::get_shader_IBL_specular(eng
 	auto out_pointer = std::dynamic_pointer_cast<shader_IBL_specular>(shader_vlight);
 	return out_pointer;
 }
+std::shared_ptr<shader_terrain_render> shader_control::get_shader_terrain_test(engine_basic::engine_fail_reason &if_succeed)
+{
+	std::string name_need = std::type_index(typeid(shader_terrain_render)).name();
+	auto shader_vlight = get_shader_by_type(std::type_index(typeid(shader_terrain_render)).name(), if_succeed);
+	if (!if_succeed.check_if_failed())
+	{
+		return std::shared_ptr<shader_terrain_render>();
+	}
+	auto out_pointer = std::dynamic_pointer_cast<shader_terrain_render>(shader_vlight);
+	return out_pointer;
+}
+
 std::shared_ptr<shader_basic> shader_control::get_shader_by_type(std::string type_name, engine_basic::engine_fail_reason &if_succeed)
 {
 	auto shader_out = shader_list.find(type_name)->second;

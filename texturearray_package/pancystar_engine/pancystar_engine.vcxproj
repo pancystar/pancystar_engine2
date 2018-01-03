@@ -169,14 +169,17 @@
     <ClInclude Include="PancyInput.h" />
     <ClInclude Include="pancystar_engine_basic.h" />
     <ClInclude Include="pancy_d3d11_basic.h" />
+    <ClInclude Include="pancy_environment.h" />
     <ClInclude Include="pancy_FFT_ocean.h" />
     <ClInclude Include="pancy_lighting.h" />
     <ClInclude Include="pancy_model_control.h" />
+    <ClInclude Include="pancy_particle.h" />
     <ClInclude Include="pancy_pretreatment.h" />
     <ClInclude Include="pancy_scene_design.h" />
     <ClInclude Include="pancy_ssao.h" />
     <ClInclude Include="pancy_posttreatment.h" />
     <ClInclude Include="pancy_terrain.h" />
+    <ClInclude Include="pancy_time_basic.h" />
     <ClInclude Include="shader_pancy.h" />
   </ItemGroup>
   <ItemGroup>
@@ -187,6 +190,7 @@
     <ClCompile Include="PancyInput.cpp" />
     <ClCompile Include="pancystar_engine_basic.cpp" />
     <ClCompile Include="pancy_d3d11_basic.cpp" />
+    <ClCompile Include="pancy_environment.cpp" />
     <ClCompile Include="pancy_FFT_ocean.cpp" />
     <ClCompile Include="pancy_lighting.cpp" />
     <ClCompile Include="pancy_model_control.cpp" />
@@ -195,6 +199,7 @@
     <ClCompile Include="pancy_scene_design.cpp" />
     <ClCompile Include="pancy_ssao.cpp" />
     <ClCompile Include="pancy_terrain.cpp" />
+    <ClCompile Include="pancy_time_basic.cpp" />
     <ClCompile Include="shader_pancy.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -204,6 +209,7 @@
     <FxCompile Include="atmosphere_render.fx" />
     <FxCompile Include="color_test.fx" />
     <FxCompile Include="fft_512x512_c2c.fx" />
+    <FxCompile Include="basic_particle.fx" />
     <FxCompile Include="gbuffer_pretreat.fx" />
     <FxCompile Include="HDR_average_pass.fx" />
     <FxCompile Include="HDR_blur_pass.fx" />

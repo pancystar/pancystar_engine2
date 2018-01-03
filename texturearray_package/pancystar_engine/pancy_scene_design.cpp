@@ -43,7 +43,337 @@ engine_basic::engine_fail_reason scene_root::release_basic()
 	return succeed;
 }
 
+real_time_environment::real_time_environment(float quality_environment_in)
+{
+	now_render_face = 0;
+	gbuffer_render_turn = true;
+	quality_environment = quality_environment_in;
+	environment_VP.TopLeftX = 0.0f;
+	environment_VP.TopLeftY = 0.0f;
+	environment_VP.Width = 1024.0f * quality_environment_in;
+	environment_VP.Height = 1024.0f * quality_environment_in;
+	environment_VP.MinDepth = 0.0f;
+	environment_VP.MaxDepth = 1.0f;
+	gbuffer_texture_data = new gbuffer_out_message(quality_environment * 1024.0f, quality_environment * 1024.0f, false);
+	scene_perspective = new engine_basic::extra_perspective_message(1024.0f * quality_environment, 1024.0f * quality_environment, 0.1f, 1000.0f, DirectX::XM_PIDIV2);
+	front_scene_center = XMFLOAT3(0, 0, 0);
+	XMFLOAT3 up[6] =
+	{
+		XMFLOAT3(0.0f, 1.0f, 0.0f),
+		XMFLOAT3(0.0f, 1.0f, 0.0f),
+		XMFLOAT3(0.0f, 0.0f,-1.0f),
+		XMFLOAT3(0.0f, 0.0f, 1.0f),
+		XMFLOAT3(0.0f, 1.0f, 0.0f),
+		XMFLOAT3(0.0f, 1.0f, 0.0f)
+	};
+	XMFLOAT3 look[6] =
+	{
+		XMFLOAT3(1.0f, 0.0f, 0.0f),
+		XMFLOAT3(-1.0f, 0.0f, 0.0f),
+		XMFLOAT3(0.0f, 1.0f, 0.0f),
+		XMFLOAT3(0.0f,-1.0f, 0.0f),
+		XMFLOAT3(0.0f, 0.0f, 1.0f),
+		XMFLOAT3(0.0f, 0.0f,-1.0f)
+	};
+	for (int i = 0; i < 6; ++i)
+	{
+		up_cube_reflect[i] = up[i];
+		look_cube_reflect[i] = look[i];
+	}
+}
+engine_basic::engine_fail_reason real_time_environment::init_cube_texture(DXGI_FORMAT tex_format, ID3D11ShaderResourceView **SRV_in, ID3D11RenderTargetView *RTV_in[6], string texture_name)
+{
+	D3D11_TEXTURE2D_DESC cubeMapDesc;
+	//渲染目标
+	cubeMapDesc.Width = static_cast<UINT>(1024.0f * quality_environment);
+	cubeMapDesc.Height = static_cast<UINT>(1024.0f * quality_environment);
+	cubeMapDesc.Format = tex_format;
+	cubeMapDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+	cubeMapDesc.ArraySize = 6;
+	cubeMapDesc.Usage = D3D11_USAGE_DEFAULT;
+	cubeMapDesc.CPUAccessFlags = 0;
+	cubeMapDesc.MipLevels = 1;
+	cubeMapDesc.MiscFlags = D3D11_RESOURCE_MISC_TEXTURECUBE;
+	cubeMapDesc.SampleDesc.Count = 1;
+	cubeMapDesc.SampleDesc.Quality = 0;
+	//使用以上描述创建纹理
+	ID3D11Texture2D *cubeMap_data(NULL);
+	HRESULT hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateTexture2D(&cubeMapDesc, 0, &cubeMap_data);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create cube " + texture_name + " texdata error when create real_time_environment");
+		return error_message;
+	}
 
+	//创建六个rendertarget
+	D3D11_RENDER_TARGET_VIEW_DESC rtvDesc_reflect;
+	rtvDesc_reflect.Format = cubeMapDesc.Format;
+	rtvDesc_reflect.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2DARRAY;
+	rtvDesc_reflect.Texture2DArray.ArraySize = 1;
+	rtvDesc_reflect.Texture2DArray.MipSlice = 0;
+	for (UINT i = 0; i < 6; ++i)
+	{
+		rtvDesc_reflect.Texture2DArray.FirstArraySlice = i;
+		hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateRenderTargetView(cubeMap_data, &rtvDesc_reflect, &RTV_in[i]);
+		if (FAILED(hr))
+		{
+			engine_basic::engine_fail_reason error_message(hr, "create reflect cubemap stencil texture RTV error when create ssrinput tex");
+			return error_message;
+		}
+	}
+	//创建一个SRV
+	D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc_reflect;
+	srvDesc_reflect.Format = cubeMapDesc.Format;
+	srvDesc_reflect.ViewDimension = D3D11_SRV_DIMENSION_TEXTURECUBE;
+	srvDesc_reflect.TextureCube.MipLevels = 1;
+	srvDesc_reflect.TextureCube.MostDetailedMip = 0;
+	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateShaderResourceView(cubeMap_data, &srvDesc_reflect, SRV_in);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create reflect cubemap stencil texture SRV error when create ssrinput tex");
+		return error_message;
+	}
+	cubeMap_data->Release();
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason real_time_environment::init_texture()
+{
+	engine_basic::engine_fail_reason check_error;
+	check_error = init_cube_texture(DXGI_FORMAT_R32G32_FLOAT, &cube_depthstencil_SRV, cube_depthstencil_RTV, "depthstencil_texture_cube");
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	init_cube_texture(DXGI_FORMAT_R32G32_FLOAT, &cube_depthstencil_backSRV, cube_depthstencil_backRTV, "depthstencil_backtexture_cube");
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	init_cube_texture(DXGI_FORMAT_R16G16B16A16_FLOAT, &cube_rendercolor_SRV, cube_rendercolor_RTV, "render_texture_cube");
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	init_cube_texture(DXGI_FORMAT_R16G16B16A16_FLOAT, &cube_rendercolor_backSRV, cube_rendercolor_backRTV, "render_backtexture_cube");
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	//建立临时深度缓冲区
+	D3D11_TEXTURE2D_DESC texDesc;
+	texDesc.Width = static_cast<int>(1024.0f * quality_environment);
+	texDesc.Height = static_cast<int>(1024.0f * quality_environment);
+	texDesc.MipLevels = 1;
+	texDesc.ArraySize = 1;
+	texDesc.Format = DXGI_FORMAT_R32_TYPELESS;
+	texDesc.SampleDesc.Count = 1;
+	texDesc.SampleDesc.Quality = 0;
+	texDesc.Usage = D3D11_USAGE_DEFAULT;
+	texDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+	texDesc.CPUAccessFlags = 0;
+	texDesc.MiscFlags = 0;
+	//建立纹理资源
+	ID3D11Texture2D* depthMap = 0;
+	HRESULT hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateTexture2D(&texDesc, 0, &depthMap);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create reflect depthtexture error when create ssrinput tex");
+		return error_message;
+	}
+	//建立深度缓冲区访问器
+	D3D11_DEPTH_STENCIL_VIEW_DESC dsvDesc;
+	dsvDesc.Flags = 0;
+	dsvDesc.Format = DXGI_FORMAT_D32_FLOAT;
+	dsvDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+	dsvDesc.Texture2D.MipSlice = 0;
+	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateDepthStencilView(depthMap, &dsvDesc, &reflect_cube_DSV);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "create reflect depthstencilview error when create ssrinput tex");
+		return error_message;
+	}
+	depthMap->Release();
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason real_time_environment::create()
+{
+	engine_basic::engine_fail_reason check_error;
+	fullscreen_buffer = new mesh_square(false);
+	check_error = fullscreen_buffer->create_object();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = gbuffer_texture_data->create();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = init_texture();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	pancy_camera::get_instance()->get_view_position(&center_position);
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+void real_time_environment::get_ViewMatrix(XMFLOAT4X4 *view_matrix, XMFLOAT4X4 *invview_matrix = NULL)
+{
+	XMFLOAT3 look_vec, up_vec;
+	//XMFLOAT4X4 view_matrix_reflect, inv_view_matrix_reflect, Proj_mat_reflect;
+	look_vec = look_cube_reflect[now_render_face];
+	up_vec = up_cube_reflect[now_render_face];
+	pancy_camera::get_instance()->count_view_matrix(look_vec, up_vec, center_position, view_matrix);
+	if (invview_matrix != NULL)
+	{
+		pancy_camera::get_instance()->count_invview_matrix(look_vec, up_vec, center_position, invview_matrix);
+	}
+}
+void real_time_environment::display_backbuffer(scene_root *environment_scene)
+{
+	//计算取景变换
+	/*
+	XMFLOAT3 look_vec, up_vec;
+	XMFLOAT4X4 view_matrix_reflect, inv_view_matrix_reflect,Proj_mat_reflect;
+	look_vec = look_cube_reflect[now_render_face];
+	up_vec = up_cube_reflect[now_render_face];
+	pancy_camera::get_instance()->count_view_matrix(look_vec, up_vec, center_position, &view_matrix_reflect);
+	pancy_camera::get_instance()->count_invview_matrix(look_vec, up_vec, center_position, &inv_view_matrix_reflect);
+	engine_basic::extra_perspective_message *scene_perspective = new engine_basic::extra_perspective_message(1024.0f * quality_environment, 1024.0f * quality_environment, 0.1f, 1000.0f, DirectX::XM_PIDIV2);
+	*/
+	XMFLOAT4X4 view_matrix_reflect, inv_view_matrix_reflect;
+	get_ViewMatrix(&view_matrix_reflect, &inv_view_matrix_reflect);
+
+	Pretreatment_gbuffer::get_instance()->render_gbuffer(environment_scene->get_geometry_buffer(), gbuffer_texture_data->get_gbuffer(), view_matrix_reflect, scene_perspective, true);
+	Pretreatment_gbuffer::get_instance()->render_lbuffer(gbuffer_texture_data->get_gbuffer(), center_position, view_matrix_reflect, inv_view_matrix_reflect, scene_perspective, true);
+
+	engine_basic::engine_fail_reason check_error;
+	//渲染深度到立方模板纹理贴图
+	auto shader_save_depth = shader_control::GetInstance()->get_shader_reflect_savedepth(check_error);
+	shader_save_depth->set_cube_count(XMFLOAT3(now_render_face, 0.0f, 0.0f));
+	shader_save_depth->set_depthtex_input(gbuffer_texture_data->get_gbuffer()->depthmap_single_tex);
+
+	d3d_pancy_basic_singleton::GetInstance()->set_render_target(cube_depthstencil_backRTV[now_render_face], NULL);
+	float clearColor[] = { 0.0f, 0.0f, -1.0f, 1e5f };
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearRenderTargetView(cube_depthstencil_backRTV[now_render_face], clearColor);
+
+	ID3DX11EffectTechnique *tech_need;
+	shader_save_depth->get_technique(&tech_need, "resolove_alpha");
+	fullscreen_buffer->get_teque(tech_need);
+	fullscreen_buffer->show_mesh();
+
+	D3DX11_TECHNIQUE_DESC techDesc;
+	shader_save_depth->set_depthtex_input(NULL);
+	ID3D11RenderTargetView* NULL_target[1] = { NULL };
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetRenderTargets(1, NULL_target, NULL);
+	tech_need->GetDesc(&techDesc);
+	for (UINT p = 0; p < techDesc.Passes; ++p)
+	{
+		tech_need->GetPassByIndex(p)->Apply(0, d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex());
+	}
+}
+void real_time_environment::display_environment(scene_root *environment_scene)
+{
+	//设置光照贴图
+	engine_basic::engine_fail_reason check_error;
+	auto shader_deffered = shader_control::GetInstance()->get_shader_lightdeffered(check_error);
+	shader_deffered->set_diffuse_light_tex(gbuffer_texture_data->get_gbuffer()->gbuffer_diffuse_tex);
+	shader_deffered->set_specular_light_tex(gbuffer_texture_data->get_gbuffer()->gbuffer_specular_tex);
+	shader_deffered->set_normal_tex(gbuffer_texture_data->get_gbuffer()->normalspec_tex);
+	shader_deffered->set_tex_specroughness_resource(gbuffer_texture_data->get_gbuffer()->specroughness_tex);
+	/*
+	XMFLOAT3 look_vec, up_vec;
+	XMFLOAT4X4 view_matrix_reflect, inv_view_matrix_reflect, Proj_mat_reflect;
+	look_vec = look_cube_reflect[now_render_face];
+	up_vec = up_cube_reflect[now_render_face];
+	pancy_camera::get_instance()->count_view_matrix(look_vec, up_vec, center_position, &view_matrix_reflect);
+	pancy_camera::get_instance()->count_invview_matrix(look_vec, up_vec, center_position, &inv_view_matrix_reflect);
+	engine_basic::extra_perspective_message *scene_perspective = new engine_basic::extra_perspective_message(1024.0f * quality_environment, 1024.0f * quality_environment, 0.1f, 1000.0f, DirectX::XM_PIDIV2);
+	*/
+	XMFLOAT4X4 view_matrix_reflect, inv_view_matrix_reflect;
+	get_ViewMatrix(&view_matrix_reflect);
+
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->RSSetViewports(1, &environment_VP);
+
+	ID3D11RenderTargetView* renderTargets[1] = { cube_rendercolor_backRTV[now_render_face] };
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetRenderTargets(1, renderTargets, reflect_cube_DSV);
+	float clearColor[] = { 0.0f, 0.0f, 0.0f, 1e5f };
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearRenderTargetView(cube_rendercolor_backRTV[now_render_face], clearColor);
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearDepthStencilView(reflect_cube_DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
+
+	static const XMMATRIX T(
+		0.5f, 0.0f, 0.0f, 0.0f,
+		0.0f, -0.5f, 0.0f, 0.0f,
+		0.0f, 0.0f, 1.0f, 0.0f,
+		0.5f, 0.5f, 0.0f, 1.0f);
+	XMMATRIX V = XMLoadFloat4x4(&view_matrix_reflect);
+	XMMATRIX P = XMLoadFloat4x4(&scene_perspective->get_proj_matrix());
+	XMFLOAT4X4 VPT;
+	XMStoreFloat4x4(&VPT, V * P * T);
+
+	auto shader_need = shader_control::GetInstance()->get_shader_lightdeffered(check_error);
+	shader_need->set_trans_ssao(&VPT);
+	auto shader_sky = shader_control::GetInstance()->get_shader_sky_draw(check_error);
+	shader_sky->set_trans_texproj(&VPT);
+
+	environment_scene->display_environment(view_matrix_reflect, scene_perspective->get_proj_matrix());
+}
+void real_time_environment::display_a_turn(scene_root *environment_scene)
+{
+	if (gbuffer_render_turn)
+	{
+		display_backbuffer(environment_scene);
+	}
+	else
+	{
+		display_environment(environment_scene);
+	}
+	//切换渲染模式(渲染gbuffer/color)
+	gbuffer_render_turn = !gbuffer_render_turn;
+	if (gbuffer_render_turn)
+	{
+		//切换渲染面
+		now_render_face = (now_render_face + 1) % 6;
+	}
+	if (now_render_face == 0 && gbuffer_render_turn)
+	{
+		//切换深度记录立方缓冲区
+		std::swap(cube_depthstencil_SRV, cube_depthstencil_backSRV);
+		for (int i = 0; i < 6; ++i)
+		{
+			std::swap(cube_depthstencil_RTV[i], cube_depthstencil_backRTV[i]);
+		}
+		//切换颜色记录立方缓冲区
+		std::swap(cube_rendercolor_SRV, cube_rendercolor_backSRV);
+		for (int i = 0; i < 6; ++i)
+		{
+			std::swap(cube_rendercolor_RTV[i], cube_rendercolor_backRTV[i]);
+		}
+		//更换反射中心点
+		front_scene_center = center_position;
+		pancy_camera::get_instance()->get_view_position(&center_position);
+	}
+}
+void real_time_environment::release()
+{
+	fullscreen_buffer->release();
+	gbuffer_texture_data->release();
+	cube_depthstencil_SRV->Release();
+	cube_depthstencil_backSRV->Release();
+	cube_rendercolor_SRV->Release();
+	cube_rendercolor_backSRV->Release();
+	reflect_cube_DSV->Release();
+	for (int i = 0; i < 6; ++i)
+	{
+		cube_depthstencil_RTV[i]->Release();
+		cube_depthstencil_backRTV[i]->Release();
+		cube_rendercolor_RTV[i]->Release();
+		cube_rendercolor_backRTV[i]->Release();
+	}
+}
 
 scene_test_square::scene_test_square()
 {
@@ -475,344 +805,15 @@ void scene_test_square::release()
 	tex_cubesky->Release();
 	render_ocean->release();
 	simulate_ocean->release();
-	
+
 }
 
-real_time_environment::real_time_environment(float quality_environment_in)
-{
-	now_render_face = 0;
-	gbuffer_render_turn = true;
-	quality_environment = quality_environment_in;
-	environment_VP.TopLeftX = 0.0f;
-	environment_VP.TopLeftY = 0.0f;
-	environment_VP.Width = 1024.0f * quality_environment_in;
-	environment_VP.Height = 1024.0f * quality_environment_in;
-	environment_VP.MinDepth = 0.0f;
-	environment_VP.MaxDepth = 1.0f;
-	gbuffer_texture_data = new gbuffer_out_message(quality_environment * 1024.0f, quality_environment * 1024.0f, false);
-	scene_perspective = new engine_basic::extra_perspective_message(1024.0f * quality_environment, 1024.0f * quality_environment, 0.1f, 1000.0f, DirectX::XM_PIDIV2);
-	front_scene_center = XMFLOAT3(0, 0, 0);
-	XMFLOAT3 up[6] =
-	{
-		XMFLOAT3(0.0f, 1.0f, 0.0f),
-		XMFLOAT3(0.0f, 1.0f, 0.0f),
-		XMFLOAT3(0.0f, 0.0f,-1.0f),
-		XMFLOAT3(0.0f, 0.0f, 1.0f),
-		XMFLOAT3(0.0f, 1.0f, 0.0f),
-		XMFLOAT3(0.0f, 1.0f, 0.0f)
-	};
-	XMFLOAT3 look[6] =
-	{
-		XMFLOAT3(1.0f, 0.0f, 0.0f),
-		XMFLOAT3(-1.0f, 0.0f, 0.0f),
-		XMFLOAT3(0.0f, 1.0f, 0.0f),
-		XMFLOAT3(0.0f,-1.0f, 0.0f),
-		XMFLOAT3(0.0f, 0.0f, 1.0f),
-		XMFLOAT3(0.0f, 0.0f,-1.0f)
-	};
-	for (int i = 0; i < 6; ++i)
-	{
-		up_cube_reflect[i] = up[i];
-		look_cube_reflect[i] = look[i];
-	}
-}
-engine_basic::engine_fail_reason real_time_environment::init_cube_texture(DXGI_FORMAT tex_format, ID3D11ShaderResourceView **SRV_in, ID3D11RenderTargetView *RTV_in[6], string texture_name)
-{
-	D3D11_TEXTURE2D_DESC cubeMapDesc;
-	//渲染目标
-	cubeMapDesc.Width = static_cast<UINT>(1024.0f * quality_environment);
-	cubeMapDesc.Height = static_cast<UINT>(1024.0f * quality_environment);
-	cubeMapDesc.Format = tex_format;
-	cubeMapDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
-	cubeMapDesc.ArraySize = 6;
-	cubeMapDesc.Usage = D3D11_USAGE_DEFAULT;
-	cubeMapDesc.CPUAccessFlags = 0;
-	cubeMapDesc.MipLevels = 1;
-	cubeMapDesc.MiscFlags = D3D11_RESOURCE_MISC_TEXTURECUBE;
-	cubeMapDesc.SampleDesc.Count = 1;
-	cubeMapDesc.SampleDesc.Quality = 0;
-	//使用以上描述创建纹理
-	ID3D11Texture2D *cubeMap_data(NULL);
-	HRESULT hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateTexture2D(&cubeMapDesc, 0, &cubeMap_data);
-	if (FAILED(hr))
-	{
-		engine_basic::engine_fail_reason error_message(hr, "create cube " + texture_name + " texdata error when create real_time_environment");
-		return error_message;
-	}
 
-	//创建六个rendertarget
-	D3D11_RENDER_TARGET_VIEW_DESC rtvDesc_reflect;
-	rtvDesc_reflect.Format = cubeMapDesc.Format;
-	rtvDesc_reflect.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2DARRAY;
-	rtvDesc_reflect.Texture2DArray.ArraySize = 1;
-	rtvDesc_reflect.Texture2DArray.MipSlice = 0;
-	for (UINT i = 0; i < 6; ++i)
-	{
-		rtvDesc_reflect.Texture2DArray.FirstArraySlice = i;
-		hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateRenderTargetView(cubeMap_data, &rtvDesc_reflect, &RTV_in[i]);
-		if (FAILED(hr))
-		{
-			engine_basic::engine_fail_reason error_message(hr, "create reflect cubemap stencil texture RTV error when create ssrinput tex");
-			return error_message;
-		}
-	}
-	//创建一个SRV
-	D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc_reflect;
-	srvDesc_reflect.Format = cubeMapDesc.Format;
-	srvDesc_reflect.ViewDimension = D3D11_SRV_DIMENSION_TEXTURECUBE;
-	srvDesc_reflect.TextureCube.MipLevels = 1;
-	srvDesc_reflect.TextureCube.MostDetailedMip = 0;
-	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateShaderResourceView(cubeMap_data, &srvDesc_reflect, SRV_in);
-	if (FAILED(hr))
-	{
-		engine_basic::engine_fail_reason error_message(hr, "create reflect cubemap stencil texture SRV error when create ssrinput tex");
-		return error_message;
-	}
-	cubeMap_data->Release();
-	engine_basic::engine_fail_reason succeed;
-	return succeed;
-}
-engine_basic::engine_fail_reason real_time_environment::init_texture()
-{
-	engine_basic::engine_fail_reason check_error;
-	check_error = init_cube_texture(DXGI_FORMAT_R32G32_FLOAT, &cube_depthstencil_SRV, cube_depthstencil_RTV, "depthstencil_texture_cube");
-	if (!check_error.check_if_failed())
-	{
-		return check_error;
-	}
-	init_cube_texture(DXGI_FORMAT_R32G32_FLOAT, &cube_depthstencil_backSRV, cube_depthstencil_backRTV, "depthstencil_backtexture_cube");
-	if (!check_error.check_if_failed())
-	{
-		return check_error;
-	}
-	init_cube_texture(DXGI_FORMAT_R16G16B16A16_FLOAT, &cube_rendercolor_SRV, cube_rendercolor_RTV, "render_texture_cube");
-	if (!check_error.check_if_failed())
-	{
-		return check_error;
-	}
-	init_cube_texture(DXGI_FORMAT_R16G16B16A16_FLOAT, &cube_rendercolor_backSRV, cube_rendercolor_backRTV, "render_backtexture_cube");
-	if (!check_error.check_if_failed())
-	{
-		return check_error;
-	}
-	//建立临时深度缓冲区
-	D3D11_TEXTURE2D_DESC texDesc;
-	texDesc.Width = static_cast<int>(1024.0f * quality_environment);
-	texDesc.Height = static_cast<int>(1024.0f * quality_environment);
-	texDesc.MipLevels = 1;
-	texDesc.ArraySize = 1;
-	texDesc.Format = DXGI_FORMAT_R32_TYPELESS;
-	texDesc.SampleDesc.Count = 1;
-	texDesc.SampleDesc.Quality = 0;
-	texDesc.Usage = D3D11_USAGE_DEFAULT;
-	texDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
-	texDesc.CPUAccessFlags = 0;
-	texDesc.MiscFlags = 0;
-	//建立纹理资源
-	ID3D11Texture2D* depthMap = 0;
-	HRESULT hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateTexture2D(&texDesc, 0, &depthMap);
-	if (FAILED(hr))
-	{
-		engine_basic::engine_fail_reason error_message(hr, "create reflect depthtexture error when create ssrinput tex");
-		return error_message;
-	}
-	//建立深度缓冲区访问器
-	D3D11_DEPTH_STENCIL_VIEW_DESC dsvDesc;
-	dsvDesc.Flags = 0;
-	dsvDesc.Format = DXGI_FORMAT_D32_FLOAT;
-	dsvDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
-	dsvDesc.Texture2D.MipSlice = 0;
-	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateDepthStencilView(depthMap, &dsvDesc, &reflect_cube_DSV);
-	if (FAILED(hr))
-	{
-		engine_basic::engine_fail_reason error_message(hr, "create reflect depthstencilview error when create ssrinput tex");
-		return error_message;
-	}
-	depthMap->Release();
-	engine_basic::engine_fail_reason succeed;
-	return succeed;
-}
-engine_basic::engine_fail_reason real_time_environment::create()
-{
-	engine_basic::engine_fail_reason check_error;
-	fullscreen_buffer = new mesh_square(false);
-	check_error = fullscreen_buffer->create_object();
-	if (!check_error.check_if_failed())
-	{
-		return check_error;
-	}
-	check_error = gbuffer_texture_data->create();
-	if (!check_error.check_if_failed())
-	{
-		return check_error;
-	}
-	check_error = init_texture();
-	if (!check_error.check_if_failed())
-	{
-		return check_error;
-	}
-	pancy_camera::get_instance()->get_view_position(&center_position);
-	engine_basic::engine_fail_reason succeed;
-	return succeed;
-}
-void real_time_environment::get_ViewMatrix(XMFLOAT4X4 *view_matrix, XMFLOAT4X4 *invview_matrix = NULL)
-{
-	XMFLOAT3 look_vec, up_vec;
-	//XMFLOAT4X4 view_matrix_reflect, inv_view_matrix_reflect, Proj_mat_reflect;
-	look_vec = look_cube_reflect[now_render_face];
-	up_vec = up_cube_reflect[now_render_face];
-	pancy_camera::get_instance()->count_view_matrix(look_vec, up_vec, center_position, view_matrix);
-	if (invview_matrix != NULL)
-	{
-		pancy_camera::get_instance()->count_invview_matrix(look_vec, up_vec, center_position, invview_matrix);
-	}
-}
-void real_time_environment::display_backbuffer(scene_root *environment_scene)
-{
-	//计算取景变换
-	/*
-	XMFLOAT3 look_vec, up_vec;
-	XMFLOAT4X4 view_matrix_reflect, inv_view_matrix_reflect,Proj_mat_reflect;
-	look_vec = look_cube_reflect[now_render_face];
-	up_vec = up_cube_reflect[now_render_face];
-	pancy_camera::get_instance()->count_view_matrix(look_vec, up_vec, center_position, &view_matrix_reflect);
-	pancy_camera::get_instance()->count_invview_matrix(look_vec, up_vec, center_position, &inv_view_matrix_reflect);
-	engine_basic::extra_perspective_message *scene_perspective = new engine_basic::extra_perspective_message(1024.0f * quality_environment, 1024.0f * quality_environment, 0.1f, 1000.0f, DirectX::XM_PIDIV2);
-	*/
-	XMFLOAT4X4 view_matrix_reflect, inv_view_matrix_reflect;
-	get_ViewMatrix(&view_matrix_reflect, &inv_view_matrix_reflect);
-
-	Pretreatment_gbuffer::get_instance()->render_gbuffer(environment_scene->get_geometry_buffer(), gbuffer_texture_data->get_gbuffer(), view_matrix_reflect, scene_perspective, true);
-	Pretreatment_gbuffer::get_instance()->render_lbuffer(gbuffer_texture_data->get_gbuffer(), center_position, view_matrix_reflect, inv_view_matrix_reflect, scene_perspective, true);
-
-	engine_basic::engine_fail_reason check_error;
-	//渲染深度到立方模板纹理贴图
-	auto shader_save_depth = shader_control::GetInstance()->get_shader_reflect_savedepth(check_error);
-	shader_save_depth->set_cube_count(XMFLOAT3(now_render_face, 0.0f, 0.0f));
-	shader_save_depth->set_depthtex_input(gbuffer_texture_data->get_gbuffer()->depthmap_single_tex);
-
-	d3d_pancy_basic_singleton::GetInstance()->set_render_target(cube_depthstencil_backRTV[now_render_face], NULL);
-	float clearColor[] = { 0.0f, 0.0f, -1.0f, 1e5f };
-	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearRenderTargetView(cube_depthstencil_backRTV[now_render_face], clearColor);
-
-	ID3DX11EffectTechnique *tech_need;
-	shader_save_depth->get_technique(&tech_need, "resolove_alpha");
-	fullscreen_buffer->get_teque(tech_need);
-	fullscreen_buffer->show_mesh();
-
-	D3DX11_TECHNIQUE_DESC techDesc;
-	shader_save_depth->set_depthtex_input(NULL);
-	ID3D11RenderTargetView* NULL_target[1] = { NULL };
-	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetRenderTargets(1, NULL_target, NULL);
-	tech_need->GetDesc(&techDesc);
-	for (UINT p = 0; p < techDesc.Passes; ++p)
-	{
-		tech_need->GetPassByIndex(p)->Apply(0, d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex());
-	}
-}
-void real_time_environment::display_environment(scene_root *environment_scene)
-{
-	//设置光照贴图
-	engine_basic::engine_fail_reason check_error;
-	auto shader_deffered = shader_control::GetInstance()->get_shader_lightdeffered(check_error);
-	shader_deffered->set_diffuse_light_tex(gbuffer_texture_data->get_gbuffer()->gbuffer_diffuse_tex);
-	shader_deffered->set_specular_light_tex(gbuffer_texture_data->get_gbuffer()->gbuffer_specular_tex);
-	shader_deffered->set_normal_tex(gbuffer_texture_data->get_gbuffer()->normalspec_tex);
-	shader_deffered->set_tex_specroughness_resource(gbuffer_texture_data->get_gbuffer()->specroughness_tex);
-	/*
-	XMFLOAT3 look_vec, up_vec;
-	XMFLOAT4X4 view_matrix_reflect, inv_view_matrix_reflect, Proj_mat_reflect;
-	look_vec = look_cube_reflect[now_render_face];
-	up_vec = up_cube_reflect[now_render_face];
-	pancy_camera::get_instance()->count_view_matrix(look_vec, up_vec, center_position, &view_matrix_reflect);
-	pancy_camera::get_instance()->count_invview_matrix(look_vec, up_vec, center_position, &inv_view_matrix_reflect);
-	engine_basic::extra_perspective_message *scene_perspective = new engine_basic::extra_perspective_message(1024.0f * quality_environment, 1024.0f * quality_environment, 0.1f, 1000.0f, DirectX::XM_PIDIV2);
-	*/
-	XMFLOAT4X4 view_matrix_reflect, inv_view_matrix_reflect;
-	get_ViewMatrix(&view_matrix_reflect);
-
-	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->RSSetViewports(1, &environment_VP);
-
-	ID3D11RenderTargetView* renderTargets[1] = { cube_rendercolor_backRTV[now_render_face] };
-	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetRenderTargets(1, renderTargets, reflect_cube_DSV);
-	float clearColor[] = { 0.0f, 0.0f, 0.0f, 1e5f };
-	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearRenderTargetView(cube_rendercolor_backRTV[now_render_face], clearColor);
-	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearDepthStencilView(reflect_cube_DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
-
-	static const XMMATRIX T(
-		0.5f, 0.0f, 0.0f, 0.0f,
-		0.0f, -0.5f, 0.0f, 0.0f,
-		0.0f, 0.0f, 1.0f, 0.0f,
-		0.5f, 0.5f, 0.0f, 1.0f);
-	XMMATRIX V = XMLoadFloat4x4(&view_matrix_reflect);
-	XMMATRIX P = XMLoadFloat4x4(&scene_perspective->get_proj_matrix());
-	XMFLOAT4X4 VPT;
-	XMStoreFloat4x4(&VPT, V * P * T);
-
-	auto shader_need = shader_control::GetInstance()->get_shader_lightdeffered(check_error);
-	shader_need->set_trans_ssao(&VPT);
-	auto shader_sky = shader_control::GetInstance()->get_shader_sky_draw(check_error);
-	shader_sky->set_trans_texproj(&VPT);
-
-	environment_scene->display_environment(view_matrix_reflect, scene_perspective->get_proj_matrix());
-}
-void real_time_environment::display_a_turn(scene_root *environment_scene)
-{
-	if (gbuffer_render_turn)
-	{
-		display_backbuffer(environment_scene);
-	}
-	else
-	{
-		display_environment(environment_scene);
-	}
-	//切换渲染模式(渲染gbuffer/color)
-	gbuffer_render_turn = !gbuffer_render_turn;
-	if (gbuffer_render_turn)
-	{
-		//切换渲染面
-		now_render_face = (now_render_face + 1) % 6;
-	}
-	if (now_render_face == 0 && gbuffer_render_turn)
-	{
-		//切换深度记录立方缓冲区
-		std::swap(cube_depthstencil_SRV, cube_depthstencil_backSRV);
-		for (int i = 0; i < 6; ++i)
-		{
-			std::swap(cube_depthstencil_RTV[i], cube_depthstencil_backRTV[i]);
-		}
-		//切换颜色记录立方缓冲区
-		std::swap(cube_rendercolor_SRV, cube_rendercolor_backSRV);
-		for (int i = 0; i < 6; ++i)
-		{
-			std::swap(cube_rendercolor_RTV[i], cube_rendercolor_backRTV[i]);
-		}
-		//更换反射中心点
-		front_scene_center = center_position;
-		pancy_camera::get_instance()->get_view_position(&center_position);
-	}
-}
-void real_time_environment::release()
-{
-	fullscreen_buffer->release();
-	gbuffer_texture_data->release();
-	cube_depthstencil_SRV->Release();
-	cube_depthstencil_backSRV->Release();
-	cube_rendercolor_SRV->Release();
-	cube_rendercolor_backSRV->Release();
-	reflect_cube_DSV->Release();
-	for (int i = 0; i < 6; ++i)
-	{
-		cube_depthstencil_RTV[i]->Release();
-		cube_depthstencil_backRTV[i]->Release();
-		cube_rendercolor_RTV[i]->Release();
-		cube_rendercolor_backRTV[i]->Release();
-	}
-}
 
 scene_test_environment::scene_test_environment()
 {
 	test_model = new model_reader_PancySkinMesh("yuriskin\\yuri.pancyskinmesh", "yuriskin\\yuri.pancymat", "yuriskin\\yuri.pancyskin");
+	/*
 	quality_reflect = 0.5f;
 	XMFLOAT3 up[6] =
 	{
@@ -837,6 +838,7 @@ scene_test_environment::scene_test_environment()
 		up_cube_reflect[i] = up[i];
 		look_cube_reflect[i] = look[i];
 	}
+	*/
 }
 engine_basic::engine_fail_reason scene_test_environment::create()
 {
@@ -848,6 +850,13 @@ engine_basic::engine_fail_reason scene_test_environment::create()
 		return check_error;
 	}
 	//其他资源
+	test_IBL = new environment_IBL_control(20,4,0.25f);
+	check_error = test_IBL->create();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	/*
 	environment_texture_data = new gbuffer_out_message(1024.0f * quality_reflect, 1024.0f * quality_reflect, false);
 	check_error = environment_texture_data->create();
 	if (!check_error.check_if_failed())
@@ -860,6 +869,7 @@ engine_basic::engine_fail_reason scene_test_environment::create()
 	{
 		return check_error;
 	}
+	*/
 	check_error = test_model->create();
 	if (!check_error.check_if_failed())
 	{
@@ -913,14 +923,14 @@ engine_basic::engine_fail_reason scene_test_environment::create()
 	{
 		return check_error;
 	}
-
+	/*
 	HRESULT hr_need = CreateDDSTextureFromFileEx(d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device(), d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex(), L"Texture_cube1.dds", 0, D3D11_USAGE_DEFAULT, D3D11_BIND_SHADER_RESOURCE, 0, 0, false, NULL, &tex_cubesky);
 	check_error = create_cubemap();
 	if (!check_error.check_if_failed())
 	{
 		return check_error;
 	}
-
+	*/
 	//加载测试山脉
 	terrain_file_path terrain_file;
 	terrain_file.height_rawdata_name = "terrain_data\\terrain.raw";
@@ -940,8 +950,15 @@ engine_basic::engine_fail_reason scene_test_environment::create()
 	terrain_file.color_albe_texdata_name[3] = "terrain_data\\texdds\\Rock_GuiMossyRock_2k_alb_s.dds";
 	terrain_file.color_norm_texdata_name[3] = "terrain_data\\texdds\\Rock_GuiMossyRock_2k_n.dds";
 
-	terrain_need = new pancy_terrain_part(2048.0f,200,100.0f,1000.0f,XMFLOAT2(0.0f,0.0f), terrain_file);
+	terrain_need = new pancy_terrain_part(2048.0f, 200, 100.0f, 1000.0f, XMFLOAT2(0.0f, 0.0f), terrain_file);
 	check_error = terrain_need->create();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	//加载测试粒子
+	particle_fire = new particle_looping<point_ParticleBasic>(5000);
+	check_error = particle_fire->create(L"flare0.dds");
 	if (!check_error.check_if_failed())
 	{
 		return check_error;
@@ -954,13 +971,19 @@ void scene_test_environment::display()
 	show_animation_test();
 	show_sky_single();
 	show_terrain();
-	//show_sky_cube();
+	show_particle();
+	show_sky_cube();
+}
+void scene_test_environment::show_particle()
+{
+	particle_fire->draw_particle();
 }
 void scene_test_environment::display_environment(XMFLOAT4X4 view_matrix, XMFLOAT4X4 proj_matrix)
 {
 }
 void scene_test_environment::update(float delta_time)
 {
+	time_need = delta_time;
 	float move_speed = 0.525f;
 	XMMATRIX view;
 	auto user_input = pancy_input::GetInstance();
@@ -1011,19 +1034,37 @@ void scene_test_environment::update(float delta_time)
 	XMFLOAT4X4 world_matrix;
 	XMFLOAT4X4 final_matrix;
 	//更新天空
+	test_IBL->update_sky_data(delta_time);
+
 	trans_world = XMMatrixTranslation(0.0, 0.0, 0.0);
 	scal_world = XMMatrixScaling(50, 50, 50);
 	XMStoreFloat4x4(&world_matrix, scal_world *  trans_world);
 	geometry_buffer->update_a_model_instance(ID_model_sky, world_matrix, delta_time);
+
+	float rand_time = static_cast<float>(rand() % 1000) / 20.0f;
+	XMFLOAT4X4 view_mat, proj_mat;
+	scene_camera->count_view_matrix(&view_mat);
+	proj_mat = engine_basic::perspective_message::get_instance()->get_proj_matrix();
+	XMFLOAT4X4 part_proj;
+	XMFLOAT3 view_pos;
+	scene_camera->get_view_position(&view_pos);
+	XMStoreFloat4x4(&part_proj, XMLoadFloat4x4(&view_mat) * XMLoadFloat4x4(&proj_mat));
+	particle_fire->update(delta_time, rand_time, &part_proj, &view_pos);
+	particle_fire->set_particle_direct(&XMFLOAT3(0, 0, 0), &XMFLOAT3(0, 0, 0));
 }
 void scene_test_environment::release()
 {
 	//释放基本资源
 	release_basic();
 	//释放其他资源
-	environment_texture_data->release();
+	particle_fire->release();
+	test_IBL->release();
+
 	terrain_need->release();
+	test_model->release();
 	//pancy_geometry_control_singleton::get_instance()->release();
+	/*
+	environment_texture_data->release();
 	tex_cubesky->Release();
 	SRV_cube->Release();
 	reflect_cube_DSV->Release();
@@ -1045,7 +1086,8 @@ void scene_test_environment::release()
 		RTV_diffusecube[i]->Release();
 	}
 	fullscreen_buffer->release();
-	test_model->release();
+	*/
+
 }
 void scene_test_environment::show_sky_single()
 {
@@ -1059,7 +1101,12 @@ void scene_test_environment::show_sky_single()
 	shader_test->get_technique(&teque_need, "draw_sky");
 	shader_test->set_trans_world(&data_view->get_matrix_list()[0]);
 	//设定立方贴图
-	shader_test->set_tex_resource(tex_cubesky);
+	auto sky_data = test_IBL->get_IBL_data_by_time(time_need);
+	if (sky_data != NULL) 
+	{
+		shader_test->set_tex_resource(sky_data->get_SRV_spec());
+	}
+	//shader_test->set_tex_resource(tex_cubesky);
 	//设定总变换
 	XMFLOAT4X4 view_mat, final_mat, viewproj;
 	pancy_camera::get_instance()->count_view_matrix(&view_mat);
@@ -1080,6 +1127,12 @@ void scene_test_environment::show_sky_single()
 
 void scene_test_environment::show_sky_cube()
 {
+	/*
+	bool check_finish = test_IBL->display_an_IBL_data();
+	if (!check_finish) 
+	{
+		if_finish = true;
+	}
 	for (int i = 0; i < 6; ++i)
 	{
 		engine_basic::engine_fail_reason check_error;
@@ -1211,6 +1264,7 @@ void scene_test_environment::show_sky_cube()
 		fullscreen_buffer->get_teque(teque_need);
 		fullscreen_buffer->show_mesh();
 	}
+	*/
 }
 
 void scene_test_environment::show_animation_test()
@@ -1280,7 +1334,7 @@ void scene_test_environment::show_terrain()
 {
 	engine_basic::engine_fail_reason check_error;
 	//设定总变换
-	XMFLOAT4X4 view_mat,proj_mat;
+	XMFLOAT4X4 view_mat, proj_mat;
 	XMFLOAT3 view_pos;
 	pancy_camera::get_instance()->count_view_matrix(&view_mat);
 	pancy_camera::get_instance()->get_view_position(&view_pos);
@@ -1289,6 +1343,7 @@ void scene_test_environment::show_terrain()
 	terrain_need->render_terrain(view_pos, view_mat, proj_mat);
 
 }
+/*
 engine_basic::engine_fail_reason scene_test_environment::create_cubemap()
 {
 	HRESULT hr;
@@ -1442,10 +1497,10 @@ engine_basic::engine_fail_reason scene_test_environment::create_cubemap()
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
-
+*/
 pancy_scene_control::pancy_scene_control()
 {
-	sundir = XMFLOAT3(-0.972948968, 0.227391526, 0.0407850109);
+	sundir = XMFLOAT3(0, 0.227391526, 0.0407850109);
 	update_time = 0.0f;
 	scene_now_show = -1;
 	quality_reflect = 0.5f;
@@ -1789,20 +1844,41 @@ void pancy_scene_control::update(float delta_time)
 	{
 		if (pancy_input::GetInstance()->check_mouseDown(0))
 		{
-			sundir.y -= pancy_input::GetInstance()->MouseMove_Y() * 0.01f;
-			float average = sqrt(sundir.x * sundir.x + sundir.y * sundir.y + sundir.z * sundir.z);
-			sundir.x /= average;
-			sundir.y /= average;
-			sundir.z /= average;
+			//sundir.y -= pancy_input::GetInstance()->MouseMove_Y() * 0.01f;
+			//float average = sqrt(sundir.x * sundir.x + sundir.y * sundir.y + sundir.z * sundir.z);
+			//sundir.x /= average;
+			//sundir.y /= average;
+			//sundir.z /= average;
+			time_count += pancy_input::GetInstance()->MouseMove_Y() * 0.01f;
+			if (time_count > XM_2PI)
+			{
+				time_count -= XM_2PI;
+			}
+			sundir.x = 0;
+			sundir.y = -sin(time_count);
+			sundir.z = cos(time_count);
+
 			//scene_camera->rotation_up(user_input->MouseMove_X() * 0.001f);
 			//scene_camera->rotation_right(user_input->MouseMove_Y() * 0.001f);
 		}
 		//sundir.y += 0.1;
 		//sundir.x /=
 	}
+	//time_count += 0.5f*delta_time;
+	/*
+	time_count = -0.0f;
+	if (time_count > XM_2PI)
+	{
+		time_count -= XM_2PI;
+	}
+	sundir.x = 0;
+	sundir.y = -sin(time_count);
+	sundir.z = cos(time_count);
+	*/
 	if (scene_now_show >= 0 && scene_now_show < scene_list.size())
 	{
-		scene_list[scene_now_show]->update(delta_time);
+		//scene_list[scene_now_show]->update(delta_time);
+		scene_list[scene_now_show]->update(time_count);
 	}
 
 
@@ -1825,12 +1901,27 @@ void pancy_scene_control::display()
 	//渲染gbuffer
 	if (scene_now_show >= 0 && scene_now_show < scene_list.size())
 	{
+		//反投影
+		const float kFovY = engine_basic::perspective_message::get_instance()->get_perspective_angle();
+		//const float kFovY = engine_basic::perspective_message::get_instance()->get_perspective_angle();
+		const float kTanFovY = tan(kFovY / 2.0);
+		float aspect_ratio = static_cast<float>(d3d_pancy_basic_singleton::GetInstance()->get_wind_width()) / static_cast<float>(d3d_pancy_basic_singleton::GetInstance()->get_wind_height());
+		XMFLOAT4X4 clip_matrix =
+		{
+			kTanFovY * aspect_ratio, 0.0, 0.0, 0.0,
+			0.0, kTanFovY, 0.0, 0.0,
+			0.0, 0.0, 0.0, -1.0,
+			0.0, 0.0, 1.0, 1.0
+		};
+		auto shader_pretreat_lbuffer = shader_control::GetInstance()->get_shader_lightbuffer(check_error);
+		shader_pretreat_lbuffer->set_view_from_clip(clip_matrix);
+		//gbuffer
 		engine_basic::extra_perspective_message *scene_perspective = new engine_basic::extra_perspective_message(d3d_pancy_basic_singleton::GetInstance()->get_wind_width(), d3d_pancy_basic_singleton::GetInstance()->get_wind_height(), 0.1f, 1000.0f, DirectX::XM_PIDIV4);
-		Pretreatment_gbuffer::get_instance()->render_gbuffer(scene_list[scene_now_show]->get_geometry_buffer(), scene_list[scene_now_show]->get_gbuffer_renderdata(), view_mat, scene_perspective,false);
+		Pretreatment_gbuffer::get_instance()->render_gbuffer(scene_list[scene_now_show]->get_geometry_buffer(), scene_list[scene_now_show]->get_gbuffer_renderdata(), view_mat, scene_perspective, false);
 
 		//渲染AO
 		//ssao_render->get_normaldepthmap(pretreat_render->get_gbuffer_normalspec(), pretreat_render->get_gbuffer_depth());
-		
+
 		ssao_render->get_normaldepthmap(scene_list[scene_now_show]->get_gbuffer_renderdata()->normalspec_tex, scene_list[scene_now_show]->get_gbuffer_renderdata()->depthmap_single_tex);
 		ssao_render->compute_ssaomap();
 		ssao_render->blur_ssaomap();
@@ -1840,7 +1931,7 @@ void pancy_scene_control::display()
 		//计算光照
 		//d3d_pancy_basic_singleton::GetInstance()->reset_viewport();
 		//pretreat_render->display_lbuffer(false);
-		Pretreatment_gbuffer::get_instance()->render_lbuffer(scene_list[scene_now_show]->get_gbuffer_renderdata(), view_pos, view_mat, inv_view_mat, scene_perspective,true);
+		Pretreatment_gbuffer::get_instance()->render_lbuffer(scene_list[scene_now_show]->get_gbuffer_renderdata(), view_pos, view_mat, inv_view_mat, scene_perspective, true);
 		//设置光照贴图
 		auto shader_deffered = shader_control::GetInstance()->get_shader_lightdeffered(check_error);
 		shader_deffered->set_diffuse_light_tex(scene_list[scene_now_show]->get_gbuffer_renderdata()->gbuffer_diffuse_tex);
@@ -1862,13 +1953,13 @@ void pancy_scene_control::display()
 		//反射颜色计算
 		render_posttreatment_RTGR::get_instance()->draw_reflect(
 			scene_list[scene_now_show]->get_gbuffer_renderdata(),
-			reflect_buffer, environment_map_list->get_scene_center(), 
-			environment_map_list->get_env_color_texture(), 
+			reflect_buffer, environment_map_list->get_scene_center(),
+			environment_map_list->get_env_color_texture(),
 			environment_map_list->get_env_depth_texture()
 			);
 		//HDR计算
 		render_posttreatment_HDR::get_instance()->display(
-			reflect_buffer->reflect_out_tex, 
+			reflect_buffer->reflect_out_tex,
 			scene_list[scene_now_show]->get_HDRbuffer_data(),
 			d3d_pancy_basic_singleton::GetInstance()->get_back_buffer()
 			);
@@ -1883,14 +1974,14 @@ void pancy_scene_control::display()
 		scene_list[scene_now_show]->display();
 		scene_list[scene_now_show]->display_nopost();
 	}
-	
+
 	globel_reflect->draw_reflect(pretreat_render->get_environment_map_renderplace(), pretreat_render->get_posttreat_color_map(), pretreat_render->get_posttreat_mask_map(), pretreat_render->get_gbuffer_normalspec(), pretreat_render->get_gbuffer_depth(), reflect_cube_SRV, pretreat_render->get_reflect_mask_map());
 	globel_reflect->draw_to_posttarget(ssao_render->get_aomap(), pretreat_render->get_gbuffer_normalspec(), pretreat_render->get_gbuffer_specrough(), brdf_pic);
 	HDR_tonemapping->display(globel_reflect->get_output_tex());
 	*/
 	//渲染立方环境反射
 	//render_environment();
-	
+
 	d3d_pancy_basic_singleton::GetInstance()->restore_render_target();
 	auto shader_need = shader_control::GetInstance()->get_shader_lightdeffered(check_error);
 	shader_need->set_diffuse_light_tex(NULL);
@@ -1909,7 +2000,7 @@ void pancy_scene_control::display()
 	//HRESULT hr = swapchain->Present(0, 0);
 	//atmosphere_texture->build_atomosphere_texture();
 
-	
+
 	auto shader_test_ato = shader_control::GetInstance()->get_shader_atmosphere_render(check_error);
 	shader_test_ato->set_tex_depth(pretreat_render->get_gbuffer_depth());
 	shader_test_ato->set_tex_normal(pretreat_render->get_gbuffer_normalspec());

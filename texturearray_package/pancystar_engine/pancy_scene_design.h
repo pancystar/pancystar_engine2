@@ -13,6 +13,8 @@
 #include"pancy_atmosphere.h"
 #include"pancy_FFT_ocean.h"
 #include"pancy_terrain.h"
+#include"pancy_particle.h"
+#include"pancy_environment.h"
 #include<map>
 #include <Shlobj.h>  
 #include <tchar.h>  
@@ -44,86 +46,7 @@ protected:
 	engine_basic::engine_fail_reason create_basic();
 	engine_basic::engine_fail_reason release_basic();
 };
-
-
-
-
-
-class scene_test_square : public scene_root
-{
-	float all_time_need = 0;
-	pancy_model_ID ID_model_castel;
-	int model_ID_castel;
-	pancy_model_ID ID_model_floor;
-	int model_ID_floor;
-	pancy_model_ID ID_model_ball[30];
-	int model_ID_ball;
-	pancy_model_ID ID_model_sky;
-	int model_ID_sky;
-	pancy_model_ID ID_model_pbrtest;
-	int model_ID_pbrtest;
-	ID3D11ShaderResourceView *tex_cubesky;
-	OceanSimulator *simulate_ocean;
-	FFT_ocean      *render_ocean;
-public:
-	scene_test_square();
-	engine_basic::engine_fail_reason create();
-	void display();
-	void display_nopost() {};
-	void display_environment(XMFLOAT4X4 view_matrix, XMFLOAT4X4 proj_matrix);
-	void update(float delta_time);
-	void release();
-private:
-	void show_model_single(string tech_name, XMFLOAT4X4 *view_matrix = NULL, XMFLOAT4X4 *proj_matrix = NULL);
-	void show_floor_single();
-	void show_sky_single();
-	void show_sky_single(XMFLOAT4X4 view_matrix, XMFLOAT4X4 *proj_matrix);
-	void show_pbr_test(string tech_name, XMFLOAT4X4 *view_matrix = NULL, XMFLOAT4X4 *proj_matrix = NULL);
-};
-class scene_test_environment : public scene_root
-{
-	pancy_terrain_part        *terrain_need;
-	gbuffer_out_message       *environment_texture_data;
-	pancy_model_ID ID_model_skin;
-	pancy_model_ID ID_model_skin2;
-	int model_ID_skin;
-	int animation_id;
-	model_reader_pancymesh   *test_model;
-	Geometry_basic           *fullscreen_buffer;
-	XMFLOAT3                 up_cube_reflect[6];
-	XMFLOAT3                 look_cube_reflect[6];
-	float quality_reflect;
-	pancy_model_ID ID_model_sky;
-	int model_ID_sky;
-	ID3D11ShaderResourceView *tex_cubesky;
-	ID3D11ShaderResourceView *SRV_cube;
-	ID3D11RenderTargetView *RTV_cube[7*6];
-
-	ID3D11ShaderResourceView *SRV_diffusecube;
-	ID3D11RenderTargetView *RTV_diffusecube[6];
-
-	ID3D11ShaderResourceView *SRV_singlecube;
-	ID3D11RenderTargetView *RTV_singlecube[6];
-
-	ID3D11DepthStencilView   *reflect_cube_DSV;
-
-public:
-	scene_test_environment();
-	engine_basic::engine_fail_reason create();
-	void display();
-	void display_nopost() {};
-	void display_environment(XMFLOAT4X4 view_matrix, XMFLOAT4X4 proj_matrix);
-	void update(float delta_time);
-	void release();
-private:
-	void show_sky_single();
-	void show_sky_cube();
-	void show_animation_test();
-	void show_terrain();
-	engine_basic::engine_fail_reason create_cubemap();
-};
-
-class real_time_environment 
+class real_time_environment
 {
 	D3D11_VIEWPORT           environment_VP;
 	Geometry_basic           *fullscreen_buffer;          //È«ÆÁÄ»Æ½Ãæ
@@ -167,10 +90,102 @@ private:
 	void display_environment(scene_root *environment_scene);
 	void get_ViewMatrix(XMFLOAT4X4 *view_matrix, XMFLOAT4X4 *invview_matrix);
 };
+class scene_test_square : public scene_root
+{
+	float all_time_need = 0;
+	pancy_model_ID ID_model_castel;
+	int model_ID_castel;
+	pancy_model_ID ID_model_floor;
+	int model_ID_floor;
+	pancy_model_ID ID_model_ball[30];
+	int model_ID_ball;
+	pancy_model_ID ID_model_sky;
+	int model_ID_sky;
+	pancy_model_ID ID_model_pbrtest;
+	int model_ID_pbrtest;
+	ID3D11ShaderResourceView *tex_cubesky;
+	OceanSimulator *simulate_ocean;
+	FFT_ocean      *render_ocean;
+public:
+	scene_test_square();
+	engine_basic::engine_fail_reason create();
+	void display();
+	void display_nopost() {};
+	void display_environment(XMFLOAT4X4 view_matrix, XMFLOAT4X4 proj_matrix);
+	void update(float delta_time);
+	void release();
+private:
+	void show_model_single(string tech_name, XMFLOAT4X4 *view_matrix = NULL, XMFLOAT4X4 *proj_matrix = NULL);
+	void show_floor_single();
+	void show_sky_single();
+	void show_sky_single(XMFLOAT4X4 view_matrix, XMFLOAT4X4 *proj_matrix);
+	void show_pbr_test(string tech_name, XMFLOAT4X4 *view_matrix = NULL, XMFLOAT4X4 *proj_matrix = NULL);
+};
+
+
+
+
+class scene_test_environment : public scene_root
+{
+	
+	particle_looping<point_ParticleBasic>          *particle_fire;
+	pancy_terrain_part        *terrain_need;
+	bool if_finish = false;
+	float time_need = 0;
+	pancy_model_ID ID_model_skin;
+	pancy_model_ID ID_model_skin2;
+	int model_ID_skin;
+	int animation_id;
+	model_reader_pancymesh   *test_model;
+	environment_IBL_control  *test_IBL;
+	pancy_model_ID ID_model_sky;
+	int model_ID_sky;
+	/*
+	gbuffer_out_message      *environment_texture_data;
+	Geometry_basic           *fullscreen_buffer;
+	XMFLOAT3                 up_cube_reflect[6];
+	XMFLOAT3                 look_cube_reflect[6];
+	float quality_reflect;
+	
+	ID3D11ShaderResourceView *tex_cubesky;
+	ID3D11ShaderResourceView *SRV_cube;
+	ID3D11RenderTargetView *RTV_cube[7*6];
+
+	ID3D11ShaderResourceView *SRV_diffusecube;
+	ID3D11RenderTargetView *RTV_diffusecube[6];
+
+	ID3D11ShaderResourceView *SRV_singlecube;
+	ID3D11RenderTargetView *RTV_singlecube[6];
+
+	ID3D11DepthStencilView   *reflect_cube_DSV;
+	*/
+public:
+	scene_test_environment();
+	engine_basic::engine_fail_reason create();
+	void display();
+	void display_nopost() {};
+	void display_environment(XMFLOAT4X4 view_matrix, XMFLOAT4X4 proj_matrix);
+	void update(float delta_time);
+	void release();
+private:
+	void show_sky_single();
+	void show_sky_cube();
+	void show_animation_test();
+	void show_terrain();
+	void show_particle();
+	//engine_basic::engine_fail_reason create_cubemap();
+};
+
+
+
+class scene_game_build : public scene_root
+{
+};
 
 
 class pancy_scene_control
 {
+	float time_count = 0;
 	int scene_now_show;
 	XMFLOAT3 sundir;
 	ID3D11ShaderResourceView *brdf_pic;

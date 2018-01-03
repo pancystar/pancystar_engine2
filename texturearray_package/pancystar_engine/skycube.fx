@@ -55,6 +55,15 @@ float4 PS(VertexOut pin) :SV_TARGET
 	float4 atomosphere_color = atmosphere_mask.Sample(samTex, pin.pos_texproj.xy);
 	return atomosphere_color;
 }
+float4 PS_cube(VertexOut pin) :SV_TARGET
+{
+	float4 tex_color = float4(0.0f,0.0f,0.0f,0.0f);
+	float4 color_fog = float4(0.75f, 0.75f, 0.75f, 1.0f);
+	float3 view_direct = normalize(pin.position_bef - position_view);
+	float3 map_direct = view_direct.xyz;//视线向量
+	tex_color = texture_cube.Sample(samTex, map_direct);
+	return tex_color;
+}
 float4 PS_gamma(VertexOut pin) :SV_TARGET
 {
 	float4 tex_color = float4(0.0f,0.0f,0.0f,0.0f);
@@ -78,6 +87,16 @@ technique11 draw_sky
 		SetVertexShader(CompileShader(vs_5_0,VS()));
 		SetGeometryShader(NULL);
 		SetPixelShader(CompileShader(ps_5_0, PS()));
+		SetRasterizerState(DisableCulling);
+	}
+}
+technique11 draw_sky_cube
+{
+	Pass p0
+	{
+		SetVertexShader(CompileShader(vs_5_0,VS()));
+		SetGeometryShader(NULL);
+		SetPixelShader(CompileShader(ps_5_0, PS_cube()));
 		SetRasterizerState(DisableCulling);
 	}
 }

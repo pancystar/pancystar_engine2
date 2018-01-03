@@ -375,6 +375,12 @@ engine_basic::engine_fail_reason sunlight_with_shadowmap::create()
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
+void sunlight_with_shadowmap::update_sunlight()
+{
+	engine_basic::engine_fail_reason check_error;
+	auto shader_deffered = shader_control::GetInstance()->get_shader_lightbuffer(check_error);
+	shader_deffered->set_sunlight(light_data);
+}
 void sunlight_with_shadowmap::draw_shadow(pancy_geometry_control *geometry_list)
 {
 	divide_view_frustum(sunlight_lamda_log, shadow_devide);
@@ -714,7 +720,9 @@ void light_control_singleton::update_sunlight(XMFLOAT3 dir)
 	if (data_now != sun_pssmshadow_light.end())
 	{
 		data_now->second.set_light_dir(dir.x, dir.y, dir.z);
+		data_now->second.update_sunlight();
 	}
+	update_and_setlight();
 }
 void light_control_singleton::draw_shadow(pancy_geometry_control *geometry_list)
 {

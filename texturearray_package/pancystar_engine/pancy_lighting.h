@@ -93,6 +93,7 @@ public:
 	XMFLOAT4X4 build_matrix_sunlight(float near_plane, float far_plane, XMFLOAT3 light_dir);
 	void build_AABB_box(XMFLOAT4 near_point[4], XMFLOAT4 far_point[4], XMFLOAT3 &min_pos, XMFLOAT3 &max_pos);
 	void release();
+	void update_sunlight();
 private:
 	void draw_shadow_basic(pancy_geometry_control *geometry_list,int count);
 };

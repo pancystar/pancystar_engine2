@@ -1542,6 +1542,7 @@ void Pretreatment_gbuffer::render_lbuffer(
 	lbuffer_shader->set_tex_mask(render_target_out->AtmosphereMask_tex);
 	lbuffer_shader->set_camera(view_position);
 	lbuffer_shader->set_exposure(10.0f);
+	//lbuffer_shader->set_sun_size(XMFLOAT2(1,1));
 	//MSAA深度还原参数
 	XMFLOAT3 rec_proj_vec;
 	rec_proj_vec.x = 1.0f / perspective_message->get_proj_matrix()._43;

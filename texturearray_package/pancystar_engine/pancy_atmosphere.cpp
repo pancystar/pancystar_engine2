@@ -250,6 +250,7 @@ void atmosphere_pretreatment::build_atomosphere_texture()
 	shader_pretreat_lbuffer->set_white_point(XMFLOAT3(1.0f, 1.0f, 1.0f));
 	//·´Í¶Ó°
 	const float kFovY = engine_basic::perspective_message::get_instance()->get_perspective_angle();
+	//const float kFovY = engine_basic::perspective_message::get_instance()->get_perspective_angle();
 	const float kTanFovY = tan(kFovY / 2.0);
 	float aspect_ratio = static_cast<float>(d3d_pancy_basic_singleton::GetInstance()->get_wind_width()) / static_cast<float>(d3d_pancy_basic_singleton::GetInstance()->get_wind_height());
 	XMFLOAT4X4 clip_matrix =

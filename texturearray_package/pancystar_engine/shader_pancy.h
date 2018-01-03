@@ -833,6 +833,30 @@ private:
 	void init_handle();//注册shader中所有全局变量的句柄
 	void set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member);
 };
+class shader_particle : public shader_basic
+{
+	ID3DX11EffectVariable         *view_pos_handle;                //视点位置
+	ID3DX11EffectVariable         *start_position_handle;          //粒子产生源的位置
+	ID3DX11EffectScalarVariable   *time_game_handle;               //粒子产生源的位置
+	ID3DX11EffectScalarVariable   *time_delta_handle;              //粒子产生的方向
+	ID3DX11EffectMatrixVariable   *project_matrix_handle;          //全套几何变换句柄
+	ID3DX11EffectShaderResourceVariable   *texture_handle;         //粒子贴图纹理
+	ID3DX11EffectShaderResourceVariable   *RandomTex_handle;       //随机数贴图纹理
+public:
+	shader_particle(LPCWSTR filename);
+	engine_basic::engine_fail_reason set_viewposition(XMFLOAT3 eye_pos);
+	engine_basic::engine_fail_reason set_startposition(XMFLOAT3 start_pos);
+	engine_basic::engine_fail_reason set_frametime(float game_time, float delta_time);
+	engine_basic::engine_fail_reason set_randomtex(ID3D11ShaderResourceView *tex_in);
+	engine_basic::engine_fail_reason set_trans_all(XMFLOAT4X4 *mat_need);
+	engine_basic::engine_fail_reason set_texture(ID3D11ShaderResourceView *tex_in);
+	void release();
+private:
+	void init_handle();//注册shader中所有全局变量的句柄
+	void set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member);
+};
+
+
 class shader_control
 {
 private:
@@ -892,6 +916,7 @@ public:
 	std::shared_ptr<shader_ocean_draw> get_shader_oceandraw_tess(engine_basic::engine_fail_reason &if_succeed);
 	std::shared_ptr<shader_IBL_specular> get_shader_IBL_specular(engine_basic::engine_fail_reason &if_succeed);
 	std::shared_ptr<shader_terrain_render> get_shader_terrain_test(engine_basic::engine_fail_reason &if_succeed);
+	std::shared_ptr<shader_particle> get_shader_particle_basic(engine_basic::engine_fail_reason &if_succeed);
 	void release();
 private:
 	engine_basic::engine_fail_reason init_basic();

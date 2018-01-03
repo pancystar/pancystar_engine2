@@ -153,7 +153,7 @@ float3 count_normal_sphereradiance(float pz,VertexOut pin, float render_check, f
 	//float shadow_length = max(0.0, min(shadow_out, distance_to_intersection) - shadow_in) * lightshaft_fadein_hack;
 	float shadow_length = 0.5f;
 	//float3 transmittance;
-	in_scatter = GetSkyRadianceToPoint(camera - earth_center, point_in - earth_center, shadow_length, rec_dir, transmittance);
+	in_scatter = GetSkyRadianceToPoint(float3(0, 2, 5) - earth_center, point_in - earth_center, shadow_length, rec_dir, transmittance);
 	//sphere_radiance = sphere_radiance * transmittance + in_scatter;
 	return minus_hack * sphere_radiance * render_check;
 	
@@ -166,19 +166,19 @@ float3 count_sky_radiance(float3 view_direction)
 	float minus_hack = 1.0f;
 	if (rec_dir.y < 0.0f) 
 	{
-		minus_hack = max(0.0f,0.2f + rec_dir.y);
+		minus_hack = max(0.0f,1.0f + 3.0f*rec_dir.y);
 		rec_dir.y = 0.0f;
 	}
 	float shadow_length = 0.0f;;
 	float3 transmittance;
-	float3 radiance = GetSkyRadiance(camera - earth_center, view_direction, shadow_length, rec_dir, transmittance);
+	float3 radiance = GetSkyRadiance(float3(0,2,5) - earth_center, normalize(float3(view_direction.x, view_direction.y+ camera.y*0.0014f, view_direction.z)), shadow_length, rec_dir, transmittance);
 	if (dot(view_direction, rec_dir) > sun_size.y)
 	{
 		radiance = radiance + transmittance * GetSolarRadiance();
 	}
-	//float3 rgb_color = pow(float3(1.0f, 1.0f, 1.0f) - exp(-radiance / white_point_in * exposure), float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2));
+	float3 rgb_color = pow(float3(1.0f, 1.0f, 1.0f) - exp(-radiance / white_point_in * exposure), float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2));
 	//float3 rgb_color = float3(1.0f, 1.0f, 1.0f) - exp(-radiance / white_point_in * exposure);
-	return minus_hack * radiance;
+	return minus_hack * rgb_color;
 }
 VertexOut VS(VertexIn vin)
 {

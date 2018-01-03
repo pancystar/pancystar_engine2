@@ -60,6 +60,15 @@
     <ClInclude Include="pancy_terrain.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="pancy_time_basic.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="pancy_particle.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="pancy_environment.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="geometry.cpp">
@@ -108,6 +117,12 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="pancy_terrain.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="pancy_time_basic.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="pancy_environment.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
@@ -206,6 +221,9 @@
       <Filter>源文件</Filter>
     </FxCompile>
     <FxCompile Include="terrain_tess.fx">
+      <Filter>源文件</Filter>
+    </FxCompile>
+    <FxCompile Include="basic_particle.fx">
       <Filter>源文件</Filter>
     </FxCompile>
   </ItemGroup>

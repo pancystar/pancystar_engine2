@@ -69,6 +69,14 @@ struct point_ssao
 	XMFLOAT3 normal;
 	XMFLOAT2 tex;
 };
+struct point_ParticleBasic 
+{
+	XMFLOAT3 position;
+	XMFLOAT3 speed;
+	XMFLOAT2 Size;
+	float Age;
+	unsigned int Type;
+};
 //几何体访问类
 class Geometry_basic
 {

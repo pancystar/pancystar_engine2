@@ -159,7 +159,7 @@ float3 Prefilter_DiffuseEnvMap(float3 R, TextureCube EnvMap)
 	float TotalWeight = 0.0000001f;
 	float3 N = R;
 	float3 PrefilteredColor = 0;
-	const uint NumSamples = 2048;
+	const uint NumSamples = 4096;
 
 	for (uint i = 0; i < NumSamples; i++)
 	{

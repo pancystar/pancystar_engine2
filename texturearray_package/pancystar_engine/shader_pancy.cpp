@@ -3607,6 +3607,119 @@ void shader_terrain_render::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member
 	}
 }
 
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~粒子着色~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+shader_particle::shader_particle(LPCWSTR filename) :shader_basic(filename)
+{
+
+}
+void shader_particle::init_handle()
+{
+	//纹理信息句柄
+	texture_handle = fx_need->GetVariableByName("texture_first")->AsShaderResource();
+	RandomTex_handle = fx_need->GetVariableByName("texture_random")->AsShaderResource();
+	//几何变换信息句柄
+	project_matrix_handle = fx_need->GetVariableByName("final_matrix")->AsMatrix();
+	view_pos_handle = fx_need->GetVariableByName("position_view");
+	//粒子产生信息
+	start_position_handle = fx_need->GetVariableByName("position_start");
+	//动画时间
+	time_game_handle = fx_need->GetVariableByName("game_time")->AsScalar();
+	time_delta_handle = fx_need->GetVariableByName("delta_time")->AsScalar();
+}
+void shader_particle::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member)
+{
+	//设置顶点声明
+	D3D11_INPUT_ELEMENT_DESC rec[] =
+	{
+		//语义名    语义索引      数据格式          输入槽 起始地址     输入槽的格式 
+		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+		{ "VELOCITY", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+		{ "SIZE",     0, DXGI_FORMAT_R32G32_FLOAT,    0, 24, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+		{ "AGE",      0, DXGI_FORMAT_R32_FLOAT,       0, 32, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+		{ "TYPE",     0, DXGI_FORMAT_R32_UINT,        0, 36, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+	};
+	*num_member = sizeof(rec) / sizeof(D3D11_INPUT_ELEMENT_DESC);
+	for (UINT i = 0; i < *num_member; ++i)
+	{
+		member_point[i] = rec[i];
+	}
+}
+engine_basic::engine_fail_reason shader_particle::set_viewposition(XMFLOAT3 eye_pos)
+{
+	HRESULT hr = view_pos_handle->SetRawValue((void*)&eye_pos, 0, sizeof(eye_pos));
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set particle view position error");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_particle::set_startposition(XMFLOAT3 start_pos)
+{
+	HRESULT hr = start_position_handle->SetRawValue((void*)&start_pos, 0, sizeof(start_pos));
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set particle start position error");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_particle::set_frametime(float game_time, float delta_time)
+{
+	HRESULT hr = time_game_handle->SetFloat(game_time);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set particle rand time error");
+		return error_message;
+	}
+	hr = time_delta_handle->SetFloat(delta_time);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set particle delta time error");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_particle::set_randomtex(ID3D11ShaderResourceView *tex_in)
+{
+	HRESULT hr = RandomTex_handle->SetResource(tex_in);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set particle random tex error");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_particle::set_trans_all(XMFLOAT4X4 *mat_need)
+{
+	engine_basic::engine_fail_reason check_error = set_matrix(project_matrix_handle, mat_need);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_particle::set_texture(ID3D11ShaderResourceView *tex_in)
+{
+	HRESULT hr = texture_handle->SetResource(tex_in);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set particle color tex error");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+void shader_particle::release()
+{
+	release_basic();
+}
+
 //shader管理器
 shader_control *shader_control::shadercontrol_pInstance = NULL;
 shader_control::shader_control() 
@@ -4100,6 +4213,18 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
+	std::shared_ptr<shader_particle> shader_particle_test = std::make_shared<shader_particle>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\basic_particle.cso");
+	check_error = shader_particle_test->shder_create();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = add_a_new_shader(std::type_index(typeid(shader_particle)), shader_particle_test);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
@@ -4422,7 +4547,17 @@ std::shared_ptr<shader_terrain_render> shader_control::get_shader_terrain_test(e
 	auto out_pointer = std::dynamic_pointer_cast<shader_terrain_render>(shader_vlight);
 	return out_pointer;
 }
-
+std::shared_ptr<shader_particle> shader_control::get_shader_particle_basic(engine_basic::engine_fail_reason &if_succeed)
+{
+	std::string name_need = std::type_index(typeid(shader_particle)).name();
+	auto shader_vlight = get_shader_by_type(std::type_index(typeid(shader_particle)).name(), if_succeed);
+	if (!if_succeed.check_if_failed())
+	{
+		return std::shared_ptr<shader_particle>();
+	}
+	auto out_pointer = std::dynamic_pointer_cast<shader_particle>(shader_vlight);
+	return out_pointer;
+}
 std::shared_ptr<shader_basic> shader_control::get_shader_by_type(std::string type_name, engine_basic::engine_fail_reason &if_succeed)
 {
 	auto shader_out = shader_list.find(type_name)->second;

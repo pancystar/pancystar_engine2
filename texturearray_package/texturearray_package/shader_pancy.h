@@ -118,6 +118,9 @@ class virtual_light_shader : public shader_basic
 
 	ID3DX11EffectShaderResourceVariable   *texture_diffusearray_handle;     //漫反射贴图句柄
 	ID3DX11EffectShaderResourceVariable   *cubemap_texture;                 //立方贴图资源
+
+	ID3DX11EffectShaderResourceVariable   *animation_buffer;      //动画数据
+	ID3DX11EffectVariable                 *point_offset_handle;   //动画数据偏移
 public:
 	virtual_light_shader(LPCWSTR filename);
 	engine_basic::engine_fail_reason set_view_pos(XMFLOAT3 eye_pos);
@@ -135,6 +138,9 @@ public:
 	
 	engine_basic::engine_fail_reason set_tex_diffuse_array(ID3D11ShaderResourceView *tex_in);//设置漫反射纹理数组
 	engine_basic::engine_fail_reason set_tex_environment(ID3D11ShaderResourceView* tex_cube);           //设置纹理资源
+
+	engine_basic::engine_fail_reason set_animation_buffer(ID3D11ShaderResourceView* buffer_in);
+	engine_basic::engine_fail_reason set_animation_offset(XMUINT4 offset_data);
 	void release();
 private:
 	void init_handle();                 //注册全局变量句柄

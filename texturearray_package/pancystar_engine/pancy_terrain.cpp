@@ -1,19 +1,31 @@
 #include"pancy_terrain.h"
-
-pancy_terrain_part::pancy_terrain_part(float terrain_width_in, int terrain_divide_in, float Terrain_ColorTexScal_in, float Terrain_HeightScal_in, XMFLOAT2 terrain_offset_in, terrain_file_path file_name)
+//地形数据
+pancy_terrain_part::pancy_terrain_part(
+	float terrain_width_in, 
+	int terrain_divide_in, 
+	float Terrain_ColorTexScal_in, 
+	float Terrain_HeightScal_in, 
+	XMFLOAT2 terrain_offset_in, 
+	string file_name
+	)
 {
 	terrain_width = terrain_width_in;
 	terrain_divide = terrain_divide_in;
 	Terrain_HeightScal = Terrain_HeightScal_in;
 	terrain_offset = terrain_offset_in;
 
-	terrain_file = file_name;
+	terrain_file_name = file_name;
 	Terrain_ColorTexScal = Terrain_ColorTexScal_in;
 
 }
 engine_basic::engine_fail_reason pancy_terrain_part::create()
 {
 	engine_basic::engine_fail_reason check_error;
+	check_error = load_terrain_file();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
 	terrain_renderbuffer = new mesh_terrain_tessellation(false, terrain_divide, terrain_width, Terrain_ColorTexScal);
 	check_error = terrain_renderbuffer->create_object();
 	if (!check_error.check_if_failed())
@@ -280,13 +292,84 @@ engine_basic::engine_fail_reason pancy_terrain_part::load_tex_array(string texda
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
+string pancy_terrain_part::find_path(string input)
+{
+	string check_out;
+	int tail = -1;
+	for (int i = input.size(); i >= 0; --i)
+	{
+		if (input[i] == '\\') 
+		{
+			tail = i;
+			break;
+		}
+	}
+	for (int i = 0; i <= tail; ++i)
+	{
+		check_out += input[i];
+	}
+	return check_out;
+}
+string pancy_terrain_part::move_string_space(string input)
+{
+	string check_out;
+	int start_copy = input.size();
+	for (int i = 0; i < input.size() - 1; ++i)
+	{
+		if (input[i] == ' ' && input[i + 1] != ' ') 
+		{
+			start_copy = i + 1;
+		}
+	}
+	for (int i = start_copy; i < input.size(); ++i) 
+	{
+		check_out += input[i];
+	}
+	return check_out;
+}
+engine_basic::engine_fail_reason pancy_terrain_part::load_terrain_file()
+{
+	std::ifstream load_file;
+	load_file.open(terrain_file_name);
+	if (!load_file.is_open()) 
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "load terrain file " + terrain_file_name + " error");
+		return error_message;
+	}
+	string path_terrain = find_path(terrain_file_name);
+	char data[100];
+	int length = 0;
+	load_file.getline(data, 100);
+	//地形纹理信息
+	load_file.getline(data, 100);
+	terrain_file.height_rawdata_name = path_terrain + move_string_space(data);
+	load_file.getline(data, 100);
+	terrain_file.normal_texdata_name = path_terrain + move_string_space(data);
+	load_file.getline(data, 100);
+	terrain_file.tangent_texdata_name = path_terrain + move_string_space(data);
+	load_file.getline(data, 100);
+	terrain_file.blend_texdata_name = path_terrain + move_string_space(data);
+	//颜色纹理信息
+	string tex_albedo_name[4];
+	string tex_normal_name[4];
+	for (int i = 0; i < 4; ++i)
+	{
+		load_file.getline(data, 100);
+		load_file.getline(data, 100);
+		terrain_file.color_albe_texdata_name[i] = path_terrain + data;
+		load_file.getline(data, 100);
+		terrain_file.color_norm_texdata_name[i] = path_terrain + data;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
 void pancy_terrain_part::render_terrain(XMFLOAT3 view_pos, XMFLOAT4X4 view_mat, XMFLOAT4X4 proj_mat)
 {
 	engine_basic::engine_fail_reason check_error;
 	auto shader_terrain = shader_control::GetInstance()->get_shader_terrain_test(check_error);
 	XMFLOAT4X4 world_mat, final_mat;
-	XMStoreFloat4x4(&world_mat, XMMatrixTranslation(terrain_offset.x, 0, terrain_offset.y));
-	XMStoreFloat4x4(&final_mat, XMMatrixTranslation(terrain_offset.x, 0, terrain_offset.y) * XMLoadFloat4x4(&view_mat) * XMLoadFloat4x4(&proj_mat));
+	XMStoreFloat4x4(&world_mat, XMMatrixTranslation(terrain_offset.x - (terrain_width / 2.0f), 0, terrain_offset.y - (terrain_width / 2.0f)));
+	XMStoreFloat4x4(&final_mat, XMMatrixTranslation(terrain_offset.x - (terrain_width / 2.0f), 0, terrain_offset.y - (terrain_width / 2.0f)) * XMLoadFloat4x4(&view_mat) * XMLoadFloat4x4(&proj_mat));
 	shader_terrain->set_trans_world(&world_mat);
 	shader_terrain->set_trans_all(&final_mat);
 	shader_terrain->set_terrain_size(terrain_width, TexHeight_width, Terrain_HeightScal);
@@ -303,4 +386,821 @@ void pancy_terrain_part::render_terrain(XMFLOAT3 view_pos, XMFLOAT4X4 view_mat, 
 	terrain_renderbuffer->show_mesh();
 	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->HSSetShader(NULL, 0, 0);
 	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->DSSetShader(NULL, 0, 0);
+}
+//地形组织资源
+terrain_part_resource::terrain_part_resource(
+	int self_ID_in,
+	float terrain_width_in,
+	int terrain_divide_in,
+	float Terrain_ColorTexScal_in,
+	float Terrain_HeightScal_in,
+	XMFLOAT2 terrain_offset_in,
+	string file_name_in
+	)
+{
+	self_ID = self_ID_in;
+	terrain_width = terrain_width_in;
+	terrain_divide = terrain_divide_in;
+	Terrain_ColorTexScal = Terrain_ColorTexScal_in;
+	Terrain_HeightScal = Terrain_HeightScal_in;
+	terrain_offset = terrain_offset_in;
+	file_name = file_name_in;
+	now_terrain = NULL;
+	if_loaded = false;
+	neighbour_up_ID = -1;
+	neighbour_down_ID = -1;
+	neighbour_left_ID = -1;
+	neighbour_right_ID = -1;
+	neighbour_upleft_ID = -1;
+	neighbour_upright_ID = -1;
+	neighbour_downleft_ID = -1;
+	neighbour_downright_ID = -1;
+}
+void terrain_part_resource::get_all_neighbour(int neighbour_ID[9])
+{
+	neighbour_ID[0] = neighbour_downleft_ID;
+	neighbour_ID[1] = neighbour_left_ID;
+	neighbour_ID[2] = neighbour_upleft_ID;
+	neighbour_ID[3] = neighbour_down_ID;
+	neighbour_ID[4] = self_ID;
+	neighbour_ID[5] = neighbour_up_ID;
+	neighbour_ID[6] = neighbour_downright_ID;
+	neighbour_ID[7] = neighbour_right_ID;
+	neighbour_ID[8] = neighbour_upright_ID;
+
+}
+engine_basic::engine_fail_reason terrain_part_resource::build_resource()
+{
+	now_terrain = new pancy_terrain_part(terrain_width, terrain_divide, Terrain_ColorTexScal, Terrain_HeightScal, terrain_offset, file_name);
+	engine_basic::engine_fail_reason check_error = now_terrain->create();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	if_loaded = true;
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+void terrain_part_resource::release_resource()
+{
+	now_terrain->release();
+	now_terrain = NULL;
+	if_loaded = false;
+}
+void terrain_part_resource::display(XMFLOAT3 view_pos, XMFLOAT4X4 view_mat, XMFLOAT4X4 proj_mat)
+{
+	now_terrain->render_terrain(view_pos, view_mat, proj_mat);
+}
+//地形管理器
+pancy_terrain_control::pancy_terrain_control(
+	string terrain_list,
+	float terrain_width_in,
+	int terrain_divide_in,
+	float Terrain_ColorTexScal_in,
+	float Terrain_HeightScal_in,
+	float rebuild_dis
+	)
+{
+	terrain_list_file = terrain_list;
+	terrain_width = terrain_width_in;
+	terrain_divide = terrain_divide_in;
+	Terrain_ColorTexScal = Terrain_ColorTexScal_in;
+	Terrain_HeightScal = Terrain_HeightScal_in;
+	rebuild_distance_quality = rebuild_dis;
+	if_created = false;
+}
+string pancy_terrain_control::move_string_space(string input)
+{
+	string check_out;
+	int start_copy = input.size();
+	for (int i = 0; i < input.size() - 1; ++i)
+	{
+		if (input[i] == ' ' && input[i + 1] != ' ')
+		{
+			start_copy = i + 1;
+		}
+	}
+	for (int i = start_copy; i < input.size(); ++i)
+	{
+		check_out += input[i];
+	}
+	return check_out;
+}
+string pancy_terrain_control::find_path(string input)
+{
+	string check_out;
+	int tail = -1;
+	for (int i = input.size(); i >= 0; --i)
+	{
+		if (input[i] == '\\')
+		{
+			tail = i;
+			break;
+		}
+	}
+	for (int i = 0; i <= tail; ++i)
+	{
+		check_out += input[i];
+	}
+	return check_out;
+}
+engine_basic::engine_fail_reason pancy_terrain_control::build_neighbour(int node_ID)
+{
+	auto data_center = &terrain_data_list.find(node_ID)->second;
+	if (data_center->get_neighbour_up_ID() == -1 || data_center->get_neighbour_down_ID() == -1 || data_center->get_neighbour_left_ID() == -1 || data_center->get_neighbour_right_ID() == -1)
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "the tree havent been completely build");
+		return error_message;
+	}
+	if (data_center->get_neighbour_upleft_ID() == -1 || data_center->get_neighbour_upright_ID() == -1 || data_center->get_neighbour_downleft_ID() == -1 || data_center->get_neighbour_downright_ID() == -1)
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "the tree havent been completely build");
+		return error_message;
+	}
+	//八个区域子节点
+	auto data_up = &terrain_data_list.find(data_center->get_neighbour_up_ID())->second;
+	auto data_down = &terrain_data_list.find(data_center->get_neighbour_down_ID())->second;
+	auto data_left = &terrain_data_list.find(data_center->get_neighbour_left_ID())->second;
+	auto data_right = &terrain_data_list.find(data_center->get_neighbour_right_ID())->second;
+	auto data_upleft = &terrain_data_list.find(data_center->get_neighbour_upleft_ID())->second;
+	auto data_upright = &terrain_data_list.find(data_center->get_neighbour_upright_ID())->second;
+	auto data_downleft = &terrain_data_list.find(data_center->get_neighbour_downleft_ID())->second;
+	auto data_downright = &terrain_data_list.find(data_center->get_neighbour_downright_ID())->second;
+	//建立上区域子节点
+	if (data_up->get_neighbour_down_ID() == -1)
+	{
+		data_up->set_neighbour_down_ID(data_center->get_self_ID());
+	}
+	else if (data_up->get_neighbour_down_ID() != data_center->get_self_ID())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list build error when find the up_node's down node");
+		return error_message;
+	}
+	if (data_up->get_neighbour_left_ID() == -1)
+	{
+		data_up->set_neighbour_left_ID(data_upleft->get_self_ID());
+	}
+	else if (data_up->get_neighbour_left_ID() != data_upleft->get_self_ID())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list build error when find the up_node's left node");
+		return error_message;
+	}
+	if (data_up->get_neighbour_right_ID() == -1)
+	{
+		data_up->set_neighbour_right_ID(data_upright->get_self_ID());
+	}
+	else if (data_up->get_neighbour_right_ID() != data_upright->get_self_ID())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list build error when find the up_node's right node");
+		return error_message;
+	}
+	if (data_up->get_neighbour_downleft_ID() == -1)
+	{
+		data_up->set_neighbour_downleft_ID(data_left->get_self_ID());
+	}
+	else if (data_up->get_neighbour_downleft_ID() != data_left->get_self_ID())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list build error when find the up_node's downleft node");
+		return error_message;
+	}
+	if (data_up->get_neighbour_downright_ID() == -1)
+	{
+		data_up->set_neighbour_downright_ID(data_right->get_self_ID());
+	}
+	else if (data_up->get_neighbour_downright_ID() != data_right->get_self_ID())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list build error when find the up_node's downright node");
+		return error_message;
+	}
+	//建立下区域子节点
+	if (data_down->get_neighbour_up_ID() == -1)
+	{
+		data_down->set_neighbour_up_ID(data_center->get_self_ID());
+	}
+	else if (data_down->get_neighbour_up_ID() != data_center->get_self_ID())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list build error when find the down_node's up node");
+		return error_message;
+	}
+	if (data_down->get_neighbour_left_ID() == -1)
+	{
+		data_down->set_neighbour_left_ID(data_downleft->get_self_ID());
+	}
+	else if (data_down->get_neighbour_left_ID() != data_downleft->get_self_ID())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list build error when find the down_node's left node");
+		return error_message;
+	}
+	if (data_down->get_neighbour_right_ID() == -1)
+	{
+		data_down->set_neighbour_right_ID(data_downright->get_self_ID());
+	}
+	else if (data_down->get_neighbour_right_ID() != data_downright->get_self_ID())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list build error when find the down_node's right node");
+		return error_message;
+	}
+	if (data_down->get_neighbour_upleft_ID() == -1)
+	{
+		data_down->set_neighbour_upleft_ID(data_left->get_self_ID());
+	}
+	else if (data_down->get_neighbour_upleft_ID() != data_left->get_self_ID())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list build error when find the down_node's upleft node");
+		return error_message;
+	}
+	if (data_down->get_neighbour_upright_ID() == -1)
+	{
+		data_down->set_neighbour_upright_ID(data_right->get_self_ID());
+	}
+	else if (data_down->get_neighbour_upright_ID() != data_right->get_self_ID())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list build error when find the down_node's upright node");
+		return error_message;
+	}
+	//建立左区域子节点
+	if (data_left->get_neighbour_up_ID() == -1)
+	{
+		data_left->set_neighbour_up_ID(data_upleft->get_self_ID());
+	}
+	else if (data_left->get_neighbour_up_ID() != data_upleft->get_self_ID())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list build error when find the left_node's up node");
+		return error_message;
+	}
+	if (data_left->get_neighbour_down_ID() == -1)
+	{
+		data_left->set_neighbour_down_ID(data_downleft->get_self_ID());
+	}
+	else if (data_left->get_neighbour_down_ID() != data_downleft->get_self_ID())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list build error when find the left_node's down node");
+		return error_message;
+	}
+	if (data_left->get_neighbour_right_ID() == -1)
+	{
+		data_left->set_neighbour_right_ID(data_center->get_self_ID());
+	}
+	else if (data_left->get_neighbour_right_ID() != data_center->get_self_ID())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list build error when find the left_node's right node");
+		return error_message;
+	}
+	if (data_left->get_neighbour_upright_ID() == -1)
+	{
+		data_left->set_neighbour_upright_ID(data_up->get_self_ID());
+	}
+	else if (data_left->get_neighbour_upright_ID() != data_up->get_self_ID())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list build error when find the left_node's upright node");
+		return error_message;
+	}
+	if (data_left->get_neighbour_downright_ID() == -1)
+	{
+		data_left->set_neighbour_downright_ID(data_down->get_self_ID());
+	}
+	else if (data_left->get_neighbour_downright_ID() != data_down->get_self_ID())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list build error when find the left_node's downright node");
+		return error_message;
+	}
+	//建立右区域子节点
+	if (data_right->get_neighbour_up_ID() == -1)
+	{
+		data_right->set_neighbour_up_ID(data_upright->get_self_ID());
+	}
+	else if (data_right->get_neighbour_up_ID() != data_upright->get_self_ID())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list build error when find the right_node's up node");
+		return error_message;
+	}
+	if (data_right->get_neighbour_down_ID() == -1)
+	{
+		data_right->set_neighbour_down_ID(data_downright->get_self_ID());
+	}
+	else if (data_right->get_neighbour_down_ID() != data_downright->get_self_ID())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list build error when find the right_node's down node");
+		return error_message;
+	}
+	if (data_right->get_neighbour_left_ID() == -1)
+	{
+		data_right->set_neighbour_left_ID(data_center->get_self_ID());
+	}
+	else if (data_right->get_neighbour_left_ID() != data_center->get_self_ID())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list build error when find the right_node's left node");
+		return error_message;
+	}
+	if (data_right->get_neighbour_upleft_ID() == -1)
+	{
+		data_right->set_neighbour_upleft_ID(data_up->get_self_ID());
+	}
+	else if (data_right->get_neighbour_upleft_ID() != data_up->get_self_ID())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list build error when find the right_node's upleft node");
+		return error_message;
+	}
+	if (data_right->get_neighbour_downleft_ID() == -1)
+	{
+		data_right->set_neighbour_downleft_ID(data_down->get_self_ID());
+	}
+	else if (data_right->get_neighbour_downleft_ID() != data_down->get_self_ID())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list build error when find the right_node's downleft node");
+		return error_message;
+	}
+	//建立左上区域子节点
+	if (data_upleft->get_neighbour_right_ID() == -1)
+	{
+		data_upleft->set_neighbour_right_ID(data_up->get_self_ID());
+	}
+	else if (data_upleft->get_neighbour_right_ID() != data_up->get_self_ID())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list build error when find the upleft_node's right node");
+		return error_message;
+	}
+	if (data_upleft->get_neighbour_down_ID() == -1)
+	{
+		data_upleft->set_neighbour_down_ID(data_left->get_self_ID());
+	}
+	else if (data_upleft->get_neighbour_down_ID() != data_left->get_self_ID())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list build error when find the upleft_node's down node");
+		return error_message;
+	}
+	if (data_upleft->get_neighbour_downright_ID() == -1)
+	{
+		data_upleft->set_neighbour_downright_ID(data_center->get_self_ID());
+	}
+	else if (data_upleft->get_neighbour_downright_ID() != data_center->get_self_ID())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list build error when find the upleft_node's downright node");
+		return error_message;
+	}
+	//建立右上区域子节点
+	if (data_upright->get_neighbour_left_ID() == -1)
+	{
+		data_upright->set_neighbour_left_ID(data_up->get_self_ID());
+	}
+	else if (data_upright->get_neighbour_left_ID() != data_up->get_self_ID())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list build error when find the upright_node's left node");
+		return error_message;
+	}
+	if (data_upright->get_neighbour_down_ID() == -1)
+	{
+		data_upright->set_neighbour_down_ID(data_right->get_self_ID());
+	}
+	else if (data_upright->get_neighbour_down_ID() != data_right->get_self_ID())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list build error when find the upright_node's down node");
+		return error_message;
+	}
+	if (data_upright->get_neighbour_downleft_ID() == -1)
+	{
+		data_upright->set_neighbour_downleft_ID(data_center->get_self_ID());
+	}
+	else if (data_upright->get_neighbour_downleft_ID() != data_center->get_self_ID())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list build error when find the upright_node's downleft node");
+		return error_message;
+	}
+	//建立左下区域子节点
+	if (data_downleft->get_neighbour_right_ID() == -1)
+	{
+		data_downleft->set_neighbour_right_ID(data_down->get_self_ID());
+	}
+	else if (data_downleft->get_neighbour_right_ID() != data_down->get_self_ID())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list build error when find the downleft_node's right node");
+		return error_message;
+	}
+	if (data_downleft->get_neighbour_up_ID() == -1)
+	{
+		data_downleft->set_neighbour_up_ID(data_left->get_self_ID());
+	}
+	else if (data_downleft->get_neighbour_up_ID() != data_left->get_self_ID())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list build error when find the downleft_node's up node");
+		return error_message;
+	}
+	if (data_downleft->get_neighbour_upright_ID() == -1)
+	{
+		data_downleft->set_neighbour_upright_ID(data_center->get_self_ID());
+	}
+	else if (data_downleft->get_neighbour_upright_ID() != data_center->get_self_ID())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list build error when find the downleft_node's upright node");
+		return error_message;
+	}
+	//建立右下区域子节点
+	if (data_downright->get_neighbour_left_ID() == -1)
+	{
+		data_downright->set_neighbour_left_ID(data_down->get_self_ID());
+	}
+	else if (data_downright->get_neighbour_left_ID() != data_down->get_self_ID())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list build error when find the downright_node's left node");
+		return error_message;
+	}
+	if (data_downright->get_neighbour_up_ID() == -1)
+	{
+		data_downright->set_neighbour_up_ID(data_right->get_self_ID());
+	}
+	else if (data_downright->get_neighbour_up_ID() != data_right->get_self_ID())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list build error when find the downright_node's up node");
+		return error_message;
+	}
+	if (data_downright->get_neighbour_upleft_ID() == -1)
+	{
+		data_downright->set_neighbour_upleft_ID(data_center->get_self_ID());
+	}
+	else if (data_downright->get_neighbour_upleft_ID() != data_center->get_self_ID())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list build error when find the downright_node's upleft node");
+		return error_message;
+	}
+
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason pancy_terrain_control::build_terrain_tree()
+{
+	int now_queue_tail = 1;
+	int now_build_headtree = 0;//当前正在建造的地形树的顶节点
+	while (true)
+	{
+		//获取当前的根节点
+		auto data_center = &terrain_data_list.find(now_build_headtree)->second;
+		//链接根节点的子节点
+		if (now_queue_tail >= terrain_data_list.size())
+		{
+			break;
+		}
+		if (data_center->get_neighbour_up_ID() == -1)
+		{
+			data_center->set_neighbour_up_ID(now_queue_tail);
+			terrain_data_list.find(now_queue_tail)->second.set_neighbour_down_ID(data_center->get_self_ID());
+			XMFLOAT2 up_position;
+			up_position.x = data_center->get_offset().x;
+			up_position.y = data_center->get_offset().y + terrain_width;
+			terrain_data_list.find(now_queue_tail)->second.set_offset(up_position);
+			now_queue_tail += 1;
+		}
+		else if (data_center->get_self_ID() != terrain_data_list.find(data_center->get_neighbour_up_ID())->second.get_neighbour_down_ID())
+		{
+			engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list headnode build error when find the up node");
+			return error_message;
+		}
+
+		if (now_queue_tail >= terrain_data_list.size())
+		{
+			break;
+		}
+		if (data_center->get_neighbour_down_ID() == -1)
+		{
+			data_center->set_neighbour_down_ID(now_queue_tail);
+			terrain_data_list.find(now_queue_tail)->second.set_neighbour_up_ID(data_center->get_self_ID());
+			XMFLOAT2 down_position;
+			down_position.x = data_center->get_offset().x;
+			down_position.y = data_center->get_offset().y - terrain_width;
+			terrain_data_list.find(now_queue_tail)->second.set_offset(down_position);
+
+			now_queue_tail += 1;
+		}
+		else if (data_center->get_self_ID() != terrain_data_list.find(data_center->get_neighbour_down_ID())->second.get_neighbour_up_ID())
+		{
+			engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list headnode build error when find the down node");
+			return error_message;
+		}
+
+		if (now_queue_tail >= terrain_data_list.size())
+		{
+			break;
+		}
+		if (data_center->get_neighbour_left_ID() == -1)
+		{
+			data_center->set_neighbour_left_ID(now_queue_tail);
+			terrain_data_list.find(now_queue_tail)->second.set_neighbour_right_ID(data_center->get_self_ID());
+			XMFLOAT2 left_position;
+			left_position.x = data_center->get_offset().x - terrain_width;
+			left_position.y = data_center->get_offset().y;
+			terrain_data_list.find(now_queue_tail)->second.set_offset(left_position);
+
+			now_queue_tail += 1;
+		}
+		else if (data_center->get_self_ID() != terrain_data_list.find(data_center->get_neighbour_left_ID())->second.get_neighbour_right_ID())
+		{
+			engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list headnode build error when find the left node");
+			return error_message;
+		}
+
+		if (now_queue_tail >= terrain_data_list.size())
+		{
+			break;
+		}
+		if (data_center->get_neighbour_right_ID() == -1)
+		{
+			data_center->set_neighbour_right_ID(now_queue_tail);
+			terrain_data_list.find(now_queue_tail)->second.set_neighbour_left_ID(data_center->get_self_ID());
+			XMFLOAT2 right_position;
+			right_position.x = data_center->get_offset().x + terrain_width;
+			right_position.y = data_center->get_offset().y;
+			terrain_data_list.find(now_queue_tail)->second.set_offset(right_position);
+			now_queue_tail += 1;
+		}
+		else if (data_center->get_self_ID() != terrain_data_list.find(data_center->get_neighbour_right_ID())->second.get_neighbour_left_ID())
+		{
+			engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list headnode build error when find the right node");
+			return error_message;
+		}
+
+
+		if (now_queue_tail >= terrain_data_list.size())
+		{
+			break;
+		}
+		if (data_center->get_neighbour_upleft_ID() == -1)
+		{
+			data_center->set_neighbour_upleft_ID(now_queue_tail);
+			terrain_data_list.find(now_queue_tail)->second.set_neighbour_downright_ID(data_center->get_self_ID());
+			XMFLOAT2 upleft_position;
+			upleft_position.x = data_center->get_offset().x - terrain_width;
+			upleft_position.y = data_center->get_offset().y + terrain_width;
+			terrain_data_list.find(now_queue_tail)->second.set_offset(upleft_position);
+			now_queue_tail += 1;
+		}
+		else if (data_center->get_self_ID() != terrain_data_list.find(data_center->get_neighbour_upleft_ID())->second.get_neighbour_downright_ID())
+		{
+			engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list headnode build error when find the upleft node");
+			return error_message;
+		}
+
+		if (now_queue_tail >= terrain_data_list.size())
+		{
+			break;
+		}
+		if (data_center->get_neighbour_upright_ID() == -1)
+		{
+			data_center->set_neighbour_upright_ID(now_queue_tail);
+			terrain_data_list.find(now_queue_tail)->second.set_neighbour_downleft_ID(data_center->get_self_ID());
+			XMFLOAT2 upright_position;
+			upright_position.x = data_center->get_offset().x + terrain_width;
+			upright_position.y = data_center->get_offset().y + terrain_width;
+			terrain_data_list.find(now_queue_tail)->second.set_offset(upright_position);
+			now_queue_tail += 1;
+		}
+		else if (data_center->get_self_ID() != terrain_data_list.find(data_center->get_neighbour_upright_ID())->second.get_neighbour_downleft_ID())
+		{
+			engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list headnode build error when find the upright node");
+			return error_message;
+		}
+
+		if (now_queue_tail >= terrain_data_list.size())
+		{
+			break;
+		}
+		if (data_center->get_neighbour_downleft_ID() == -1)
+		{
+			data_center->set_neighbour_downleft_ID(now_queue_tail);
+			terrain_data_list.find(now_queue_tail)->second.set_neighbour_upright_ID(data_center->get_self_ID());
+			XMFLOAT2 downleft_position;
+			downleft_position.x = data_center->get_offset().x - terrain_width;
+			downleft_position.y = data_center->get_offset().y - terrain_width;
+			terrain_data_list.find(now_queue_tail)->second.set_offset(downleft_position);
+			now_queue_tail += 1;
+		}
+		else if (data_center->get_self_ID() != terrain_data_list.find(data_center->get_neighbour_downleft_ID())->second.get_neighbour_upright_ID())
+		{
+			engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list headnode build error when find the downleft node");
+			return error_message;
+		}
+
+		if (now_queue_tail >= terrain_data_list.size())
+		{
+			break;
+		}
+		if (data_center->get_neighbour_downright_ID() == -1)
+		{
+			data_center->set_neighbour_downright_ID(now_queue_tail);
+			terrain_data_list.find(now_queue_tail)->second.set_neighbour_upleft_ID(data_center->get_self_ID());
+			XMFLOAT2 downright_position;
+			downright_position.x = data_center->get_offset().x + terrain_width;
+			downright_position.y = data_center->get_offset().y - terrain_width;
+			terrain_data_list.find(now_queue_tail)->second.set_offset(downright_position);
+			now_queue_tail += 1;
+		}
+		else if (data_center->get_self_ID() != terrain_data_list.find(data_center->get_neighbour_downright_ID())->second.get_neighbour_upleft_ID())
+		{
+			engine_basic::engine_fail_reason error_message(E_FAIL, "terrain list headnode build error when find the downright node");
+			return error_message;
+		}
+
+		//子节点互相连接
+		build_neighbour(now_build_headtree);
+		//切换根节点
+		now_build_headtree += 1;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+
+engine_basic::engine_fail_reason pancy_terrain_control::load_a_terrain(int node_ID)
+{
+	auto data_center = &terrain_data_list.find(node_ID)->second;
+	if (data_center->check_if_loaded() == true)
+	{
+		//资源在之前已经被加载创建
+		engine_basic::engine_fail_reason error_message(E_FAIL, "the resource have been build, do not rebuild resource");
+	}
+	engine_basic::engine_fail_reason check_error = data_center->build_resource();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason pancy_terrain_control::unload_a_terrain(int node_ID)
+{
+	auto data_center = &terrain_data_list.find(node_ID)->second;
+	if (data_center->check_if_loaded() == false)
+	{
+		//资源尚未创建，无法释放
+		engine_basic::engine_fail_reason error_message(E_FAIL, "the resource haven't been build, could not release resource");
+	}
+	data_center->release_resource();
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+
+engine_basic::engine_fail_reason pancy_terrain_control::create()
+{
+	std::ifstream load_file;
+	load_file.open(terrain_list_file);
+	if (!load_file.is_open())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "load terrain file " + terrain_list_file + " error");
+		return error_message;
+	}
+	char data[100];
+	int length = 0;
+	load_file.getline(data, 100);
+	string file_path = find_path(terrain_list_file);
+	while (!load_file.eof())
+	{
+		load_file.getline(data, 100);
+		string now_terrain_data = file_path + move_string_space(data);
+		terrain_part_resource *new_terrain_data = new terrain_part_resource(length, terrain_width, terrain_divide, Terrain_ColorTexScal, Terrain_HeightScal, XMFLOAT2(0, 0), now_terrain_data);
+		std::pair<int, terrain_part_resource> new_terrain(length, *new_terrain_data);
+		terrain_data_list.insert(new_terrain);
+		length += 1;
+		delete new_terrain_data;
+	}
+	engine_basic::engine_fail_reason check_error = build_terrain_tree();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+void pancy_terrain_control::update(XMFLOAT3 view_pos,XMFLOAT4X4 view_matrix_in,XMFLOAT4X4 proj_matrix_in)
+{
+	now_view_pos = view_pos;
+	view_matrix = view_matrix_in;//取景变换
+	proj_matrix = proj_matrix_in;//投影变换
+	auto data_center = &terrain_data_list.find(now_center_terrain)->second;
+	XMFLOAT2 view_pos_2d = XMFLOAT2(view_pos.x, view_pos.z);
+	XMFLOAT2 now_center_pos = data_center->get_offset();
+	float dir_x = abs(now_center_pos.x - view_pos_2d.x);
+	float dir_y = abs(now_center_pos.y - view_pos_2d.y);
+	float rebuild_distance_need = rebuild_distance_quality * terrain_width + terrain_width / 2.0f;
+	if (dir_x > rebuild_distance_need || dir_y > rebuild_distance_need || !if_created)
+	{
+		//消去第一次创建的标志
+		if_created = true;
+		//摄像机越界，重新构造九宫格
+		int neighbour_ID[9];
+		data_center->get_all_neighbour(neighbour_ID);
+		//计算当前摄像机所在地形的归属
+		int x_dis = static_cast<int>(view_pos_2d.x - now_center_pos.x);
+		int y_dis = static_cast<int>(view_pos_2d.y - now_center_pos.y);
+		int x_check = 0, y_check = 0;
+		if (x_dis > terrain_width / 2.0f)
+		{
+			//新的地形中心位于原地形的右边
+			x_check = 1;
+		}
+		if (x_dis < -terrain_width / 2.0f)
+		{
+			//新的地形中心位于原地形的左边
+			x_check = -1;
+		}
+		if (y_dis > terrain_width / 2.0f)
+		{
+			//新的地形中心位于原地形的上边
+			y_check = 1;
+		}
+		if (y_dis < -terrain_width / 2.0f)
+		{
+			//新的地形中心位于原地形的下边
+			y_check = -1;
+		}
+		//三进制索引
+		x_check += 1;
+		y_check += 1;
+		int index_neighbour = x_check * 3 + y_check;
+		//terrain_part_resource *exchange_terrain = NULL;
+		if (neighbour_ID[index_neighbour] == -1)
+		{
+			//对应的边缘地形不存在
+			return;
+		}
+		auto exchange_terrain = &terrain_data_list.find(neighbour_ID[index_neighbour])->second;
+		//XMFLOAT2 new_center_pos = terrain_data_list.find(neighbour_ID[index_neighbour])->second.get_offset();
+		XMFLOAT2 new_center_pos = exchange_terrain->get_offset();
+		//释放与新的中心地形不邻接的地形
+		for (int i = 0; i < 9; ++i)
+		{
+			if (neighbour_ID[i] != -1)
+			{
+				auto data_neighbour = terrain_data_list.find(neighbour_ID[i]);
+				if (data_neighbour != terrain_data_list.end())
+				{
+					XMFLOAT2 off_pos_2d = data_neighbour->second.get_offset();
+					float min_distance = 1.5f*terrain_width;
+					float distance_x = abs(new_center_pos.x - off_pos_2d.x);
+					float distance_y = abs(new_center_pos.y - off_pos_2d.y);
+					if (distance_x > min_distance || distance_y > min_distance)
+					{
+						if (data_neighbour->second.check_if_loaded()) 
+						{
+							data_neighbour->second.release_resource();
+						}
+					}
+				}
+
+			}
+		}
+		//为新的中心点拓展边界地形
+		int all_new_neighbour[9];
+		exchange_terrain->get_all_neighbour(all_new_neighbour);
+		for (int i = 0; i < 9; ++i)
+		{
+			if (all_new_neighbour[i] != -1)
+			{
+				auto now_new_neighbour = terrain_data_list.find(all_new_neighbour[i]);
+				if (now_new_neighbour->second.check_if_loaded() == false)
+				{
+					now_new_neighbour->second.build_resource();
+				}
+			}
+		}
+		now_center_terrain = neighbour_ID[index_neighbour];
+	}
+
+}
+void pancy_terrain_control::release() 
+{
+	auto data_center = &terrain_data_list.find(now_center_terrain)->second;
+	int data_all[9];
+	data_center->get_all_neighbour(data_all);
+	for (int i = 0; i < 9; ++i) 
+	{
+		if (data_all[i] != -1) 
+		{
+			auto data_delete = terrain_data_list.find(data_all[i]);
+			if (data_delete != terrain_data_list.end() && data_delete->second.check_if_loaded())
+			{
+				data_delete->second.release_resource();
+			}
+		}
+	}
+}
+void pancy_terrain_control::display() 
+{
+	auto data_center = &terrain_data_list.find(now_center_terrain)->second;
+	int data_all[9];
+	data_center->get_all_neighbour(data_all);
+	for (int i = 0; i < 9; ++i)
+	{
+		if (data_all[i] != -1)
+		{
+			auto data_render = terrain_data_list.find(data_all[i]);
+			if (data_render != terrain_data_list.end() && data_render->second.check_if_loaded())
+			{
+				XMFLOAT2 offset_pos = data_render->second.get_offset();
+				XMFLOAT2 distance;
+				distance.x = abs(offset_pos.x - now_view_pos.x);
+				distance.y = abs(offset_pos.y - now_view_pos.z);
+				if (distance.x < (terrain_width / 2.0f + terrain_width / 3.0f) && distance.y < (terrain_width / 2.0f + terrain_width / 3.0f)) 
+				{
+					data_render->second.display(now_view_pos,view_matrix,proj_matrix);
+				}
+			}
+		}
+	}
 }

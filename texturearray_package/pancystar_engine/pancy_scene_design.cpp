@@ -850,7 +850,7 @@ engine_basic::engine_fail_reason scene_test_environment::create()
 		return check_error;
 	}
 	//其他资源
-	test_IBL = new environment_IBL_control(20,4,0.25f);
+	test_IBL = new environment_IBL_control(20, 4, 0.25f);
 	check_error = test_IBL->create();
 	if (!check_error.check_if_failed())
 	{
@@ -932,7 +932,9 @@ engine_basic::engine_fail_reason scene_test_environment::create()
 	}
 	*/
 	//加载测试山脉
+	/*
 	terrain_file_path terrain_file;
+
 	terrain_file.height_rawdata_name = "terrain_data\\terrain.raw";
 	terrain_file.normal_texdata_name = "terrain_data\\terrainnorm1lk.dds";
 	terrain_file.tangent_texdata_name = "terrain_data\\terraintangent1k.dds";
@@ -949,9 +951,17 @@ engine_basic::engine_fail_reason scene_test_environment::create()
 
 	terrain_file.color_albe_texdata_name[3] = "terrain_data\\texdds\\Rock_GuiMossyRock_2k_alb_s.dds";
 	terrain_file.color_norm_texdata_name[3] = "terrain_data\\texdds\\Rock_GuiMossyRock_2k_n.dds";
-
-	terrain_need = new pancy_terrain_part(2048.0f, 200, 100.0f, 1000.0f, XMFLOAT2(0.0f, 0.0f), terrain_file);
+	*/
+	/*
+	terrain_need = new pancy_terrain_part(2048.0f, 200, 100.0f, 1000.0f, XMFLOAT2(0.0f, 0.0f), "terrain_data\\pancy.ptl");
 	check_error = terrain_need->create();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	*/
+	terrain_test = new pancy_terrain_control("terrain_data\\pancy.ptn", 2048.0f, 200, 100.0f, 1000.0f, 1.0f - 1.0f / 3.0f);
+	check_error = terrain_test->create();
 	if (!check_error.check_if_failed())
 	{
 		return check_error;
@@ -1035,22 +1045,23 @@ void scene_test_environment::update(float delta_time)
 	XMFLOAT4X4 final_matrix;
 	//更新天空
 	test_IBL->update_sky_data(delta_time);
-
-	trans_world = XMMatrixTranslation(0.0, 0.0, 0.0);
+	XMFLOAT3 view_pos;
+	scene_camera->get_view_position(&view_pos);
+	trans_world = XMMatrixTranslation(view_pos.x, view_pos.y, view_pos.z);
 	scal_world = XMMatrixScaling(50, 50, 50);
 	XMStoreFloat4x4(&world_matrix, scal_world *  trans_world);
 	geometry_buffer->update_a_model_instance(ID_model_sky, world_matrix, delta_time);
-
+	//更新粒子
 	float rand_time = static_cast<float>(rand() % 1000) / 20.0f;
 	XMFLOAT4X4 view_mat, proj_mat;
 	scene_camera->count_view_matrix(&view_mat);
 	proj_mat = engine_basic::perspective_message::get_instance()->get_proj_matrix();
 	XMFLOAT4X4 part_proj;
-	XMFLOAT3 view_pos;
-	scene_camera->get_view_position(&view_pos);
 	XMStoreFloat4x4(&part_proj, XMLoadFloat4x4(&view_mat) * XMLoadFloat4x4(&proj_mat));
 	particle_fire->update(delta_time, rand_time, &part_proj, &view_pos);
 	particle_fire->set_particle_direct(&XMFLOAT3(0, 0, 0), &XMFLOAT3(0, 0, 0));
+	//更新地面
+	terrain_test->update(view_pos, view_mat, proj_mat);
 }
 void scene_test_environment::release()
 {
@@ -1060,7 +1071,8 @@ void scene_test_environment::release()
 	particle_fire->release();
 	test_IBL->release();
 
-	terrain_need->release();
+	//terrain_need->release();
+	terrain_test->release();
 	test_model->release();
 	//pancy_geometry_control_singleton::get_instance()->release();
 	/*
@@ -1102,7 +1114,7 @@ void scene_test_environment::show_sky_single()
 	shader_test->set_trans_world(&data_view->get_matrix_list()[0]);
 	//设定立方贴图
 	auto sky_data = test_IBL->get_IBL_data_by_time(time_need);
-	if (sky_data != NULL) 
+	if (sky_data != NULL)
 	{
 		shader_test->set_tex_resource(sky_data->get_SRV_spec());
 	}
@@ -1129,7 +1141,7 @@ void scene_test_environment::show_sky_cube()
 {
 	/*
 	bool check_finish = test_IBL->display_an_IBL_data();
-	if (!check_finish) 
+	if (!check_finish)
 	{
 		if_finish = true;
 	}
@@ -1334,6 +1346,7 @@ void scene_test_environment::show_terrain()
 {
 	engine_basic::engine_fail_reason check_error;
 	//设定总变换
+	/*
 	XMFLOAT4X4 view_mat, proj_mat;
 	XMFLOAT3 view_pos;
 	pancy_camera::get_instance()->count_view_matrix(&view_mat);
@@ -1341,6 +1354,8 @@ void scene_test_environment::show_terrain()
 	XMMATRIX proj = XMLoadFloat4x4(&engine_basic::perspective_message::get_instance()->get_proj_matrix());
 	XMStoreFloat4x4(&proj_mat, proj);
 	terrain_need->render_terrain(view_pos, view_mat, proj_mat);
+	*/
+	terrain_test->display();
 
 }
 /*
@@ -1498,6 +1513,381 @@ engine_basic::engine_fail_reason scene_test_environment::create_cubemap()
 	return succeed;
 }
 */
+
+scene_test_plant::scene_test_plant()
+{
+}
+engine_basic::engine_fail_reason scene_test_plant::create()
+{
+	engine_basic::engine_fail_reason check_error;
+	//创建基本的资源
+	check_error = create_basic();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	//其他资源
+	XMFLOAT4X4 mat_world;
+	XMStoreFloat4x4(&mat_world, XMMatrixIdentity());
+	//加载天空
+	check_error = geometry_buffer->load_a_model_type("ballmodel\\outmodel.pancymesh", "ballmodel\\outmodel.pancymat", false, model_ID_sky);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = geometry_buffer->add_a_model_instance(model_ID_sky, mat_world, ID_model_sky);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	geometry_resource_view *data_view = NULL;
+	geometry_buffer->get_a_model_type(&data_view, model_ID_sky);
+	data_view->set_cull_front();
+	//加载骨骼测试椎体
+	check_error = geometry_buffer->load_a_model_type("bone_test\\bone_test.pancymesh", "bone_test\\bone_test.pancymat", false, model_ID_bone);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+
+	//加载骨骼结构
+	check_error = load_skintree("testtree\\test.pancyskin");
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	update_root(root_skin, mat_world,-1);
+	get_bone_matrix();
+	//加载测试模型
+	check_error = geometry_buffer->load_a_skinmodel_type("testtree\\test.pancyskinmesh", "testtree\\test.pancymat", "testtree\\test.pancyskin", false, model_ID_skin, 100);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = geometry_buffer->load_a_skinmodel_animation(model_ID_skin, "testtree\\test.pancyanimation", animation_id);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = geometry_buffer->add_a_model_instance(model_ID_skin, mat_world, ID_model_skin);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = geometry_buffer->set_a_instance_animation(ID_model_skin, animation_id);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	//添加测试实例
+	for (int i = 0; i < bone_num; ++i)
+	{
+		check_error = geometry_buffer->add_a_model_instance(model_ID_bone, mat_world, ID_model_bone[i]);
+		if (!check_error.check_if_failed())
+		{
+			return check_error;
+		}
+	}
+
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+void scene_test_plant::display()
+{
+	show_sky_single();
+	show_bone();
+	show_skinmesh();
+}
+void scene_test_plant::display_environment(XMFLOAT4X4 view_matrix, XMFLOAT4X4 proj_matrix)
+{
+}
+void scene_test_plant::update(float delta_time)
+{
+	float move_speed = 0.525f;
+	XMMATRIX view;
+	auto user_input = pancy_input::GetInstance();
+	auto scene_camera = pancy_camera::get_instance();
+	//user_input->get_input();
+	if (user_input->check_keyboard(DIK_A))
+	{
+		scene_camera->walk_right(-move_speed);
+	}
+	if (user_input->check_keyboard(DIK_W))
+	{
+		scene_camera->walk_front(move_speed);
+	}
+	if (user_input->check_keyboard(DIK_R))
+	{
+		scene_camera->walk_up(move_speed);
+	}
+	if (user_input->check_keyboard(DIK_D))
+	{
+		scene_camera->walk_right(move_speed);
+	}
+	if (user_input->check_keyboard(DIK_S))
+	{
+		scene_camera->walk_front(-move_speed);
+	}
+	if (user_input->check_keyboard(DIK_F))
+	{
+		scene_camera->walk_up(-move_speed);
+	}
+	if (user_input->check_keyboard(DIK_Q))
+	{
+		scene_camera->rotation_look(0.001f);
+	}
+	if (user_input->check_keyboard(DIK_E))
+	{
+		scene_camera->rotation_look(-0.001f);
+	}
+	if (user_input->check_mouseDown(1))
+	{
+		scene_camera->rotation_up(user_input->MouseMove_X() * 0.001f);
+		scene_camera->rotation_right(user_input->MouseMove_Y() * 0.001f);
+	}
+
+	XMMATRIX trans_world;
+	XMMATRIX scal_world;
+	XMMATRIX rotation_world;
+
+	XMFLOAT4X4 world_matrix;
+	XMFLOAT4X4 final_matrix;
+	//更新天空
+	XMFLOAT3 view_pos;
+	scene_camera->get_view_position(&view_pos);
+	trans_world = XMMatrixTranslation(view_pos.x, view_pos.y, view_pos.z);
+	scal_world = XMMatrixScaling(50, 50, 50);
+	XMStoreFloat4x4(&world_matrix, scal_world *  trans_world);
+	geometry_buffer->update_a_model_instance(ID_model_sky, world_matrix, delta_time);
+	//更新骨骼测试体
+	
+	//geometry_buffer->update_a_model_instance(ID_model_bone, world_matrix, delta_time);
+	for (int i = 0; i < bone_num; ++i)
+	{
+		trans_world = XMLoadFloat4x4(&bone_matrix_array[i]);
+		//scal_world = XMMatrixRotationX(-XM_PIDIV2);
+		scal_world = XMMatrixScaling(0.1,0.1,0.1);
+		XMStoreFloat4x4(&world_matrix, scal_world *  trans_world);
+		geometry_buffer->update_a_model_instance(ID_model_bone[i], world_matrix, delta_time);
+	}
+}
+void scene_test_plant::release()
+{
+	//释放基本资源
+	release_basic();
+	//释放其他资源
+
+}
+void scene_test_plant::show_sky_single()
+{
+	engine_basic::engine_fail_reason check_error;
+	auto shader_test = shader_control::GetInstance()->get_shader_sky_draw(check_error);
+
+	geometry_resource_view *data_view = NULL;
+	geometry_buffer->get_a_model_type(&data_view, model_ID_sky);
+	//选定绘制路径
+	ID3DX11EffectTechnique *teque_need;
+	shader_test->get_technique(&teque_need, "draw_sky");
+	shader_test->set_trans_world(&data_view->get_matrix_list()[0]);
+	//设定立方贴图
+	//auto sky_data = test_IBL->get_IBL_data_by_time(time_need);
+	//if (sky_data != NULL)
+	//{
+	//	shader_test->set_tex_resource(sky_data->get_SRV_spec());
+	//}
+	//shader_test->set_tex_resource(tex_cubesky);
+	//设定总变换
+	XMFLOAT4X4 view_mat, final_mat, viewproj;
+	pancy_camera::get_instance()->count_view_matrix(&view_mat);
+	XMMATRIX proj = XMLoadFloat4x4(&engine_basic::perspective_message::get_instance()->get_proj_matrix());
+
+
+
+	XMMATRIX world_matrix_rec = XMLoadFloat4x4(&data_view->get_matrix_list()[0]);
+	XMMATRIX worldViewProj = world_matrix_rec*XMLoadFloat4x4(&view_mat)*proj;
+	XMFLOAT4X4 world_viewrec;
+	XMStoreFloat4x4(&world_viewrec, worldViewProj);
+	shader_test->set_trans_all(&world_viewrec);
+
+	data_view->get_technique(teque_need);
+
+	data_view->draw(false);
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->RSSetState(NULL);
+}
+void scene_test_plant::show_bone()
+{
+	engine_basic::engine_fail_reason check_error;
+	auto shader_need = shader_control::GetInstance()->get_shader_lightdeffered(check_error);
+
+	geometry_resource_view *data_view = NULL;
+	geometry_buffer->get_a_model_type(&data_view, model_ID_bone);
+	XMFLOAT4X4 view_mat, final_mat,view_proj;
+	pancy_camera::get_instance()->count_view_matrix(&view_mat);
+	XMMATRIX proj;
+	proj = XMLoadFloat4x4(&engine_basic::perspective_message::get_instance()->get_proj_matrix());
+
+	XMMATRIX rec_world = XMLoadFloat4x4(&data_view->get_matrix_list()[0]) * XMLoadFloat4x4(&view_mat) * proj;
+	XMMATRIX rec_viewproj = XMLoadFloat4x4(&view_mat) * proj;
+	XMStoreFloat4x4(&final_mat, rec_world);
+	XMStoreFloat4x4(&view_proj, rec_viewproj);
+
+	auto matrix_list = data_view->get_matrix_list();
+	XMFLOAT4X4 *data_worldmat_array = new XMFLOAT4X4[matrix_list.size()];
+	int count_num = 0;
+	for (auto mat_need = matrix_list.begin(); mat_need != matrix_list.end(); ++mat_need)
+	{
+		data_worldmat_array[count_num++] = *mat_need._Ptr;
+	}
+
+	shader_need->set_trans_all(&final_mat);
+	shader_need->set_tex_diffuse_array(data_view->get_texture());
+	shader_need->set_world_matrix_array(data_worldmat_array, data_view->get_matrix_list().size());
+	shader_need->set_trans_viewproj(&view_proj);
+	pancy_material test_Mt;
+	XMFLOAT4 rec_ambient2(1.0f, 1.0f, 1.0f, 1.0f);
+	XMFLOAT4 rec_diffuse2(1.0f, 1.0f, 1.0f, 1.0f);
+	XMFLOAT4 rec_specular2(0.2f, 0.2f, 0.2f, 6.0f);
+	test_Mt.ambient = rec_ambient2;
+	test_Mt.diffuse = rec_diffuse2;
+	test_Mt.specular = rec_specular2;
+	test_Mt.reflect = rec_ambient2;
+	shader_need->set_material(test_Mt);
+
+	ID3DX11EffectTechnique *teque_need;
+	shader_need->get_technique(&teque_need, "LightTech_instance");
+
+	data_view->get_technique(teque_need);
+
+	data_view->draw(false);
+}
+void scene_test_plant::read_bone_tree(skin_tree *now)
+{
+	char data[11];
+	skin_instream.read(reinterpret_cast<char*>(now), sizeof(*now));
+	now->brother = NULL;
+	now->son = NULL;
+	skin_instream.read(data, sizeof(data));
+	while (strcmp(data, "*heaphead*") == 0)
+	{
+		//入栈符号，代表子节点
+		skin_tree *now_point = new skin_tree();
+		read_bone_tree(now_point);
+		now_point->brother = now->son;
+		now->son = now_point;
+		skin_instream.read(data, sizeof(data));
+	}
+}
+engine_basic::engine_fail_reason scene_test_plant::load_skintree(string filename)
+{
+	skin_instream.open(filename, ios::binary);
+	if (!skin_instream.is_open())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "open file " + filename + " error");
+		return error_message;
+	}
+	//读取偏移矩阵
+	int bone_num_need;
+	skin_instream.read(reinterpret_cast<char*>(&bone_num), sizeof(bone_num));
+	skin_instream.read(reinterpret_cast<char*>(offset_matrix_array), bone_num*sizeof(XMFLOAT4X4));
+	//先读取第一个入栈符
+	char data[11];
+	skin_instream.read(reinterpret_cast<char*>(data), sizeof(data));
+	root_skin = new skin_tree();
+	//递归重建骨骼树
+	read_bone_tree(root_skin);
+	//关闭文件
+	skin_instream.close();
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+void scene_test_plant::update_root(skin_tree *root, XMFLOAT4X4 matrix_parent,int ID_parent)
+{
+	if (root == NULL)
+	{
+		return;
+	}
+	XMMATRIX rec = XMLoadFloat4x4(&root->animation_matrix);
+	XMStoreFloat4x4(&root->now_matrix, rec * XMLoadFloat4x4(&matrix_parent));
+	if (root->bone_number >= 0)
+	{
+		bone_matrix_array[root->bone_number] = root->now_matrix;
+		parent_ID[root->bone_number] = ID_parent;
+	}
+	update_root(root->brother, matrix_parent, root->bone_number);
+	update_root(root->son, root->now_matrix, root->bone_number);
+}
+void scene_test_plant::get_bone_matrix()
+{
+	for (int i = 0; i < bone_num; ++i)
+	{
+		XMStoreFloat4x4(&final_matrix_array[i], XMLoadFloat4x4(&offset_matrix_array[i]) * XMLoadFloat4x4(&bone_matrix_array[i]));
+	}
+}
+void scene_test_plant::show_skinmesh() 
+{
+	engine_basic::engine_fail_reason check_error;
+	auto shader_need = shader_control::GetInstance()->get_shader_lightdeffered(check_error);
+	//auto data = geometry_buffer->
+
+	XMFLOAT4X4 world_mat, view_mat, final_mat;
+
+	pancy_camera::get_instance()->count_view_matrix(&view_mat);
+	XMMATRIX proj;
+	proj = XMLoadFloat4x4(&engine_basic::perspective_message::get_instance()->get_proj_matrix());
+	XMStoreFloat4x4(&world_mat, XMMatrixIdentity());
+	XMMATRIX rec_world = XMMatrixIdentity() * XMLoadFloat4x4(&view_mat) * proj;
+	//XMMATRIX rec_world2 = XMMatrixTranslation(1.0f,0.0f,0.0f) * XMLoadFloat4x4(&view_mat) * proj;
+	XMStoreFloat4x4(&final_mat, rec_world);
+
+
+	shader_need->set_trans_world(&world_mat);
+	shader_need->set_trans_viewproj(&final_mat);
+	
+
+
+
+
+	geometry_resource_view *data_view = NULL;
+	geometry_buffer->get_a_model_type(&data_view, model_ID_skin);
+	data_view->update(ID_model_skin.model_instance, world_mat, 0.2f);
+	shader_need->set_tex_diffuse_array(data_view->get_texture());
+	auto data_bone_matlist = data_view->get_bone_matrix_list();
+	//XMFLOAT4X4 bone_mat[100];
+	XMFLOAT4X4 world_mat_list[] = { world_mat};
+	int bone_size = 0;
+
+	shader_need->set_bonemat_buffer(data_view->get_bone_matrix_list());
+	shader_need->set_world_matrix_array(world_mat_list, 1);
+	shader_need->set_bone_num(data_view->get_bone_mat_num());
+	ID3DX11EffectTechnique *teque_need;
+	//设置顶点声明
+	D3D11_INPUT_ELEMENT_DESC rec_inputdesc[] =
+	{
+		//语义名    语义索引      数据格式          输入槽 起始地址     输入槽的格式 
+		{ "POSITION",0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,0  ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "NORMAL"  ,0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,12 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TANGENT" ,0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,24 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TEXINDICES" ,0  ,DXGI_FORMAT_R32G32B32A32_UINT  ,0    ,36 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TEXDIFFNORM",0  ,DXGI_FORMAT_R32G32B32A32_FLOAT      ,0    ,52 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TEXOTHER",0  ,DXGI_FORMAT_R32G32B32A32_FLOAT      ,0    ,68 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "BONEINDICES" ,0  ,DXGI_FORMAT_R32G32B32A32_UINT  ,0    ,84 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "WEIGHTS"     ,0  ,DXGI_FORMAT_R32G32B32A32_FLOAT ,0    ,100 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+	};
+	UINT num_member = sizeof(rec_inputdesc) / sizeof(D3D11_INPUT_ELEMENT_DESC);
+	shader_need->get_technique(rec_inputdesc, num_member, &teque_need, "LightTech_instance_bone");
+
+	data_view->get_technique(teque_need);
+	data_view->draw(false);
+
+	XMFLOAT4X4 *mat_list = NULL;
+	int bone_num_now = 0;
+	data_view->get_bonematrix_singledata(&mat_list, bone_num_now);
+	for (int i = 0; i < bone_num_now; ++i)
+	{
+		final_matrix_array[i] = mat_list[i];
+	}
+}
+
 pancy_scene_control::pancy_scene_control()
 {
 	sundir = XMFLOAT3(0, 0.227391526, 0.0407850109);
@@ -1755,6 +2145,7 @@ engine_basic::engine_fail_reason pancy_scene_control::create()
 void pancy_scene_control::render_environment()
 {
 }
+
 /*
 void pancy_scene_control::render_environment()
 {

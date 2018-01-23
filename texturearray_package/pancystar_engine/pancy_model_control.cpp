@@ -731,6 +731,15 @@ std::vector<XMFLOAT4X4> geometry_resource_view::get_matrix_list()
 	}
 	return world_matrix_array;
 }
+void geometry_resource_view::get_bonematrix_singledata(XMFLOAT4X4 **mat_in, int &bone_num)
+{
+	if (!if_skin)
+	{
+		return;
+	}
+	auto data_now = instance_list.begin();
+	engine_basic::engine_fail_reason check_error = data_now->second.get_bone_matrix(mat_in, bone_num);
+}
 ID3D11ShaderResourceView * geometry_resource_view::get_bone_matrix_list()
 {
 	if (!if_skin)

@@ -8,6 +8,66 @@
 #include <assimp/postprocess.h>     // 该头文件中包含后处理的标志位定义
 #include <assimp/matrix4x4.h>
 #include <assimp/matrix3x3.h>
+#include <fbxsdk.h>
+struct mesh_animation_data
+{
+	XMFLOAT3 position;
+	XMFLOAT3 normal;
+	XMFLOAT3 tangent;
+};
+struct mesh_animation_per_frame
+{
+	int point_num;
+	mesh_animation_data *point_data;
+	mesh_animation_per_frame(int point_num_in)
+	{
+		point_num = point_num_in;
+		point_data = new mesh_animation_data[point_num_in];
+	};
+};
+
+class mesh_animation_FBX
+{
+#ifdef IOS_REF
+#undef  IOS_REF
+#define IOS_REF (*(pManager->GetIOSettings()))
+#endif
+	//FBX属性
+	int lVertexCount;
+	FbxString *lFilePath;
+	FbxManager* lSdkManager = NULL;
+	FbxScene* lScene = NULL;
+	FbxMesh* lMesh;
+	//动画属性
+	int point_num;
+	int point_index_num;
+	UINT *index_buffer;
+	std::vector<mesh_animation_per_frame> anim_data_list;
+	FbxTime anim_start;
+	FbxTime anim_end;
+	FbxTime anim_frame;
+	int frame_per_second;
+	int frame_num;
+	//测试缓冲区
+	ID3D11ShaderResourceView *point_buffer;
+public:
+	mesh_animation_FBX(std::string file_name_in, int point_num_in,int point_index_num_in);
+	engine_basic::engine_fail_reason create(UINT *index_buffer_in);
+	int get_point_num() { return point_num; };
+	int get_frame_num() { return frame_num; };
+	ID3D11ShaderResourceView *get_buffer() { return point_buffer; };
+	void release();
+private:
+	engine_basic::engine_fail_reason build_buffer();
+	void InitializeSdkObjects(FbxManager*& pManager, FbxScene*& pScene);
+	void DestroySdkObjects(FbxManager* pManager, bool pExitStatus);
+	bool SaveScene(FbxManager* pManager, FbxDocument* pScene, const char* pFilename, int pFileFormat, bool pEmbedMedia);
+	bool LoadScene(FbxManager* pManager, FbxDocument* pScene, const char* pFilename);
+	void PreparePointCacheData(FbxScene* pScene, FbxTime &pCache_Start, FbxTime &pCache_Stop);
+	engine_basic::engine_fail_reason ReadVertexCacheData(FbxMesh* pMesh, FbxTime& pTime, FbxVector4* pVertexArray);
+	void UpdateVertexPosition(const FbxMesh * pMesh, const FbxVector4 * pVertices);
+	engine_basic::engine_fail_reason find_tree_mesh(FbxNode *pNode);
+};
 
 
 struct material_list
@@ -41,26 +101,41 @@ struct meshview_list
 class assimp_basic
 {
 protected:
+	std::vector<int> model_part_vertex_num;
+	bool if_fbx_meshanimation;
+	mesh_animation_FBX *FBXanim_import;
 	meshview_list *mesh_need;        //网格表
 	ID3DX11EffectTechnique *teque_pancy;       //绘制路径
 	std::string filename;        //模型文件名
 	char rec_texpath[128];       //纹理路径
 	Assimp::Importer importer;   //模型导入器
 	const aiScene *model_need;   //模型存储类
+	const aiScene *model_need_CCW;   //模型存储类（反面）
 	material_list *matlist_need; //材质表
 	int material_optimization;
 	int mesh_optimization;
 	std::vector<std::string> meshpart_name;
+	int vertex_final_num;
+	int index_pack_num;
+	UINT *index_pack_list;
+	UINT *index_pack_list_CCW;
 public:
 	assimp_basic(const char* filename, const char* texture_path);
-	engine_basic::engine_fail_reason model_create(bool if_adj,int alpha_partnum, int* alpha_part);
+	engine_basic::engine_fail_reason model_create(bool if_adj, int alpha_partnum, int* alpha_part);
+	//顶点动画数据
 	int get_meshnum();
+	int get_animation_point_num() { return FBXanim_import->get_point_num(); };
+	int get_anim_num() { return FBXanim_import->get_frame_num(); };
+	ID3D11ShaderResourceView *get_anim_buffer() { return FBXanim_import->get_buffer(); };
+	bool check_if_mesh_anim() { return if_fbx_meshanimation; };
+	//基本数据
 	int get_texnum() { return material_optimization; };
 	virtual void get_texture(material_list *texture_need, int i);
 	virtual void get_texture_byindex(material_list *texture_need, int index);
 	bool check_if_anim();
 	virtual void release();
 	virtual void draw_part(int i);
+	int get_part_offset(int part);
 	std::string get_mesh_name_bypart(int mesh_id);
 	HRESULT get_technique(ID3DX11EffectTechnique *teque_need);
 protected:
@@ -75,12 +150,9 @@ class model_reader_assimp : public assimp_basic
 {
 protected:
 	T *point_pack_list;
-	UINT *index_pack_list;
-	int vertex_final_num;
-	int index_pack_num;
 public:
 	model_reader_assimp(const char* filename, const char* texture_path);
-	void get_model_pack_num(int &vertex_num,int &index_num);
+	void get_model_pack_num(int &vertex_num, int &index_num);
 	void get_model_pack_data(T *point_data, UINT *index_data);
 protected:
 	virtual engine_basic::engine_fail_reason init_mesh(bool if_adj);
@@ -103,11 +175,11 @@ engine_basic::engine_fail_reason model_reader_assimp<T>::init_mesh(bool if_adj)
 		const aiMesh* paiMesh = model_need->mMeshes[i];
 		std::string data_name = paiMesh->mName.C_Str();
 		int count = 0;
-		for (int i = 0; i < data_name.size(); ++i) 
+		for (int i = 0; i < data_name.size(); ++i)
 		{
-			if (data_name[i] == ' ') 
+			if (data_name[i] == ' ')
 			{
-				count = i+1;
+				count = i + 1;
 			}
 		}
 		std::string final_name;
@@ -137,6 +209,7 @@ engine_basic::engine_fail_reason model_reader_assimp<T>::init_mesh(bool if_adj)
 		mesh_need[i].material_use = paiMesh->mMaterialIndex;
 		point_need = (T*)malloc(paiMesh->mNumVertices * sizeof(T));
 		index_need = (unsigned int*)malloc(paiMesh->mNumFaces * 3 * sizeof(unsigned int));
+		model_part_vertex_num.push_back(paiMesh->mNumVertices);
 		//顶点缓存
 		for (unsigned int j = 0; j < paiMesh->mNumVertices; j++)
 		{
@@ -195,7 +268,7 @@ engine_basic::engine_fail_reason model_reader_assimp<T>::init_mesh(bool if_adj)
 			}
 		}
 		//模型的第i个模块的顶点及索引信息
-		mesh_need[i].point_buffer = new mesh_model<T>(point_need, index_need,paiMesh->mNumVertices, paiMesh->mNumFaces * 3,if_adj);
+		mesh_need[i].point_buffer = new mesh_model<T>(point_need, index_need, paiMesh->mNumVertices, paiMesh->mNumFaces * 3, if_adj);
 		//根据内存信息创建显存区
 		engine_basic::engine_fail_reason check_fail = mesh_need[i].point_buffer->create_object();
 		if (!check_fail.check_if_failed())
@@ -222,7 +295,7 @@ void model_reader_assimp<T>::get_model_pack_num(int &vertex_num, int &index_num)
 template<typename T>
 void model_reader_assimp<T>::get_model_pack_data(T *point_data, UINT *index_data)
 {
-	for (int i = 0; i < vertex_final_num; ++i) 
+	for (int i = 0; i < vertex_final_num; ++i)
 	{
 		point_data[i] = point_pack_list[i];
 	}
@@ -298,7 +371,7 @@ struct animation_set
 	animation_data *head_animition;                     //该动画的数据
 	animation_set *next;                                //指向下一个动画的指针
 };
-class model_reader_skin :public model_reader_assimp<point_skincommon> 
+class model_reader_skin :public model_reader_assimp<point_skincommon>
 {
 	skin_tree *root_skin;
 	animation_set *first_animation;

@@ -278,6 +278,7 @@ public:
 
 	std::vector<XMFLOAT4X4> get_matrix_list();
 	ID3D11ShaderResourceView * get_bone_matrix_list();
+	void get_bonematrix_singledata(XMFLOAT4X4 **mat_in,int &bone_num);
 	int get_bone_mat_num();
 	int add_an_instance(XMFLOAT4X4 world_matrix);
 	engine_basic::engine_fail_reason get_technique(ID3DX11EffectTechnique *teque_need) { return model_data->get_technique(teque_need); };

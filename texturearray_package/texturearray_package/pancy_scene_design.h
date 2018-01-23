@@ -79,6 +79,7 @@ private:
 
 class scene_test_square : public scene_root 
 {
+	float time_all;
 	XMFLOAT4X4 offset_matrix[100];
 	skin_tree *bone_read;
 	animation_set *anim_read;

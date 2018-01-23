@@ -185,6 +185,31 @@ void virtual_light_shader::init_handle()
 	texture_brdfluv_handle = fx_need->GetVariableByName("texture_rdfluv")->AsShaderResource();
 	cubemap_texture = fx_need->GetVariableByName("texture_environment")->AsShaderResource();
 	texture_diffusearray_handle = fx_need->GetVariableByName("texture_pack_diffuse")->AsShaderResource();
+
+	animation_buffer = fx_need->GetVariableByName("input_point")->AsShaderResource();
+	point_offset_handle = fx_need->GetVariableByName("offset_num");
+}
+engine_basic::engine_fail_reason virtual_light_shader::set_animation_buffer(ID3D11ShaderResourceView* buffer_in)
+{
+	HRESULT hr = animation_buffer->SetResource(buffer_in);
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason failed_message(hr, "set animation_buffer error in" + shader_file_string);
+		return failed_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason virtual_light_shader::set_animation_offset(XMUINT4 offset_data) 
+{
+	HRESULT hr = point_offset_handle->SetRawValue((void*)&offset_data, 0, sizeof(offset_data));
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason failed_message(hr, "set point_offset_handle error in" + shader_file_string);
+		return failed_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
 }
 engine_basic::engine_fail_reason virtual_light_shader::set_view_pos(XMFLOAT3 eye_pos)
 {
@@ -631,7 +656,7 @@ engine_basic::engine_fail_reason shader_control::init()
 engine_basic::engine_fail_reason shader_control::init_basic()
 {
 
-	std::shared_ptr<color_shader> shader_color_test = std::make_shared<color_shader>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\color_test.cso");
+	std::shared_ptr<color_shader> shader_color_test = std::make_shared<color_shader>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\texarray\\color_test.cso");
 	engine_basic::engine_fail_reason check_error = shader_color_test->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -644,7 +669,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 	}
 
 
-	std::shared_ptr<virtual_light_shader> shader_vlight_test = std::make_shared<virtual_light_shader>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\virtual_light_pbr.cso");
+	std::shared_ptr<virtual_light_shader> shader_vlight_test = std::make_shared<virtual_light_shader>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\texarray\\virtual_light_pbr.cso");
 	check_error = shader_vlight_test->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -656,7 +681,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
-	std::shared_ptr<picture_show_shader> shader_picture_test = std::make_shared<picture_show_shader>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\show_pic.cso");
+	std::shared_ptr<picture_show_shader> shader_picture_test = std::make_shared<picture_show_shader>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\texarray\\show_pic.cso");
 	check_error = shader_picture_test->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -668,7 +693,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
-	std::shared_ptr<shader_skycube> shader_sky_draw = std::make_shared<shader_skycube>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\skycube.cso");
+	std::shared_ptr<shader_skycube> shader_sky_draw = std::make_shared<shader_skycube>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\texarray\\skycube.cso");
 	check_error = shader_sky_draw->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -680,7 +705,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
-	std::shared_ptr<brdf_envpre_shader> shader_brdf_draw = std::make_shared<brdf_envpre_shader>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\render_brdf_list.cso");
+	std::shared_ptr<brdf_envpre_shader> shader_brdf_draw = std::make_shared<brdf_envpre_shader>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\texarray\\render_brdf_list.cso");
 	check_error = shader_brdf_draw->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -692,7 +717,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
-	std::shared_ptr<find_clip> shader_find_clip = std::make_shared<find_clip>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\find_clip.cso");
+	std::shared_ptr<find_clip> shader_find_clip = std::make_shared<find_clip>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\texarray\\find_clip.cso");
 	check_error = shader_find_clip->shder_create();
 	if (!check_error.check_if_failed())
 	{

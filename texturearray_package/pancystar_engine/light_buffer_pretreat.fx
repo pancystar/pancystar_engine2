@@ -363,7 +363,7 @@ PixelOut_high count_pbr_lighting(VertexOut pin, float pz,float shadow_mask)
 	float3 transmittance_out;
 	float3 in_scatter_out;
 	rec_sunlight.diffuse.rgb = count_normal_sphereradiance(pz,pin, render_check, fragment_angular_size, sphere_alpha, transmittance_out, in_scatter_out);
-	
+	//rec_sunlight.diffuse.rgb = float3(0.8f, 0.8f, 0.8f);
 	pout.atmosphereblend.rgb = count_sky_radiance(view_direction);
 	//pout.atmosphereblend.rgb = view_direction;
 	pout.atmosphereblend.a = sphere_alpha;

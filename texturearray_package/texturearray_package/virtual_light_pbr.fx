@@ -16,7 +16,8 @@ Texture2D        texture_rdfluv;   //粗糙度贴图
 
 Texture2DArray   texture_pack_diffuse;
 TextureCube      texture_environment;
-
+StructuredBuffer<float3> input_point;
+uint4 offset_num;
 
 SamplerState samTex_liner
 {
@@ -25,7 +26,10 @@ SamplerState samTex_liner
 	AddressU = Wrap;
 	AddressV = Wrap;
 };
-
+RasterizerState DisableCulling
+{
+	CullMode = FRONT;
+};
 struct Vertex_IN_bone
 {
 	float3	pos 	: POSITION;     //顶点位置
@@ -39,6 +43,16 @@ struct Vertex_IN_bone
 };
 struct Vertex_IN
 {
+	float3	pos 	: POSITION;     //顶点位置
+	float3	normal 	: NORMAL;       //顶点法向量
+	float3	tangent : TANGENT;      //顶点切向量
+	uint4   texid   : TEXINDICES;   //纹理索引
+	float4  tex1    : TEXDIFFNORM;  //顶点纹理坐标(漫反射及法线纹理)
+	float4  tex2    : TEXOTHER;     //顶点纹理坐标(其它纹理)
+};
+struct Vertex_IN_anim
+{
+	uint   vertIndex		: SV_VertexID;
 	float3	pos 	: POSITION;     //顶点位置
 	float3	normal 	: NORMAL;       //顶点法向量
 	float3	tangent : TANGENT;      //顶点切向量
@@ -158,6 +172,20 @@ VertexOut VS(Vertex_IN vin)
 	vout.tex1 = vin.tex1;
 	vout.tex2 = vin.tex2;
 	vout.position_bef = mul(float4(vin.pos, 1.0f), world_matrix).xyz;
+	return vout;
+}
+VertexOut VS_anim(Vertex_IN_anim vin)
+{
+	VertexOut vout;
+	int offset_ID = vin.vertIndex + offset_num.x + offset_num.y * offset_num.z;
+	float3 point_offset = input_point[offset_ID];
+	vout.position = mul(float4(point_offset, 1.0f), final_matrix);
+	vout.normal = mul(float4(vin.normal, 0.0f), normal_matrix).xyz;
+	vout.tangent = mul(float4(vin.tangent, 0.0f), normal_matrix).xyz;
+	vout.texid = vin.texid;
+	vout.tex1 = vin.tex1;
+	vout.tex2 = vin.tex2;
+	vout.position_bef = mul(float4(point_offset, 1.0f), world_matrix).xyz;
 	return vout;
 }
 VertexOut VS_bone(Vertex_IN_bone vin)
@@ -304,6 +332,16 @@ technique11 light_tech_pbr
 		SetVertexShader(CompileShader(vs_5_0, VS()));
 		SetGeometryShader(NULL);
 		SetPixelShader(CompileShader(ps_5_0, PS_pbr()));
+	}
+}
+technique11 light_tech_pbranim
+{
+	pass P0
+	{
+		SetVertexShader(CompileShader(vs_5_0, VS_anim()));
+		SetGeometryShader(NULL);
+		SetPixelShader(CompileShader(ps_5_0, PS_pbr()));
+		SetRasterizerState(DisableCulling);
 	}
 }
 technique11 light_tech_pbr_withbone

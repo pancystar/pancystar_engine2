@@ -121,15 +121,12 @@ private:
 	void show_sky_single(XMFLOAT4X4 view_matrix, XMFLOAT4X4 *proj_matrix);
 	void show_pbr_test(string tech_name, XMFLOAT4X4 *view_matrix = NULL, XMFLOAT4X4 *proj_matrix = NULL);
 };
-
-
-
-
 class scene_test_environment : public scene_root
 {
 	
 	particle_looping<point_ParticleBasic>          *particle_fire;
-	pancy_terrain_part        *terrain_need;
+	//pancy_terrain_part        *terrain_need;
+	pancy_terrain_control *terrain_test;
 	bool if_finish = false;
 	float time_need = 0;
 	pancy_model_ID ID_model_skin;
@@ -175,7 +172,39 @@ private:
 	void show_particle();
 	//engine_basic::engine_fail_reason create_cubemap();
 };
-
+class scene_test_plant : public scene_root
+{
+	pancy_model_ID ID_model_sky;
+	int model_ID_sky;
+	pancy_model_ID ID_model_bone[100];
+	int model_ID_bone;
+	skin_tree *root_skin;
+	std::ifstream skin_instream;
+	pancy_model_ID ID_model_skin;
+	int model_ID_skin;
+	int animation_id;
+	int bone_num;
+	XMFLOAT4X4 bone_matrix_array[100];
+	XMFLOAT4X4 offset_matrix_array[100];
+	XMFLOAT4X4 final_matrix_array[100];
+	int parent_ID[100];
+public:
+	scene_test_plant();
+	engine_basic::engine_fail_reason create();
+	void display();
+	void display_nopost() {};
+	void display_environment(XMFLOAT4X4 view_matrix, XMFLOAT4X4 proj_matrix);
+	void update(float delta_time);
+	void release();
+private:
+	void show_sky_single();
+	void show_bone();
+	engine_basic::engine_fail_reason load_skintree(string filename);
+	void read_bone_tree(skin_tree *now);
+	void update_root(skin_tree *root, XMFLOAT4X4 matrix_parent, int ID_parent);
+	void scene_test_plant::get_bone_matrix();
+	void show_skinmesh();
+};
 
 
 class scene_game_build : public scene_root

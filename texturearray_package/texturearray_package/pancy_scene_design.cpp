@@ -250,6 +250,7 @@ void texture_combine::releae()
 
 scene_test_square::scene_test_square()
 {
+	time_all = 0;
 	anim_read = NULL;
 	bone_read = NULL;
 	if_have_bone = false;
@@ -1633,8 +1634,13 @@ void scene_test_square::draw_brdfdata()
 	d3d_pancy_basic_singleton::GetInstance()->restore_render_target();
 }
 void scene_test_square::show_model()
-{
-
+{	
+	time_all += 0.05f;
+	int time_frame = static_cast<int>(time_all);
+	if (time_frame >= mesh_model_need->get_anim_num()) 
+	{
+		time_all = 0;
+	}
 	D3D11_VIEWPORT viewPort;
 	viewPort.Width = 800.0f;
 	viewPort.Height = 600.0f;
@@ -1679,8 +1685,18 @@ void scene_test_square::show_model()
 		shader_need->set_tex_diffuse(rec_need.tex_diffuse_resource);
 		shader_need->set_tex_metallic(pbr_list[i].metallic);
 		shader_need->set_tex_roughness(pbr_list[i].roughness);
-
-		if (!if_have_bone)
+		if (mesh_model_need->check_if_mesh_anim()) 
+		{
+			int offset_1 = mesh_model_need->get_part_offset(i);
+			int offset_2 = mesh_model_need->get_animation_point_num();
+			shader_need->set_animation_offset(XMUINT4(offset_1, offset_2, time_frame, 0));
+			shader_need->set_animation_buffer(mesh_model_need->get_anim_buffer());
+			shader_need->get_technique(&teque_need, "light_tech_pbranim");
+			mesh_model_need->get_technique(teque_need);
+			mesh_model_need->draw_part(i);
+			d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->RSSetState(NULL);
+		}
+		else if (!if_have_bone)
 		{
 			shader_need->get_technique(&teque_need, "light_tech_pbr");
 			mesh_model_need->get_technique(teque_need);

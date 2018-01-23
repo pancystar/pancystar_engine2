@@ -71,8 +71,9 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>F:\vs2015_lib\dx11\include;F:\vs2015_lib\assimp3\assimp-3.3.1\include;$(IncludePath)</IncludePath>
-    <LibraryPath>F:\vs2015_lib\dx11\lib;F:\vs2015_lib\assimp3\assimp-3.3.1\build\code\Release;$(LibraryPath)</LibraryPath>
+    <IncludePath>F:\vs2015_lib\dx11\include;F:\vs2015_lib\assimp3\assimp-3.3.1\include;F:\Program Files\Autodesk\FBX\FBX SDK\2018.1.1\include;$(IncludePath)</IncludePath>
+    <LibraryPath>F:\vs2015_lib\dx11\lib;F:\vs2015_lib\assimp3\assimp-3.3.1\build\code\Release;F:\Program Files\Autodesk\FBX\FBX SDK\2018.1.1\lib\vs2015\x86\debug;$(LibraryPath)</LibraryPath>
+    <OutDir>$(SolutionDir)$(Configuration)\texarray\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
@@ -95,7 +96,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>DirectXTK.lib;Effects11.lib;assimp-vc140-mt.lib;DirectXMeshd.lib;DirectXTexd.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>DirectXTK.lib;Effects11.lib;assimp-vc140-mt.lib;DirectXMeshd.lib;DirectXTexd.lib;libfbxsdk-mt.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <FxCompile>
       <ShaderType>Effect</ShaderType>

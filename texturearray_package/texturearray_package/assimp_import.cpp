@@ -4,8 +4,10 @@ assimp_basic::assimp_basic(const char* pFile, const char *texture_path)
 	filename = pFile;
 	strcpy(rec_texpath, texture_path);
 	model_need = NULL;
+	model_need_CCW = NULL;
 	matlist_need = NULL;
 	mesh_need = NULL;
+	if_fbx_meshanimation = false;
 }
 std::string assimp_basic::get_mesh_name_bypart(int mesh_id)
 {
@@ -13,7 +15,7 @@ std::string assimp_basic::get_mesh_name_bypart(int mesh_id)
 	{
 		return "";
 	}
-	else 
+	else
 	{
 		return meshpart_name[mesh_id];
 	}
@@ -55,16 +57,16 @@ void assimp_basic::change_texturedesc_2dds(char rec[])
 	}
 	strcpy(rec, &rec[start]);
 }
-engine_basic::engine_fail_reason assimp_basic::model_create(bool if_adj,int alpha_partnum, int* alpha_part)
+engine_basic::engine_fail_reason assimp_basic::model_create(bool if_adj, int alpha_partnum, int* alpha_part)
 {
+	HRESULT hr;
+	engine_basic::engine_fail_reason check_fail;
 	//aiProcess_ConvertToLeftHanded;
 	model_need = importer.ReadFile(filename,
 		aiProcess_MakeLeftHanded |
 		aiProcess_FlipWindingOrder |
-		aiProcess_CalcTangentSpace |             //计算切线和副法线
-												 //aiProcess_Triangulate |                 //将四边形面转换为三角面
-		aiProcess_JoinIdenticalVertices		//合并相同的顶点
-											//aiProcess_SortByPType
+		aiProcess_CalcTangentSpace |
+		aiProcess_JoinIdenticalVertices
 		);//将不同图元放置到不同的模型中去，图片类型可能是点、直线、三角形等
 	if (!model_need)
 	{
@@ -97,8 +99,8 @@ engine_basic::engine_fail_reason assimp_basic::model_create(bool if_adj,int alph
 			strcpy(matlist_need[i].texture_normal, rec_name);
 		}
 	}
-	HRESULT hr;
-	engine_basic::engine_fail_reason check_fail = init_mesh(if_adj);
+
+	check_fail = init_mesh(if_adj);
 	if (!check_fail.check_if_failed())
 	{
 		return check_fail;
@@ -108,12 +110,57 @@ engine_basic::engine_fail_reason assimp_basic::model_create(bool if_adj,int alph
 	{
 		return check_fail;
 	}
+
+
+
+	model_need_CCW = importer.ReadFile(filename,
+		aiProcess_MakeLeftHanded |
+		aiProcess_CalcTangentSpace |
+		aiProcess_JoinIdenticalVertices
+		);
+	//索引缓存区
+	index_pack_list_CCW = new UINT[index_pack_num];
+	int count_index_pack = 0;
+	int now_index_start = 0;
+	for (int i = 0; i < model_need_CCW->mNumMeshes; i++)
+	{
+		//获取模型的第i个模块
+		const aiMesh* paiMesh = model_need_CCW->mMeshes[i];
+		int count_index = 0;
+		for (unsigned int j = 0; j < paiMesh->mNumFaces; j++)
+		{
+			if (paiMesh->mFaces[j].mNumIndices == 3)
+			{
+				index_pack_list_CCW[count_index_pack++] = paiMesh->mFaces[j].mIndices[0] + now_index_start;
+				index_pack_list_CCW[count_index_pack++] = paiMesh->mFaces[j].mIndices[1] + now_index_start;
+				index_pack_list_CCW[count_index_pack++] = paiMesh->mFaces[j].mIndices[2] + now_index_start;
+			}
+			else
+			{
+				engine_basic::engine_fail_reason fail_message("model" + filename + "find no triangle face");
+				return fail_message;
+			}
+		}
+		now_index_start += paiMesh->mNumVertices;
+	}
+	FBXanim_import = new mesh_animation_FBX(filename, vertex_final_num, index_pack_num);
+	check_fail = FBXanim_import->create(index_pack_list_CCW);
+	if (check_fail.check_if_failed())
+	{
+		if_fbx_meshanimation = true;
+	}
+	model_need = importer.ReadFile(filename,
+		aiProcess_MakeLeftHanded |
+		aiProcess_FlipWindingOrder |
+		aiProcess_CalcTangentSpace |
+		aiProcess_JoinIdenticalVertices
+		);
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
 bool assimp_basic::check_if_anim()
 {
-	if (model_need->mNumAnimations == 0) 
+	if (model_need->mNumAnimations == 0)
 	{
 		return false;
 	}
@@ -138,7 +185,7 @@ engine_basic::engine_fail_reason assimp_basic::init_texture()
 			hr_need = CreateDDSTextureFromFileEx(d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device(), d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex(), texture_name, 0, D3D11_USAGE_DEFAULT, D3D11_BIND_SHADER_RESOURCE, 0, 0., false, NULL, &matlist_need[i].tex_diffuse_resource);
 			if (FAILED(hr_need))
 			{
-				engine_basic::engine_fail_reason check_fail(hr_need,std::string("create diffuse texture") + matlist_need[i].texture_diffuse + "error");
+				engine_basic::engine_fail_reason check_fail(hr_need, std::string("create diffuse texture") + matlist_need[i].texture_diffuse + "error");
 				return check_fail;
 			}
 			//释放临时文件名
@@ -220,16 +267,589 @@ void assimp_basic::release()
 		delete[] mesh_need;
 		//释放表资源
 		delete[] matlist_need;
+		delete[] index_pack_list_CCW; 
+		if (if_fbx_meshanimation)
+		{
+			FBXanim_import->release();
+		}
 		model_need->~aiScene();
 	}
+
 }
 void assimp_basic::draw_part(int i)
 {
 	mesh_need[i].point_buffer->get_teque(teque_pancy);
 	mesh_need[i].point_buffer->show_mesh();
 }
+int assimp_basic::get_part_offset(int part)
+{
+	int all_need = 0;
+	int count_turn = 0;
+	for (auto data_num = model_part_vertex_num.begin(); data_num != model_part_vertex_num.end(); ++data_num)
+	{
+		if (count_turn < part)
+		{
+			all_need += *data_num._Ptr;
+			count_turn++;
+		}
+		else
+		{
+			break;
+		}
+	}
+	return all_need;
+}
+//FBX网格动画
+mesh_animation_FBX::mesh_animation_FBX(std::string file_name_in, int point_num_in, int point_index_num_in)
+{
+	lFilePath = new FbxString(file_name_in.c_str());
+	point_index_num = point_index_num_in;
+	point_num = point_num_in;
+}
+engine_basic::engine_fail_reason mesh_animation_FBX::create(UINT *index_buffer_in)
+{
+	engine_basic::engine_fail_reason check_error;
+	InitializeSdkObjects(lSdkManager, lScene);
+	if (lFilePath->IsEmpty())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "need a file name");
+		return error_message;
+	}
+	else
+	{
+		bool if_succeed = LoadScene(lSdkManager, lScene, lFilePath->Buffer());
+		if (if_succeed == false)
+		{
+			engine_basic::engine_fail_reason error_message(E_FAIL, "An error occurred while loading the scene" + std::string(lFilePath->Buffer()));
+			return error_message;
+		}
+	}
+	auto pNode = lScene->GetRootNode();
+	//获取网格信息
+	if (pNode == NULL)
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "could not find the root node of FBX file" + std::string(lFilePath->Buffer()));
+		return error_message;
+	}
+	check_error = find_tree_mesh(pNode);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	//检验动画信息
+	const bool lHasVertexCache = lMesh->GetDeformerCount(FbxDeformer::eVertexCache) &&
+		(static_cast<FbxVertexCacheDeformer*>(lMesh->GetDeformer(0, FbxDeformer::eVertexCache)))->Active.Get();
+	if (!lHasVertexCache)
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "the FBX file don't have animation message" + std::string(lFilePath->Buffer()));
+		return error_message;
+	}
+	//获取时间信息
+	PreparePointCacheData(lScene, anim_start, anim_end);
+	auto FPS_rec = anim_end.GetFrameRate(fbxsdk::FbxTime::EMode::eDefaultMode);
+	auto framenum_rec = anim_end.GetFrameCount();
+	frame_per_second = static_cast<int>(FPS_rec);
+	frame_num = static_cast<int>(framenum_rec);
+	anim_frame.SetTime(0, 0, 0, 1, 0, lScene->GetGlobalSettings().GetTimeMode());
+	if (frame_num == 0)
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "could not find the mesh animation of FBX file" + std::string(lFilePath->Buffer()));
+		return error_message;
+	}
+
+	//检验模型是否匹配
+	int lPolygonCount = lMesh->GetPolygonCount();
+	if (lPolygonCount * 3 != point_index_num)
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "The model from assimp have different face count" + std::string(lFilePath->Buffer()));
+		return error_message;
+	}
+	index_buffer = new UINT[point_index_num];
+	for (int i = 0; i < point_index_num; ++i)
+	{
+		index_buffer[i] = index_buffer_in[i];
+	}
+	//开启顶点动画缓冲
+	auto time_now = anim_start;
+	FbxVector4* lVertexArray = NULL;
+	lVertexArray = new FbxVector4[lVertexCount];
+	for (int i = 0; i < frame_num; ++i)
+	{
+		time_now += anim_frame;
+		int check = time_now.GetFrameCount();
+		check_error = ReadVertexCacheData(lMesh, time_now, lVertexArray);
+		if (!check_error.check_if_failed())
+		{
+			return check_error;
+		}
+		UpdateVertexPosition(lMesh, lVertexArray);
+	}
+	bool lResult = true;
+	DestroySdkObjects(lSdkManager, lResult);
+	check_error = build_buffer();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason mesh_animation_FBX::build_buffer()
+{
+	ID3D11Buffer *buffer_vertex_need;
+	XMFLOAT3 *point_data_now;
+
+	point_data_now = new XMFLOAT3[anim_data_list.size() * anim_data_list.begin()._Ptr->point_num];
+	int size = 0;
+	for (auto data_check = anim_data_list.begin(); data_check != anim_data_list.end(); ++data_check)
+	{
+		for (int i = 0; i < data_check->point_num; ++i)
+		{
+			point_data_now[size++] = data_check->point_data[i].position;
+		}
+	}
+	//创建顶点动画缓冲区
+	D3D11_BUFFER_DESC FBX_vertex_desc;
+	FBX_vertex_desc.Usage = D3D11_USAGE_DEFAULT;            //通用类型
+	FBX_vertex_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;//缓存类型为srv
+	FBX_vertex_desc.ByteWidth = size*sizeof(XMFLOAT3);        //顶点缓存的大小
+	FBX_vertex_desc.CPUAccessFlags = 0;
+	FBX_vertex_desc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+	FBX_vertex_desc.StructureByteStride = sizeof(XMFLOAT3);
+
+	D3D11_SUBRESOURCE_DATA resource_buffer = { 0 };
+	resource_buffer.pSysMem = point_data_now;
+	HRESULT hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateBuffer(&FBX_vertex_desc, &resource_buffer, &buffer_vertex_need);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason check_error(hr, "create FBX model animation data buffer error");
+		return check_error;
+	}
+
+	D3D11_SHADER_RESOURCE_VIEW_DESC DescSRV;
+	ZeroMemory(&DescSRV, sizeof(D3D11_SHADER_RESOURCE_VIEW_DESC));
+	DescSRV.Format = DXGI_FORMAT_UNKNOWN;
+	DescSRV.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+	DescSRV.Buffer.FirstElement = 0;
+	DescSRV.Buffer.NumElements = size;
+	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateShaderResourceView(buffer_vertex_need, &DescSRV, &point_buffer);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason check_error(hr, "create FBX model animation data SRV buffer error");
+		return check_error;
+	}
+	buffer_vertex_need->Release();
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+void mesh_animation_FBX::release()
+{
+	point_buffer->Release();
+}
+engine_basic::engine_fail_reason mesh_animation_FBX::find_tree_mesh(FbxNode *pNode)
+{
+	FbxNodeAttribute* lNodeAttribute = pNode->GetNodeAttribute();
+	if (lNodeAttribute && lNodeAttribute->GetAttributeType() == FbxNodeAttribute::eMesh)
+	{
+		lMesh = pNode->GetMesh();
+		lVertexCount = lMesh->GetControlPointsCount();
+		engine_basic::engine_fail_reason succeed;
+		return succeed;
+	}
+	const int lChildCount = pNode->GetChildCount();
+	for (int lChildIndex = 0; lChildIndex < lChildCount; ++lChildIndex)
+	{
+		return find_tree_mesh(pNode->GetChild(lChildIndex));
+	}
+	engine_basic::engine_fail_reason error_message(E_FAIL, "could not find the mesh data in FBX file");
+	return error_message;
+}
+void mesh_animation_FBX::InitializeSdkObjects(FbxManager*& pManager, FbxScene*& pScene)
+{
+	//The first thing to do is to create the FBX Manager which is the object allocator for almost all the classes in the SDK
+	pManager = FbxManager::Create();
+	if (!pManager)
+	{
+		FBXSDK_printf("Error: Unable to create FBX Manager!\n");
+		exit(1);
+	}
+	else FBXSDK_printf("Autodesk FBX SDK version %s\n", pManager->GetVersion());
+
+	//Create an IOSettings object. This object holds all import/export settings.
+	FbxIOSettings* ios = FbxIOSettings::Create(pManager, IOSROOT);
+	pManager->SetIOSettings(ios);
+
+	//Load plugins from the executable directory (optional)
+	FbxString lPath = FbxGetApplicationDirectory();
+	pManager->LoadPluginsDirectory(lPath.Buffer());
+
+	//Create an FBX scene. This object holds most objects imported/exported from/to files.
+	pScene = FbxScene::Create(pManager, "My Scene");
+	if (!pScene)
+	{
+		FBXSDK_printf("Error: Unable to create FBX scene!\n");
+		exit(1);
+	}
+}
+void mesh_animation_FBX::DestroySdkObjects(FbxManager* pManager, bool pExitStatus)
+{
+	//Delete the FBX Manager. All the objects that have been allocated using the FBX Manager and that haven't been explicitly destroyed are also automatically destroyed.
+	if (pManager) pManager->Destroy();
+	if (pExitStatus) FBXSDK_printf("Program Success!\n");
+}
+bool mesh_animation_FBX::SaveScene(FbxManager* pManager, FbxDocument* pScene, const char* pFilename, int pFileFormat, bool pEmbedMedia)
+{
+	int lMajor, lMinor, lRevision;
+	bool lStatus = true;
+
+	// Create an exporter.
+	FbxExporter* lExporter = FbxExporter::Create(pManager, "");
+
+	if (pFileFormat < 0 || pFileFormat >= pManager->GetIOPluginRegistry()->GetWriterFormatCount())
+	{
+		// Write in fall back format in less no ASCII format found
+		pFileFormat = pManager->GetIOPluginRegistry()->GetNativeWriterFormat();
+
+		//Try to export in ASCII if possible
+		int lFormatIndex, lFormatCount = pManager->GetIOPluginRegistry()->GetWriterFormatCount();
+
+		for (lFormatIndex = 0; lFormatIndex < lFormatCount; lFormatIndex++)
+		{
+			if (pManager->GetIOPluginRegistry()->WriterIsFBX(lFormatIndex))
+			{
+				FbxString lDesc = pManager->GetIOPluginRegistry()->GetWriterFormatDescription(lFormatIndex);
+				const char *lASCII = "ascii";
+				if (lDesc.Find(lASCII) >= 0)
+				{
+					pFileFormat = lFormatIndex;
+					break;
+				}
+			}
+		}
+	}
+
+	// Set the export states. By default, the export states are always set to 
+	// true except for the option eEXPORT_TEXTURE_AS_EMBEDDED. The code below 
+	// shows how to change these states.
+	IOS_REF.SetBoolProp(EXP_FBX_MATERIAL, true);
+	IOS_REF.SetBoolProp(EXP_FBX_TEXTURE, true);
+	IOS_REF.SetBoolProp(EXP_FBX_EMBEDDED, pEmbedMedia);
+	IOS_REF.SetBoolProp(EXP_FBX_SHAPE, true);
+	IOS_REF.SetBoolProp(EXP_FBX_GOBO, true);
+	IOS_REF.SetBoolProp(EXP_FBX_ANIMATION, true);
+	IOS_REF.SetBoolProp(EXP_FBX_GLOBAL_SETTINGS, true);
+
+	// Initialize the exporter by providing a filename.
+	if (lExporter->Initialize(pFilename, pFileFormat, pManager->GetIOSettings()) == false)
+	{
+		FBXSDK_printf("Call to FbxExporter::Initialize() failed.\n");
+		FBXSDK_printf("Error returned: %s\n\n", lExporter->GetStatus().GetErrorString());
+		return false;
+	}
+
+	FbxManager::GetFileFormatVersion(lMajor, lMinor, lRevision);
+	FBXSDK_printf("FBX file format version %d.%d.%d\n\n", lMajor, lMinor, lRevision);
+
+	// Export the scene.
+	lStatus = lExporter->Export(pScene);
+
+	// Destroy the exporter.
+	lExporter->Destroy();
+	return lStatus;
+}
+bool mesh_animation_FBX::LoadScene(FbxManager* pManager, FbxDocument* pScene, const char* pFilename)
+{
+	int lFileMajor, lFileMinor, lFileRevision;
+	int lSDKMajor, lSDKMinor, lSDKRevision;
+	//int lFileFormat = -1;
+	int i, lAnimStackCount;
+	bool lStatus;
+	char lPassword[1024];
+
+	// Get the file version number generate by the FBX SDK.
+	FbxManager::GetFileFormatVersion(lSDKMajor, lSDKMinor, lSDKRevision);
+
+	// Create an importer.
+	FbxImporter* lImporter = FbxImporter::Create(pManager, "");
+
+	// Initialize the importer by providing a filename.
+	const bool lImportStatus = lImporter->Initialize(pFilename, -1, pManager->GetIOSettings());
+	lImporter->GetFileVersion(lFileMajor, lFileMinor, lFileRevision);
+
+	if (!lImportStatus)
+	{
+		FbxString error = lImporter->GetStatus().GetErrorString();
+		FBXSDK_printf("Call to FbxImporter::Initialize() failed.\n");
+		FBXSDK_printf("Error returned: %s\n\n", error.Buffer());
+
+		if (lImporter->GetStatus().GetCode() == FbxStatus::eInvalidFileVersion)
+		{
+			FBXSDK_printf("FBX file format version for this FBX SDK is %d.%d.%d\n", lSDKMajor, lSDKMinor, lSDKRevision);
+			FBXSDK_printf("FBX file format version for file '%s' is %d.%d.%d\n\n", pFilename, lFileMajor, lFileMinor, lFileRevision);
+		}
+
+		return false;
+	}
+
+	FBXSDK_printf("FBX file format version for this FBX SDK is %d.%d.%d\n", lSDKMajor, lSDKMinor, lSDKRevision);
+
+	if (lImporter->IsFBX())
+	{
+		FBXSDK_printf("FBX file format version for file '%s' is %d.%d.%d\n\n", pFilename, lFileMajor, lFileMinor, lFileRevision);
+
+		// From this point, it is possible to access animation stack information without
+		// the expense of loading the entire file.
+
+		FBXSDK_printf("Animation Stack Information\n");
+
+		lAnimStackCount = lImporter->GetAnimStackCount();
+
+		FBXSDK_printf("    Number of Animation Stacks: %d\n", lAnimStackCount);
+		FBXSDK_printf("    Current Animation Stack: \"%s\"\n", lImporter->GetActiveAnimStackName().Buffer());
+		FBXSDK_printf("\n");
+
+		for (i = 0; i < lAnimStackCount; i++)
+		{
+			FbxTakeInfo* lTakeInfo = lImporter->GetTakeInfo(i);
+
+			FBXSDK_printf("    Animation Stack %d\n", i);
+			FBXSDK_printf("         Name: \"%s\"\n", lTakeInfo->mName.Buffer());
+			FBXSDK_printf("         Description: \"%s\"\n", lTakeInfo->mDescription.Buffer());
+
+			// Change the value of the import name if the animation stack should be imported 
+			// under a different name.
+			FBXSDK_printf("         Import Name: \"%s\"\n", lTakeInfo->mImportName.Buffer());
+
+			// Set the value of the import state to false if the animation stack should be not
+			// be imported. 
+			FBXSDK_printf("         Import State: %s\n", lTakeInfo->mSelect ? "true" : "false");
+			FBXSDK_printf("\n");
+		}
+
+		// Set the import states. By default, the import states are always set to 
+		// true. The code below shows how to change these states.
+		IOS_REF.SetBoolProp(IMP_FBX_MATERIAL, true);
+		IOS_REF.SetBoolProp(IMP_FBX_TEXTURE, true);
+		IOS_REF.SetBoolProp(IMP_FBX_LINK, true);
+		IOS_REF.SetBoolProp(IMP_FBX_SHAPE, true);
+		IOS_REF.SetBoolProp(IMP_FBX_GOBO, true);
+		IOS_REF.SetBoolProp(IMP_FBX_ANIMATION, true);
+		IOS_REF.SetBoolProp(IMP_FBX_GLOBAL_SETTINGS, true);
+	}
+
+	// Import the scene.
+	lStatus = lImporter->Import(pScene);
+
+	if (lStatus == false && lImporter->GetStatus().GetCode() == FbxStatus::ePasswordError)
+	{
+		FBXSDK_printf("Please enter password: ");
+
+		lPassword[0] = '\0';
+
+		FBXSDK_CRT_SECURE_NO_WARNING_BEGIN
+			scanf("%s", lPassword);
+		FBXSDK_CRT_SECURE_NO_WARNING_END
+
+			FbxString lString(lPassword);
+
+		IOS_REF.SetStringProp(IMP_FBX_PASSWORD, lString);
+		IOS_REF.SetBoolProp(IMP_FBX_PASSWORD_ENABLE, true);
+
+		lStatus = lImporter->Import(pScene);
+
+		if (lStatus == false && lImporter->GetStatus().GetCode() == FbxStatus::ePasswordError)
+		{
+			FBXSDK_printf("\nPassword is wrong, import aborted.\n");
+		}
+	}
+
+	// Destroy the importer.
+	lImporter->Destroy();
+
+	return lStatus;
+}
+void mesh_animation_FBX::PreparePointCacheData(FbxScene* pScene, FbxTime &pCache_Start, FbxTime &pCache_Stop)
+{
+	// This function show how to cycle through scene elements in a linear way.
+	const int lNodeCount = pScene->GetSrcObjectCount<FbxNode>();
+	FbxStatus lStatus;
+
+	for (int lIndex = 0; lIndex < lNodeCount; lIndex++)
+	{
+		FbxNode* lNode = pScene->GetSrcObject<FbxNode>(lIndex);
+
+		if (lNode->GetGeometry())
+		{
+			int i, lVertexCacheDeformerCount = lNode->GetGeometry()->GetDeformerCount(FbxDeformer::eVertexCache);
+
+			// There should be a maximum of 1 Vertex Cache Deformer for the moment
+			lVertexCacheDeformerCount = lVertexCacheDeformerCount > 0 ? 1 : 0;
+
+			for (i = 0; i < lVertexCacheDeformerCount; ++i)
+			{
+				// Get the Point Cache object
+				FbxVertexCacheDeformer* lDeformer = static_cast<FbxVertexCacheDeformer*>(lNode->GetGeometry()->GetDeformer(i, FbxDeformer::eVertexCache));
+				if (!lDeformer) continue;
+				FbxCache* lCache = lDeformer->GetCache();
+				if (!lCache) continue;
+
+				// Process the point cache data only if the constraint is active
+				if (lDeformer->Active.Get())
+				{
+					auto data_check = lCache->GetCacheFileFormat();
+					if (lCache->GetCacheFileFormat() == FbxCache::eMaxPointCacheV2)
+					{
+						// This code show how to convert from PC2 to MC point cache format
+						// turn it on if you need it.
+#if 0 
+						if (!lCache->ConvertFromPC2ToMC(FbxCache::eMCOneFile,
+							FbxTime::GetFrameRate(pScene->GetGlobalTimeSettings().GetTimeMode())))
+						{
+							// Conversion failed, retrieve the error here
+							FbxString lTheErrorIs = lCache->GetStaus().GetErrorString();
+						}
+#endif
+					}
+					else if (lCache->GetCacheFileFormat() == FbxCache::eMayaCache)
+					{
+						// This code show how to convert from MC to PC2 point cache format
+						// turn it on if you need it.
+						//#if 0 
+						if (!lCache->ConvertFromMCToPC2(FbxTime::GetFrameRate(pScene->GetGlobalSettings().GetTimeMode()), 0, &lStatus))
+						{
+							// Conversion failed, retrieve the error here
+							FbxString lTheErrorIs = lStatus.GetErrorString();
+						}
+						//#endif
+					}
 
 
+					// Now open the cache file to read from it
+					if (!lCache->OpenFileForRead(&lStatus))
+					{
+						// Cannot open file 
+						FbxString lTheErrorIs = lStatus.GetErrorString();
+
+						// Set the deformer inactive so we don't play it back
+						lDeformer->Active = false;
+					}
+					else
+					{
+						// get the start and stop time of the cache
+						FbxTime lChannel_Start;
+						FbxTime lChannel_Stop;
+						int lChannelIndex = lCache->GetChannelIndex(lDeformer->Channel.Get());
+						if (lCache->GetAnimationRange(lChannelIndex, lChannel_Start, lChannel_Stop))
+						{
+							// get the smallest start time
+							if (lChannel_Start < pCache_Start) pCache_Start = lChannel_Start;
+
+							// get the biggest stop time
+							if (lChannel_Stop > pCache_Stop)  pCache_Stop = lChannel_Stop;
+						}
+					}
+				}
+			}
+		}
+	}
+}
+engine_basic::engine_fail_reason mesh_animation_FBX::ReadVertexCacheData(FbxMesh* pMesh, FbxTime& pTime, FbxVector4* pVertexArray)
+{
+	FbxVertexCacheDeformer* lDeformer = static_cast<FbxVertexCacheDeformer*>(pMesh->GetDeformer(0, FbxDeformer::eVertexCache));
+	FbxCache*               lCache = lDeformer->GetCache();
+	int                     lChannelIndex = lCache->GetChannelIndex(lDeformer->Channel.Get());
+	unsigned int            lVertexCount = (unsigned int)pMesh->GetControlPointsCount();
+	bool                    lReadSucceed = false;
+	float*                  lReadBuf = NULL;
+	unsigned int			BufferSize = 0;
+
+	if (lDeformer->Type.Get() != FbxVertexCacheDeformer::ePositions)
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "animation data type not support");
+		return error_message;
+	}
+	unsigned int Length = 0;
+	lCache->Read(NULL, Length, FBXSDK_TIME_ZERO, lChannelIndex);
+	if (Length != lVertexCount * 3)
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "the content of the cache is by vertex not by control points (we don't support it here)");
+		return error_message;
+	}
+	lReadSucceed = lCache->Read(&lReadBuf, BufferSize, pTime, lChannelIndex);
+	if (lReadSucceed)
+	{
+		unsigned int lReadBufIndex = 0;
+		while (lReadBufIndex < 3 * lVertexCount)
+		{
+			pVertexArray[lReadBufIndex / 3].mData[0] = lReadBuf[lReadBufIndex]; lReadBufIndex++;
+			pVertexArray[lReadBufIndex / 3].mData[1] = lReadBuf[lReadBufIndex]; lReadBufIndex++;
+			pVertexArray[lReadBufIndex / 3].mData[2] = lReadBuf[lReadBufIndex]; lReadBufIndex++;
+		}
+	}
+	else
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "read animation data error");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+void mesh_animation_FBX::UpdateVertexPosition(const FbxMesh * pMesh, const FbxVector4 * pVertices)
+{
+	//创建基于assimp的顶点数组
+	mesh_animation_per_frame now_frame_data(point_num);
+	//读取fbx动画数据
+	int TRIANGLE_VERTEX_COUNT = 3;
+	int VERTEX_STRIDE = 4;
+	// Convert to the same sequence with data in GPU.
+	float * lVertices = NULL;
+	int lVertexCount = 0;
+	const int lPolygonCount = pMesh->GetPolygonCount();
+	lVertexCount = lPolygonCount * TRIANGLE_VERTEX_COUNT;
+	lVertices = new float[lVertexCount * VERTEX_STRIDE];
+
+	lVertexCount = 0;
+	for (int lPolygonIndex = 0; lPolygonIndex < lPolygonCount; ++lPolygonIndex)
+	{
+		/*
+		//获取当前对应的assimp顶点
+		int traingle_point_0 = lPolygonIndex * TRIANGLE_VERTEX_COUNT + 0;
+		int traingle_point_1 = lPolygonIndex * TRIANGLE_VERTEX_COUNT + 1;
+		int traingle_point_2 = lPolygonIndex * TRIANGLE_VERTEX_COUNT + 2;
+		const int lControlPointIndex_0 = pMesh->GetPolygonVertex(lPolygonIndex, 0);
+		const int lControlPointIndex_1 = pMesh->GetPolygonVertex(lPolygonIndex, 1);
+		const int lControlPointIndex_2 = pMesh->GetPolygonVertex(lPolygonIndex, 2);
+		int vertex_index_assimp_0 = index_buffer[traingle_point_2];
+		int vertex_index_assimp_1 = index_buffer[traingle_point_1];
+		int vertex_index_assimp_2 = index_buffer[traingle_point_0];
+		now_frame_data.point_data[vertex_index_assimp_0].position.x = static_cast<float>(pVertices[lControlPointIndex_0][0]);
+		now_frame_data.point_data[vertex_index_assimp_0].position.y = static_cast<float>(pVertices[lControlPointIndex_0][1]);
+		now_frame_data.point_data[vertex_index_assimp_0].position.z = static_cast<float>(pVertices[lControlPointIndex_0][2]);
+
+		now_frame_data.point_data[vertex_index_assimp_1].position.x = static_cast<float>(pVertices[lControlPointIndex_1][0]);
+		now_frame_data.point_data[vertex_index_assimp_1].position.y = static_cast<float>(pVertices[lControlPointIndex_1][1]);
+		now_frame_data.point_data[vertex_index_assimp_1].position.z = static_cast<float>(pVertices[lControlPointIndex_1][2]);
+
+		now_frame_data.point_data[vertex_index_assimp_2].position.x = static_cast<float>(pVertices[lControlPointIndex_2][0]);
+		now_frame_data.point_data[vertex_index_assimp_2].position.y = static_cast<float>(pVertices[lControlPointIndex_2][1]);
+		now_frame_data.point_data[vertex_index_assimp_2].position.z = static_cast<float>(pVertices[lControlPointIndex_2][2]);
+		lVertexCount += 3;
+		*/
+		int vertex_index_assimp = index_buffer[lVertexCount];
+		for (int lVerticeIndex = 0; lVerticeIndex < TRIANGLE_VERTEX_COUNT; ++lVerticeIndex)
+		{
+			const int lControlPointIndex = pMesh->GetPolygonVertex(lPolygonIndex, lVerticeIndex);
+			//获取当前对应的assimp顶点
+			int vertex_index_assimp = index_buffer[lVertexCount];
+			now_frame_data.point_data[vertex_index_assimp].position.x = static_cast<float>(pVertices[lControlPointIndex][0]);
+			now_frame_data.point_data[vertex_index_assimp].position.y = static_cast<float>(pVertices[lControlPointIndex][1]);
+			now_frame_data.point_data[vertex_index_assimp].position.z = static_cast<float>(pVertices[lControlPointIndex][2]);
+			++lVertexCount;
+		}
+	}
+	anim_data_list.push_back(now_frame_data);
+	int a = 0;
+}
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~骨骼动画~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 model_reader_skin::model_reader_skin(const char* filename, const char* texture_path) : model_reader_assimp(filename, texture_path)
@@ -249,7 +869,7 @@ model_reader_skin::model_reader_skin(const char* filename, const char* texture_p
 		XMStoreFloat4x4(&final_matrix_array[i], XMMatrixIdentity());
 	}
 
-	for (int i = 0; i <	 100; ++i)
+	for (int i = 0; i < 100; ++i)
 	{
 		for (int j = 0; j < 100; ++j)
 		{
@@ -558,7 +1178,7 @@ engine_basic::engine_fail_reason  model_reader_skin::init_mesh(bool if_adj)
 		//创建顶点缓存区
 		const aiMesh* paiMesh = model_need->mMeshes[i];
 		mesh_need[i].material_use = paiMesh->mMaterialIndex;
-		
+
 		point_need = (point_skincommon*)malloc(paiMesh->mNumVertices * sizeof(point_skincommon));
 		index_need = (unsigned int*)malloc(paiMesh->mNumFaces * 3 * sizeof(unsigned int));
 		for (int j = 0; j < paiMesh->mNumVertices; ++j)
@@ -705,7 +1325,7 @@ engine_basic::engine_fail_reason  model_reader_skin::init_mesh(bool if_adj)
 		}
 		//根据内存信息创建显存区
 		//模型的第i个模块的顶点及索引信息
-		mesh_need[i].point_buffer = new mesh_model<point_skincommon>(point_need, index_need,paiMesh->mNumVertices, paiMesh->mNumFaces * 3,if_adj);
+		mesh_need[i].point_buffer = new mesh_model<point_skincommon>(point_need, index_need, paiMesh->mNumVertices, paiMesh->mNumFaces * 3, if_adj);
 		auto check_error = mesh_need[i].point_buffer->create_object();
 		if (!check_error.check_if_failed())
 		{

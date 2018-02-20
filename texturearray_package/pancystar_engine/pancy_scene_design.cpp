@@ -30,6 +30,13 @@ engine_basic::engine_fail_reason scene_root::create_basic()
 	{
 		return check_error;
 	}
+	//物理系统
+	physic_scene = new pancy_physx_scene();
+	check_error = physic_scene->create();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
@@ -235,15 +242,6 @@ void real_time_environment::get_ViewMatrix(XMFLOAT4X4 *view_matrix, XMFLOAT4X4 *
 void real_time_environment::display_backbuffer(scene_root *environment_scene)
 {
 	//计算取景变换
-	/*
-	XMFLOAT3 look_vec, up_vec;
-	XMFLOAT4X4 view_matrix_reflect, inv_view_matrix_reflect,Proj_mat_reflect;
-	look_vec = look_cube_reflect[now_render_face];
-	up_vec = up_cube_reflect[now_render_face];
-	pancy_camera::get_instance()->count_view_matrix(look_vec, up_vec, center_position, &view_matrix_reflect);
-	pancy_camera::get_instance()->count_invview_matrix(look_vec, up_vec, center_position, &inv_view_matrix_reflect);
-	engine_basic::extra_perspective_message *scene_perspective = new engine_basic::extra_perspective_message(1024.0f * quality_environment, 1024.0f * quality_environment, 0.1f, 1000.0f, DirectX::XM_PIDIV2);
-	*/
 	XMFLOAT4X4 view_matrix_reflect, inv_view_matrix_reflect;
 	get_ViewMatrix(&view_matrix_reflect, &inv_view_matrix_reflect);
 
@@ -284,15 +282,7 @@ void real_time_environment::display_environment(scene_root *environment_scene)
 	shader_deffered->set_specular_light_tex(gbuffer_texture_data->get_gbuffer()->gbuffer_specular_tex);
 	shader_deffered->set_normal_tex(gbuffer_texture_data->get_gbuffer()->normalspec_tex);
 	shader_deffered->set_tex_specroughness_resource(gbuffer_texture_data->get_gbuffer()->specroughness_tex);
-	/*
-	XMFLOAT3 look_vec, up_vec;
-	XMFLOAT4X4 view_matrix_reflect, inv_view_matrix_reflect, Proj_mat_reflect;
-	look_vec = look_cube_reflect[now_render_face];
-	up_vec = up_cube_reflect[now_render_face];
-	pancy_camera::get_instance()->count_view_matrix(look_vec, up_vec, center_position, &view_matrix_reflect);
-	pancy_camera::get_instance()->count_invview_matrix(look_vec, up_vec, center_position, &inv_view_matrix_reflect);
-	engine_basic::extra_perspective_message *scene_perspective = new engine_basic::extra_perspective_message(1024.0f * quality_environment, 1024.0f * quality_environment, 0.1f, 1000.0f, DirectX::XM_PIDIV2);
-	*/
+
 	XMFLOAT4X4 view_matrix_reflect, inv_view_matrix_reflect;
 	get_ViewMatrix(&view_matrix_reflect);
 
@@ -373,6 +363,7 @@ void real_time_environment::release()
 		cube_rendercolor_RTV[i]->Release();
 		cube_rendercolor_backRTV[i]->Release();
 	}
+	delete scene_perspective;
 }
 
 scene_test_square::scene_test_square()
@@ -786,7 +777,7 @@ void scene_test_square::update(float delta_time)
 	geometry_buffer->sleep_a_model_instance(ID_model_floor);
 	//更新天空
 	trans_world = XMMatrixTranslation(0.0, 0.0, 0.0);
-	scal_world = XMMatrixScaling(50, 50, 50);
+	scal_world = XMMatrixScaling(200, 200, 200);
 	XMStoreFloat4x4(&world_matrix, scal_world *  trans_world);
 	geometry_buffer->update_a_model_instance(ID_model_sky, world_matrix, delta_time);
 	//更新pbr测试
@@ -960,7 +951,7 @@ engine_basic::engine_fail_reason scene_test_environment::create()
 		return check_error;
 	}
 	*/
-	terrain_test = new pancy_terrain_control("terrain_data\\pancy.ptn", 2048.0f, 200, 100.0f, 1000.0f, 1.0f - 1.0f / 3.0f);
+	terrain_test = new pancy_terrain_control(physic_scene,"terrain_data\\pancy.ptn", 2048.0f, 200, 100.0f, 1000.0f, 1.0f - 1.0f / 3.0f);
 	check_error = terrain_test->create();
 	if (!check_error.check_if_failed())
 	{
@@ -973,16 +964,36 @@ engine_basic::engine_fail_reason scene_test_environment::create()
 	{
 		return check_error;
 	}
+	//加载测试物理盒子
+	check_error = geometry_buffer->load_a_model_type("square_test\\square.pancymesh", "square_test\\square.pancymat", false, model_ID_box);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = geometry_buffer->add_a_model_instance(model_ID_box, mat_world, ID_model_box);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	physx::PxTransform box_pos = physx::PxTransform(physx::PxVec3(0.0f, 200.0f, 0.0f));
+	physx::PxBoxGeometry box_geo = physx::PxBoxGeometry(physx::PxVec3(0.5f, 0.5f, 0.5f));
+	physic_scene->add_a_dynamic_object(box_pos, box_geo,XMFLOAT3(0.5,0.5,0.5),box_physx);
+	physic_scene->wakeup_a_dynamic(box_physx);
+	//todo物理
+	
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
 void scene_test_environment::display()
 {
+	
 	show_animation_test();
 	show_sky_single();
 	show_terrain();
 	show_particle();
 	show_sky_cube();
+	show_physic_box();
+	
 }
 void scene_test_environment::show_particle()
 {
@@ -1062,6 +1073,17 @@ void scene_test_environment::update(float delta_time)
 	particle_fire->set_particle_direct(&XMFLOAT3(0, 0, 0), &XMFLOAT3(0, 0, 0));
 	//更新地面
 	terrain_test->update(view_pos, view_mat, proj_mat);
+	//更新物理
+
+	physic_scene->update(0.003);
+	XMFLOAT3 pos_physic, rotation_vec;
+	float rotation_angle;
+	physic_scene->get_position_dynamic(box_physx, pos_physic);
+	trans_world = XMMatrixTranslation(pos_physic.x, pos_physic.y, pos_physic.z);
+	physic_scene->get_rotation_dynamic(box_physx, rotation_angle, rotation_vec);
+	rotation_world = XMMatrixRotationAxis(XMLoadFloat3(&rotation_vec), rotation_angle);
+	XMStoreFloat4x4(&world_matrix, rotation_world  * trans_world);
+	geometry_buffer->update_a_model_instance(ID_model_box, world_matrix,delta_time);
 }
 void scene_test_environment::release()
 {
@@ -1136,7 +1158,46 @@ void scene_test_environment::show_sky_single()
 	data_view->draw(false);
 	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->RSSetState(NULL);
 }
+void scene_test_environment::show_physic_box()
+{
+	engine_basic::engine_fail_reason check_error;
+	auto shader_need = shader_control::GetInstance()->get_shader_lightdeffered(check_error);
 
+	geometry_resource_view *data_view = NULL;
+	geometry_buffer->get_a_model_type(&data_view, model_ID_box);
+	XMFLOAT4X4 view_mat, final_mat, viewproj;
+	pancy_camera::get_instance()->count_view_matrix(&view_mat);
+	XMMATRIX proj = XMLoadFloat4x4(&engine_basic::perspective_message::get_instance()->get_proj_matrix());
+
+
+	XMMATRIX world_matrix_rec = XMLoadFloat4x4(&data_view->get_matrix_list()[0]);
+	XMMATRIX worldViewProj = world_matrix_rec*XMLoadFloat4x4(&view_mat)*proj;
+
+	XMMATRIX rec_world = XMLoadFloat4x4(&data_view->get_matrix_list()[0]) * XMLoadFloat4x4(&view_mat) * proj;
+	XMStoreFloat4x4(&final_mat, rec_world);
+
+
+	shader_need->set_trans_world(&data_view->get_matrix_list()[0]);
+	shader_need->set_trans_all(&final_mat);
+	shader_need->set_tex_diffuse_array(data_view->get_texture());
+
+	pancy_material test_Mt;
+	XMFLOAT4 rec_ambient2(1.0f, 1.0f, 1.0f, 1.0f);
+	XMFLOAT4 rec_diffuse2(1.0f, 1.0f, 1.0f, 1.0f);
+	XMFLOAT4 rec_specular2(0.2f, 0.2f, 0.2f, 6.0f);
+	test_Mt.ambient = rec_ambient2;
+	test_Mt.diffuse = rec_diffuse2;
+	test_Mt.specular = rec_specular2;
+	test_Mt.reflect = rec_ambient2;
+	shader_need->set_material(test_Mt);
+
+	ID3DX11EffectTechnique *teque_need;
+	shader_need->get_technique(&teque_need, "LightTech");
+
+	data_view->get_technique(teque_need);
+
+	data_view->draw(false);
+}
 void scene_test_environment::show_sky_cube()
 {
 	/*
@@ -2235,11 +2296,6 @@ void pancy_scene_control::update(float delta_time)
 	{
 		if (pancy_input::GetInstance()->check_mouseDown(0))
 		{
-			//sundir.y -= pancy_input::GetInstance()->MouseMove_Y() * 0.01f;
-			//float average = sqrt(sundir.x * sundir.x + sundir.y * sundir.y + sundir.z * sundir.z);
-			//sundir.x /= average;
-			//sundir.y /= average;
-			//sundir.z /= average;
 			time_count += pancy_input::GetInstance()->MouseMove_Y() * 0.01f;
 			if (time_count > XM_2PI)
 			{
@@ -2248,31 +2304,12 @@ void pancy_scene_control::update(float delta_time)
 			sundir.x = 0;
 			sundir.y = -sin(time_count);
 			sundir.z = cos(time_count);
-
-			//scene_camera->rotation_up(user_input->MouseMove_X() * 0.001f);
-			//scene_camera->rotation_right(user_input->MouseMove_Y() * 0.001f);
 		}
-		//sundir.y += 0.1;
-		//sundir.x /=
 	}
-	//time_count += 0.5f*delta_time;
-	/*
-	time_count = -0.0f;
-	if (time_count > XM_2PI)
-	{
-		time_count -= XM_2PI;
-	}
-	sundir.x = 0;
-	sundir.y = -sin(time_count);
-	sundir.z = cos(time_count);
-	*/
 	if (scene_now_show >= 0 && scene_now_show < scene_list.size())
 	{
-		//scene_list[scene_now_show]->update(delta_time);
 		scene_list[scene_now_show]->update(time_count);
 	}
-
-
 }
 void pancy_scene_control::display()
 {
@@ -2306,29 +2343,29 @@ void pancy_scene_control::display()
 		};
 		auto shader_pretreat_lbuffer = shader_control::GetInstance()->get_shader_lightbuffer(check_error);
 		shader_pretreat_lbuffer->set_view_from_clip(clip_matrix);
+		
+		
 		//gbuffer
-		engine_basic::extra_perspective_message *scene_perspective = new engine_basic::extra_perspective_message(d3d_pancy_basic_singleton::GetInstance()->get_wind_width(), d3d_pancy_basic_singleton::GetInstance()->get_wind_height(), 0.1f, 1000.0f, DirectX::XM_PIDIV4);
-		Pretreatment_gbuffer::get_instance()->render_gbuffer(scene_list[scene_now_show]->get_geometry_buffer(), scene_list[scene_now_show]->get_gbuffer_renderdata(), view_mat, scene_perspective, false);
+		engine_basic::extra_perspective_message scene_perspective(d3d_pancy_basic_singleton::GetInstance()->get_wind_width(), d3d_pancy_basic_singleton::GetInstance()->get_wind_height(), engine_basic::perspective_message::get_instance()->get_perspective_near_plane(), engine_basic::perspective_message::get_instance()->get_perspective_far_plane(), DirectX::XM_PIDIV4);
+		Pretreatment_gbuffer::get_instance()->render_gbuffer(scene_list[scene_now_show]->get_geometry_buffer(), scene_list[scene_now_show]->get_gbuffer_renderdata(), view_mat, &scene_perspective, false);
 
 		//渲染AO
-		//ssao_render->get_normaldepthmap(pretreat_render->get_gbuffer_normalspec(), pretreat_render->get_gbuffer_depth());
-
 		ssao_render->get_normaldepthmap(scene_list[scene_now_show]->get_gbuffer_renderdata()->normalspec_tex, scene_list[scene_now_show]->get_gbuffer_renderdata()->depthmap_single_tex);
 		ssao_render->compute_ssaomap();
 		ssao_render->blur_ssaomap();
+		
 		//pretreat_render->display();
 		//计算阴影
 		light_control_singleton::GetInstance()->draw_shadow(scene_list[scene_now_show]->get_geometry_buffer());
 		//计算光照
-		//d3d_pancy_basic_singleton::GetInstance()->reset_viewport();
-		//pretreat_render->display_lbuffer(false);
-		Pretreatment_gbuffer::get_instance()->render_lbuffer(scene_list[scene_now_show]->get_gbuffer_renderdata(), view_pos, view_mat, inv_view_mat, scene_perspective, true);
+		Pretreatment_gbuffer::get_instance()->render_lbuffer(scene_list[scene_now_show]->get_gbuffer_renderdata(), view_pos, view_mat, inv_view_mat, &scene_perspective, true);
 		//设置光照贴图
 		auto shader_deffered = shader_control::GetInstance()->get_shader_lightdeffered(check_error);
 		shader_deffered->set_diffuse_light_tex(scene_list[scene_now_show]->get_gbuffer_renderdata()->gbuffer_diffuse_tex);
 		shader_deffered->set_specular_light_tex(scene_list[scene_now_show]->get_gbuffer_renderdata()->gbuffer_specular_tex);
 		shader_deffered->set_normal_tex(scene_list[scene_now_show]->get_gbuffer_renderdata()->normalspec_tex);
 		shader_deffered->set_tex_specroughness_resource(scene_list[scene_now_show]->get_gbuffer_renderdata()->specroughness_tex);
+		
 		//deffered shading颜色渲染
 		auto reflect_buffer = scene_list[scene_now_show]->get_postbuffer_data();
 		ID3D11RenderTargetView* renderTargets[2] = { reflect_buffer->rtgr_input_target,reflect_buffer->rtgr_InputMask_target };
@@ -2339,8 +2376,10 @@ void pancy_scene_control::display()
 		float mask_clearColor[] = { 1.0f, 0.0f, 0.0f, 1.0f };
 		d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearRenderTargetView(reflect_buffer->rtgr_input_target, clearColor);
 		d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearRenderTargetView(reflect_buffer->rtgr_InputMask_target, mask_clearColor);
+		
 		scene_list[scene_now_show]->display();
 		scene_list[scene_now_show]->display_nopost();
+		
 		//反射颜色计算
 		render_posttreatment_RTGR::get_instance()->draw_reflect(
 			scene_list[scene_now_show]->get_gbuffer_renderdata(),
@@ -2356,23 +2395,6 @@ void pancy_scene_control::display()
 			);
 		environment_map_list->display_a_turn(scene_list[scene_now_show]);
 	}
-	/*
-	pretreat_render->set_posttreat_input_target();
-
-	d3d_pancy_basic_singleton::GetInstance()->clear_basicrender_target();
-	if (scene_now_show >= 0 && scene_now_show < scene_list.size())
-	{
-		scene_list[scene_now_show]->display();
-		scene_list[scene_now_show]->display_nopost();
-	}
-
-	globel_reflect->draw_reflect(pretreat_render->get_environment_map_renderplace(), pretreat_render->get_posttreat_color_map(), pretreat_render->get_posttreat_mask_map(), pretreat_render->get_gbuffer_normalspec(), pretreat_render->get_gbuffer_depth(), reflect_cube_SRV, pretreat_render->get_reflect_mask_map());
-	globel_reflect->draw_to_posttarget(ssao_render->get_aomap(), pretreat_render->get_gbuffer_normalspec(), pretreat_render->get_gbuffer_specrough(), brdf_pic);
-	HDR_tonemapping->display(globel_reflect->get_output_tex());
-	*/
-	//渲染立方环境反射
-	//render_environment();
-
 	d3d_pancy_basic_singleton::GetInstance()->restore_render_target();
 	auto shader_need = shader_control::GetInstance()->get_shader_lightdeffered(check_error);
 	shader_need->set_diffuse_light_tex(NULL);
@@ -2386,22 +2408,9 @@ void pancy_scene_control::display()
 	{
 		tech_need->GetPassByIndex(p)->Apply(0, d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex());
 	}
-	/*
-	//交换到屏幕
-	//HRESULT hr = swapchain->Present(0, 0);
-	//atmosphere_texture->build_atomosphere_texture();
-
-
-	auto shader_test_ato = shader_control::GetInstance()->get_shader_atmosphere_render(check_error);
-	shader_test_ato->set_tex_depth(pretreat_render->get_gbuffer_depth());
-	shader_test_ato->set_tex_normal(pretreat_render->get_gbuffer_normalspec());
-	XMFLOAT4 far_corner[4];
-	engine_basic::perspective_message::get_instance()->get_FrustumFarCorner(far_corner);
-	shader_test_ato->set_FrustumCorners(far_corner);
-	//atmosphere_texture->display(sundir);
-	*/
 	light_control_singleton::GetInstance()->update_sunlight(sundir);
 	d3d_pancy_basic_singleton::GetInstance()->end_draw();
+	
 }
 engine_basic::engine_fail_reason pancy_scene_control::add_a_scene(scene_root* scene_in)
 {

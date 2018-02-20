@@ -1442,6 +1442,7 @@ void Pretreatment_gbuffer::render_gbuffer(
 	set_normalspecdepth_target(*render_target_out);
 	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->RSSetViewports(1, &render_target_out->render_viewport);
 	//¿ªÊ¼äÖÈ¾
+
 	geometry_list->render_gbuffer(view_matrix, perspective_message->get_proj_matrix(), if_static);
 	if (render_target_out->IF_MSAA)
 	{

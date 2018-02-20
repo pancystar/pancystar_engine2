@@ -3,6 +3,7 @@
 #include"pancystar_engine_basic.h"
 #include"pancy_d3d11_basic.h"
 #include"shader_pancy.h"
+#include"pancy_physx.h"
 #include<math.h>
 #include<queue>
 using namespace std;
@@ -27,7 +28,7 @@ class pancy_terrain_part
 	int TexHeight_width;                    //地形高度图的分辨率
 	//地形数据
 	string terrain_file_name;
-	std::vector<float> terrain_height_data; //地形高度数据
+	std::vector<short> terrain_height_data; //地形高度数据
 	terrain_file_path        terrain_file;
 	Geometry_basic           *terrain_renderbuffer;
 	ID3D11ShaderResourceView *terrain_height_tex;
@@ -49,6 +50,8 @@ public:
 	void render_terrain(XMFLOAT3 view_pos, XMFLOAT4X4 view_mat, XMFLOAT4X4 proj_mat);
 	engine_basic::engine_fail_reason create();
 	void release();
+	int get_terrain_height_width() { return TexHeight_width; };
+	std::vector<short> get_terrain_height_data() { return terrain_height_data; };
 private:
 	engine_basic::engine_fail_reason load_terrain_file();
 	string find_path(string input);
@@ -81,6 +84,10 @@ class terrain_part_resource
 	int neighbour_upright_ID;
 	int neighbour_downleft_ID;
 	int neighbour_downright_ID;
+	//地形物理信息
+	bool if_loaded_physics;           //是否加载了物理信息
+	bool if_wakeup_physics;           //是否唤醒了物理效果
+	unsigned __int64 terrain_physx_ID;//物理模型ID
 public:
 	terrain_part_resource(
 		int self_ID_in,
@@ -113,12 +120,15 @@ public:
 	void get_all_neighbour(int neighbour_ID[9]);
 	void set_offset(XMFLOAT2 terrain_offset_in) { terrain_offset = terrain_offset_in; };
 	XMFLOAT2 get_offset() { return terrain_offset; }
-	engine_basic::engine_fail_reason build_resource();
-	void release_resource();
+	engine_basic::engine_fail_reason build_resource(pancy_physx_scene *physic_scene);
+	void release_resource(pancy_physx_scene *physic_scene);
 	void display(XMFLOAT3 view_pos, XMFLOAT4X4 view_mat, XMFLOAT4X4 proj_mat);
+private:
+	engine_basic::engine_fail_reason build_physic(pancy_physx_scene *physic_scene);
 };
 class pancy_terrain_control
 {
+	pancy_physx_scene *physic_scene;
 	string terrain_list_file;
 	int now_center_terrain = 0;
 	//地形基本信息
@@ -150,6 +160,7 @@ class pancy_terrain_control
 	bool if_created;
 public:
 	pancy_terrain_control(
+		pancy_physx_scene *physc_in,
 		string terrain_list,
 		float terrain_width_in,
 		int terrain_divide_in,

@@ -801,6 +801,30 @@ engine_basic::engine_fail_reason scene_test_square::export_model(string filepath
 		{
 			return error_message;
 		}
+		//~~~~~~~~~~~~~~´æ´¢¶¯»­ÐÅÏ¢~~~~~~~~~~~~~~~~~~~~~~
+		if (rec_data->check_if_mesh_anim()) 
+		{
+			out_stream.open(filename + ".pancymeshanim", ios::binary);
+			int frame_num = rec_data->get_meshanim_data()->get_frame_num();
+			int FPS_num = rec_data->get_meshanim_data()->get_FPS();
+			int frame_point_num = rec_data->get_meshanim_data()->get_point_num();
+			out_stream.write((char *)&frame_num, sizeof(frame_num));
+			out_stream.write((char *)&FPS_num, sizeof(FPS_num));
+			out_stream.write((char *)&frame_point_num, sizeof(frame_point_num));
+			auto anim_data_list = rec_data->get_meshanim_data()->get_anim_list();
+			XMFLOAT3 *point_data_pack = new XMFLOAT3[frame_point_num];
+			for (auto data = anim_data_list.begin(); data != anim_data_list.end(); ++data) 
+			{
+				for (int i = 0; i < data._Ptr->point_num; ++i) 
+				{
+					point_data_pack[i] = data._Ptr->point_data[i].position;
+				}
+				out_stream.write((char *)point_data_pack, data._Ptr->point_num * sizeof(XMFLOAT3));
+			}
+			delete[] point_data_pack;
+			out_stream.close();
+		}
+		
 	}
 	else
 	{

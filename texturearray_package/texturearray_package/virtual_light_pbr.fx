@@ -16,7 +16,13 @@ Texture2D        texture_rdfluv;   //´Ö²Ú¶ÈÌùÍ¼
 
 Texture2DArray   texture_pack_diffuse;
 TextureCube      texture_environment;
-StructuredBuffer<float3> input_point;
+struct mesh_anim 
+{
+	float3 pos;
+	float3 norm;
+	float3 tangent;
+};
+StructuredBuffer<mesh_anim> input_point;
 uint4 offset_num;
 
 SamplerState samTex_liner
@@ -178,9 +184,12 @@ VertexOut VS_anim(Vertex_IN_anim vin)
 {
 	VertexOut vout;
 	int offset_ID = vin.vertIndex + offset_num.x + offset_num.y * offset_num.z;
-	float3 point_offset = input_point[offset_ID];
+	mesh_anim data = input_point[offset_ID];
+	float3 point_offset = data.pos;
+	
 	vout.position = mul(float4(point_offset, 1.0f), final_matrix);
 	vout.normal = mul(float4(vin.normal, 0.0f), normal_matrix).xyz;
+	//vout.normal = mul(float4(data.norm, 0.0f), normal_matrix).xyz;
 	vout.tangent = mul(float4(vin.tangent, 0.0f), normal_matrix).xyz;
 	vout.texid = vin.texid;
 	vout.tex1 = vin.tex1;
@@ -260,6 +269,7 @@ float4 PS_pbr(VertexOut pin) :SV_TARGET
 	final_color += A + D + S;
 	*/
 	return final_color;
+	//return float4(normal_need, 1.0f);
 }
 float4 PS(VertexOut pin) :SV_TARGET
 {
@@ -341,7 +351,7 @@ technique11 light_tech_pbranim
 		SetVertexShader(CompileShader(vs_5_0, VS_anim()));
 		SetGeometryShader(NULL);
 		SetPixelShader(CompileShader(ps_5_0, PS_pbr()));
-		SetRasterizerState(DisableCulling);
+		//SetRasterizerState(DisableCulling);
 	}
 }
 technique11 light_tech_pbr_withbone

@@ -98,6 +98,16 @@ engine_basic::engine_fail_reason assimp_basic::model_create(bool if_adj, int alp
 			strcat(rec_name, matlist_need[i].texture_normal);
 			strcpy(matlist_need[i].texture_normal, rec_name);
 		}
+		else if (pMaterial->GetTextureCount(aiTextureType_NORMALS) > 0 && pMaterial->GetTexture(aiTextureType_NORMALS, 0, &Path, NULL, NULL, NULL, NULL, NULL) == AI_SUCCESS)
+		{
+			strcpy(matlist_need[i].texture_normal, Path.data);
+			remove_texture_path(matlist_need[i].texture_normal);
+			change_texturedesc_2dds(matlist_need[i].texture_normal);
+			char rec_name[512];
+			strcpy(rec_name, rec_texpath);
+			strcat(rec_name, matlist_need[i].texture_normal);
+			strcpy(matlist_need[i].texture_normal, rec_name);
+		}
 	}
 
 	check_fail = init_mesh(if_adj);
@@ -112,55 +122,18 @@ engine_basic::engine_fail_reason assimp_basic::model_create(bool if_adj, int alp
 	}
 
 
-
-	model_need_CCW = importer.ReadFile(filename,
-		aiProcess_MakeLeftHanded |
-		aiProcess_CalcTangentSpace |
-		aiProcess_JoinIdenticalVertices
-		);
-	//索引缓存区
-	index_pack_list_CCW = new UINT[index_pack_num];
-	int count_index_pack = 0;
-	int now_index_start = 0;
-	for (int i = 0; i < model_need_CCW->mNumMeshes; i++)
-	{
-		//获取模型的第i个模块
-		const aiMesh* paiMesh = model_need_CCW->mMeshes[i];
-		int count_index = 0;
-		for (unsigned int j = 0; j < paiMesh->mNumFaces; j++)
-		{
-			if (paiMesh->mFaces[j].mNumIndices == 3)
-			{
-				index_pack_list_CCW[count_index_pack++] = paiMesh->mFaces[j].mIndices[0] + now_index_start;
-				index_pack_list_CCW[count_index_pack++] = paiMesh->mFaces[j].mIndices[1] + now_index_start;
-				index_pack_list_CCW[count_index_pack++] = paiMesh->mFaces[j].mIndices[2] + now_index_start;
-			}
-			else
-			{
-				engine_basic::engine_fail_reason fail_message("model" + filename + "find no triangle face");
-				return fail_message;
-			}
-		}
-		now_index_start += paiMesh->mNumVertices;
-	}
 	FBXanim_import = new mesh_animation_FBX(filename, vertex_final_num, index_pack_num);
-	check_fail = FBXanim_import->create(index_pack_list_CCW);
+	check_fail = FBXanim_import->create(index_pack_list, normal_buffer, tangent_buffer);
 	if (check_fail.check_if_failed())
 	{
 		if_fbx_meshanimation = true;
 	}
-	model_need = importer.ReadFile(filename,
-		aiProcess_MakeLeftHanded |
-		aiProcess_FlipWindingOrder |
-		aiProcess_CalcTangentSpace |
-		aiProcess_JoinIdenticalVertices
-		);
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
 bool assimp_basic::check_if_anim()
 {
-	if (model_need->mNumAnimations == 0)
+	if (model_need == NULL || model_need->mNumAnimations == 0)
 	{
 		return false;
 	}
@@ -267,7 +240,6 @@ void assimp_basic::release()
 		delete[] mesh_need;
 		//释放表资源
 		delete[] matlist_need;
-		delete[] index_pack_list_CCW; 
 		if (if_fbx_meshanimation)
 		{
 			FBXanim_import->release();
@@ -302,12 +274,26 @@ int assimp_basic::get_part_offset(int part)
 //FBX网格动画
 mesh_animation_FBX::mesh_animation_FBX(std::string file_name_in, int point_num_in, int point_index_num_in)
 {
+	if_fbx_file = false;
+	if (file_name_in.size() >= 3) 
+	{
+		int tail = file_name_in.size() - 1;
+		if (file_name_in[tail] == 'x' && file_name_in[tail - 1] == 'b' && file_name_in[tail - 2] == 'f') 
+		{
+			if_fbx_file = true;
+		}
+	}
 	lFilePath = new FbxString(file_name_in.c_str());
 	point_index_num = point_index_num_in;
 	point_num = point_num_in;
 }
-engine_basic::engine_fail_reason mesh_animation_FBX::create(UINT *index_buffer_in)
+engine_basic::engine_fail_reason mesh_animation_FBX::create(UINT *index_buffer_in, XMFLOAT3 *normal_in, XMFLOAT3 *tangent_in)
 {
+	if (!if_fbx_file)
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "isn't a fbx file");
+		return error_message;
+	}
 	engine_basic::engine_fail_reason check_error;
 	InitializeSdkObjects(lSdkManager, lScene);
 	if (lFilePath->IsEmpty())
@@ -365,10 +351,18 @@ engine_basic::engine_fail_reason mesh_animation_FBX::create(UINT *index_buffer_i
 		return error_message;
 	}
 	index_buffer = new UINT[point_index_num];
-	for (int i = 0; i < point_index_num; ++i)
+	for (int i = 0; i < point_index_num / 3; ++i)
 	{
-		index_buffer[i] = index_buffer_in[i];
+		index_buffer[i * 3 + 0] = index_buffer_in[i * 3 + 0];
+		index_buffer[i * 3 + 1] = index_buffer_in[i * 3 + 1];
+		index_buffer[i * 3 + 2] = index_buffer_in[i * 3 + 2];
 	}
+	/*
+	int rec_mid;
+	rec_mid = index_buffer[traingle_point_2];
+	index_buffer[traingle_point_2] = index_buffer[traingle_point_0];
+	index_buffer[traingle_point_0] = rec_mid;
+	*/
 	//开启顶点动画缓冲
 	auto time_now = anim_start;
 	FbxVector4* lVertexArray = NULL;
@@ -382,8 +376,10 @@ engine_basic::engine_fail_reason mesh_animation_FBX::create(UINT *index_buffer_i
 		{
 			return check_error;
 		}
-		UpdateVertexPosition(lMesh, lVertexArray);
+		UpdateVertexPosition(lMesh, lVertexArray, normal_in, tangent_in);
 	}
+	//计算法线
+	//compute_normal();
 	bool lResult = true;
 	DestroySdkObjects(lSdkManager, lResult);
 	check_error = build_buffer();
@@ -391,31 +387,33 @@ engine_basic::engine_fail_reason mesh_animation_FBX::create(UINT *index_buffer_i
 	{
 		return check_error;
 	}
+	
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
 engine_basic::engine_fail_reason mesh_animation_FBX::build_buffer()
 {
 	ID3D11Buffer *buffer_vertex_need;
-	XMFLOAT3 *point_data_now;
-
-	point_data_now = new XMFLOAT3[anim_data_list.size() * anim_data_list.begin()._Ptr->point_num];
+	//XMFLOAT3 *point_data_now;
+	//point_data_now = new XMFLOAT3[anim_data_list.size() * anim_data_list.begin()._Ptr->point_num];
+	mesh_animation_data *point_data_now;
+	point_data_now = new mesh_animation_data[anim_data_list.size() * anim_data_list.begin()._Ptr->point_num];
 	int size = 0;
 	for (auto data_check = anim_data_list.begin(); data_check != anim_data_list.end(); ++data_check)
 	{
 		for (int i = 0; i < data_check->point_num; ++i)
 		{
-			point_data_now[size++] = data_check->point_data[i].position;
+			point_data_now[size++] = data_check->point_data[i];
 		}
 	}
 	//创建顶点动画缓冲区
 	D3D11_BUFFER_DESC FBX_vertex_desc;
 	FBX_vertex_desc.Usage = D3D11_USAGE_DEFAULT;            //通用类型
 	FBX_vertex_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;//缓存类型为srv
-	FBX_vertex_desc.ByteWidth = size*sizeof(XMFLOAT3);        //顶点缓存的大小
+	FBX_vertex_desc.ByteWidth = size*sizeof(mesh_animation_data);        //顶点缓存的大小
 	FBX_vertex_desc.CPUAccessFlags = 0;
 	FBX_vertex_desc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
-	FBX_vertex_desc.StructureByteStride = sizeof(XMFLOAT3);
+	FBX_vertex_desc.StructureByteStride = sizeof(mesh_animation_data);
 
 	D3D11_SUBRESOURCE_DATA resource_buffer = { 0 };
 	resource_buffer.pSysMem = point_data_now;
@@ -753,6 +751,28 @@ void mesh_animation_FBX::PreparePointCacheData(FbxScene* pScene, FbxTime &pCache
 		}
 	}
 }
+XMFLOAT3 mesh_animation_FBX::get_normal_vert(FbxMesh * pMesh, int vertex_count)
+{
+	XMFLOAT3 pNormal;
+	int rec = pMesh->GetElementNormalCount();
+	FbxGeometryElementNormal* leNormal = pMesh->GetElementNormal(0);
+	auto mode_map = leNormal->GetMappingMode();
+	auto mode_reference = leNormal->GetReferenceMode();
+	if (mode_reference == FbxGeometryElement::eDirect) 
+	{
+		pNormal.x = leNormal->GetDirectArray().GetAt(vertex_count)[0];
+		pNormal.y = leNormal->GetDirectArray().GetAt(vertex_count)[1];
+		pNormal.z = leNormal->GetDirectArray().GetAt(vertex_count)[2];
+	}
+	else 
+	{
+		int id = leNormal->GetIndexArray().GetAt(vertex_count);
+		pNormal.x = leNormal->GetDirectArray().GetAt(id)[0];
+		pNormal.y = leNormal->GetDirectArray().GetAt(id)[1];
+		pNormal.z = leNormal->GetDirectArray().GetAt(id)[2];
+	}
+	return pNormal;
+}
 engine_basic::engine_fail_reason mesh_animation_FBX::ReadVertexCacheData(FbxMesh* pMesh, FbxTime& pTime, FbxVector4* pVertexArray)
 {
 	FbxVertexCacheDeformer* lDeformer = static_cast<FbxVertexCacheDeformer*>(pMesh->GetDeformer(0, FbxDeformer::eVertexCache));
@@ -776,6 +796,7 @@ engine_basic::engine_fail_reason mesh_animation_FBX::ReadVertexCacheData(FbxMesh
 		return error_message;
 	}
 	lReadSucceed = lCache->Read(&lReadBuf, BufferSize, pTime, lChannelIndex);
+	//lReadSucceed = lCache->Read(&lReadBuf, BufferSize, pTime, 1);
 	if (lReadSucceed)
 	{
 		unsigned int lReadBufIndex = 0;
@@ -791,10 +812,36 @@ engine_basic::engine_fail_reason mesh_animation_FBX::ReadVertexCacheData(FbxMesh
 		engine_basic::engine_fail_reason error_message(E_FAIL, "read animation data error");
 		return error_message;
 	}
+	/*
+	//检验控制点变换效果
+	FbxVector4 check_rec1 = pMesh->GetControlPointAt(500);
+	std::vector<XMFLOAT3> normle_need,normle_need2;
+	for (int i = 0; i < pMesh->GetPolygonCount() * 3; ++i)
+	{
+		normle_need.push_back(get_normal_vert(pMesh,i));
+	}
+
+	for (int i = 0; i < pMesh->GetControlPointsCount(); ++i)
+	{
+		FbxVector4 pVertices_now = pVertexArray[i];
+		pMesh->SetControlPointAt(pVertices_now, i);
+	}
+	FbxVector4 check_rec2 = pMesh->GetControlPointAt(500);
+	//创建新的法线及切线
+	bool check_tre = pMesh->GenerateNormals(true);
+	bool check_tre2 = pMesh->GenerateTangentsDataForAllUVSets(true);
+	//重新检验
+	for (int i = 0; i < pMesh->GetPolygonCount() * 3; ++i)
+	{
+		normle_need2.push_back(get_normal_vert(pMesh, i));
+	}
+	*/
+
+
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
-void mesh_animation_FBX::UpdateVertexPosition(const FbxMesh * pMesh, const FbxVector4 * pVertices)
+void mesh_animation_FBX::UpdateVertexPosition(FbxMesh * pMesh, const FbxVector4 * pVertices, XMFLOAT3 *normal_in,XMFLOAT3 *tangent_in)
 {
 	//创建基于assimp的顶点数组
 	mesh_animation_per_frame now_frame_data(point_num);
@@ -807,11 +854,11 @@ void mesh_animation_FBX::UpdateVertexPosition(const FbxMesh * pMesh, const FbxVe
 	const int lPolygonCount = pMesh->GetPolygonCount();
 	lVertexCount = lPolygonCount * TRIANGLE_VERTEX_COUNT;
 	lVertices = new float[lVertexCount * VERTEX_STRIDE];
-
+	
 	lVertexCount = 0;
 	for (int lPolygonIndex = 0; lPolygonIndex < lPolygonCount; ++lPolygonIndex)
 	{
-		/*
+		
 		//获取当前对应的assimp顶点
 		int traingle_point_0 = lPolygonIndex * TRIANGLE_VERTEX_COUNT + 0;
 		int traingle_point_1 = lPolygonIndex * TRIANGLE_VERTEX_COUNT + 1;
@@ -819,22 +866,40 @@ void mesh_animation_FBX::UpdateVertexPosition(const FbxMesh * pMesh, const FbxVe
 		const int lControlPointIndex_0 = pMesh->GetPolygonVertex(lPolygonIndex, 0);
 		const int lControlPointIndex_1 = pMesh->GetPolygonVertex(lPolygonIndex, 1);
 		const int lControlPointIndex_2 = pMesh->GetPolygonVertex(lPolygonIndex, 2);
+
 		int vertex_index_assimp_0 = index_buffer[traingle_point_2];
 		int vertex_index_assimp_1 = index_buffer[traingle_point_1];
 		int vertex_index_assimp_2 = index_buffer[traingle_point_0];
 		now_frame_data.point_data[vertex_index_assimp_0].position.x = static_cast<float>(pVertices[lControlPointIndex_0][0]);
 		now_frame_data.point_data[vertex_index_assimp_0].position.y = static_cast<float>(pVertices[lControlPointIndex_0][1]);
-		now_frame_data.point_data[vertex_index_assimp_0].position.z = static_cast<float>(pVertices[lControlPointIndex_0][2]);
+		now_frame_data.point_data[vertex_index_assimp_0].position.z = -static_cast<float>(pVertices[lControlPointIndex_0][2]);
+		//now_frame_data.point_data[vertex_index_assimp_0].normal = normal_in[vertex_index_assimp_0];
+		//now_frame_data.point_data[vertex_index_assimp_0].tangent = tangent_in[vertex_index_assimp_0];
+		//now_frame_data.point_data[vertex_index_assimp_0].normal.x = normal_in.x;
+		//now_frame_data.point_data[vertex_index_assimp_0].normal.y = get_normal_vert(pMesh, lVertexCount).y;
+		//now_frame_data.point_data[vertex_index_assimp_0].normal.z = get_normal_vert(pMesh, lVertexCount).z;
 
 		now_frame_data.point_data[vertex_index_assimp_1].position.x = static_cast<float>(pVertices[lControlPointIndex_1][0]);
 		now_frame_data.point_data[vertex_index_assimp_1].position.y = static_cast<float>(pVertices[lControlPointIndex_1][1]);
-		now_frame_data.point_data[vertex_index_assimp_1].position.z = static_cast<float>(pVertices[lControlPointIndex_1][2]);
+		now_frame_data.point_data[vertex_index_assimp_1].position.z = -static_cast<float>(pVertices[lControlPointIndex_1][2]);
+		//now_frame_data.point_data[vertex_index_assimp_1].normal = normal_in[vertex_index_assimp_1];
+		//now_frame_data.point_data[vertex_index_assimp_1].tangent = tangent_in[vertex_index_assimp_1];
+		//now_frame_data.point_data[vertex_index_assimp_1].normal.x += get_normal_vert(pMesh, lVertexCount+1).x;
+		//now_frame_data.point_data[vertex_index_assimp_1].normal.y += get_normal_vert(pMesh, lVertexCount+1).y;
+		//now_frame_data.point_data[vertex_index_assimp_1].normal.z += get_normal_vert(pMesh, lVertexCount+1).z;
+
 
 		now_frame_data.point_data[vertex_index_assimp_2].position.x = static_cast<float>(pVertices[lControlPointIndex_2][0]);
 		now_frame_data.point_data[vertex_index_assimp_2].position.y = static_cast<float>(pVertices[lControlPointIndex_2][1]);
-		now_frame_data.point_data[vertex_index_assimp_2].position.z = static_cast<float>(pVertices[lControlPointIndex_2][2]);
+		now_frame_data.point_data[vertex_index_assimp_2].position.z = -static_cast<float>(pVertices[lControlPointIndex_2][2]);
+		//now_frame_data.point_data[vertex_index_assimp_2].normal = normal_in[vertex_index_assimp_2];
+		//now_frame_data.point_data[vertex_index_assimp_2].tangent = tangent_in[vertex_index_assimp_2];
+		//now_frame_data.point_data[vertex_index_assimp_2].normal.x += get_normal_vert(pMesh, lVertexCount + 2).x;
+		//now_frame_data.point_data[vertex_index_assimp_2].normal.y += get_normal_vert(pMesh, lVertexCount + 2).y;
+		//now_frame_data.point_data[vertex_index_assimp_2].normal.z += get_normal_vert(pMesh, lVertexCount + 2).z;
+
 		lVertexCount += 3;
-		*/
+		/*
 		int vertex_index_assimp = index_buffer[lVertexCount];
 		for (int lVerticeIndex = 0; lVerticeIndex < TRIANGLE_VERTEX_COUNT; ++lVerticeIndex)
 		{
@@ -843,14 +908,120 @@ void mesh_animation_FBX::UpdateVertexPosition(const FbxMesh * pMesh, const FbxVe
 			int vertex_index_assimp = index_buffer[lVertexCount];
 			now_frame_data.point_data[vertex_index_assimp].position.x = static_cast<float>(pVertices[lControlPointIndex][0]);
 			now_frame_data.point_data[vertex_index_assimp].position.y = static_cast<float>(pVertices[lControlPointIndex][1]);
-			now_frame_data.point_data[vertex_index_assimp].position.z = static_cast<float>(pVertices[lControlPointIndex][2]);
+			now_frame_data.point_data[vertex_index_assimp].position.z = -static_cast<float>(pVertices[lControlPointIndex][2]);
 			++lVertexCount;
-		}
+		}*/
 	}
 	anim_data_list.push_back(now_frame_data);
 	int a = 0;
 }
 
+void mesh_animation_FBX::compute_normal()
+{
+	int triangle_num = point_index_num / 3;
+
+	XMFLOAT3 *positions = new XMFLOAT3[point_num];
+	XMFLOAT3 *normals = new XMFLOAT3[point_num];
+	for (auto now_frame_data = anim_data_list.begin(); now_frame_data != anim_data_list.end(); ++now_frame_data)
+	{
+		
+		for (int i = 0; i < now_frame_data._Ptr->point_num; ++i)
+		{
+			positions[i] = now_frame_data._Ptr->point_data[i].position;
+		}
+		ComputeNormals(index_buffer, triangle_num, positions, point_num, CNORM_DEFAULT, normals);
+		
+		XMFLOAT3 *new_normal = new XMFLOAT3[now_frame_data._Ptr->point_num];
+		for (int i = 0; i < now_frame_data._Ptr->point_num; ++i)
+		{
+			new_normal[i] = XMFLOAT3(0, 0, 0);
+		}
+		for (int i = 0; i < triangle_num; ++i)
+		{
+			
+			//求三角面的三个点
+			int index_triangle_0 = index_buffer[i * 3 + 0];
+			int index_triangle_1 = index_buffer[i * 3 + 1];
+			int index_triangle_2 = index_buffer[i * 3 + 2];
+			/*
+			XMFLOAT3 point_triangle_0 = now_frame_data._Ptr->point_data[index_triangle_0].position;
+			XMFLOAT3 point_triangle_1 = now_frame_data._Ptr->point_data[index_triangle_1].position;
+			XMFLOAT3 point_triangle_2 = now_frame_data._Ptr->point_data[index_triangle_2].position;
+			
+			//求两个切向量
+			XMFLOAT3 vector_u, vector_v, vec_cross;
+			vector_u.x = point_triangle_1.x - point_triangle_0.x;
+			vector_u.y = point_triangle_1.y - point_triangle_0.y;
+			vector_u.z = point_triangle_1.z - point_triangle_0.z;
+			XMStoreFloat3(&vector_u,XMVector3Normalize(XMLoadFloat3(&vector_u)));
+
+			vector_v.x = point_triangle_2.x - point_triangle_0.x;
+			vector_v.y = point_triangle_2.y - point_triangle_0.y;
+			vector_v.z = point_triangle_2.z - point_triangle_0.z;
+			XMStoreFloat3(&vector_v, XMVector3Normalize(XMLoadFloat3(&vector_v)));
+			//求叉积
+			auto cross_vec_rec = XMVector3Cross(XMLoadFloat3(&vector_u), XMLoadFloat3(&vector_v));
+			auto cross_vec_normalize = XMVector3Normalize(cross_vec_rec);
+			XMStoreFloat3(&vec_cross, cross_vec_normalize);
+			
+			//合并至法向量
+			now_frame_data._Ptr->point_data[index_triangle_0].normal.x += vec_cross.x;
+			now_frame_data._Ptr->point_data[index_triangle_0].normal.y += vec_cross.y;
+			now_frame_data._Ptr->point_data[index_triangle_0].normal.z += vec_cross.z;
+
+			now_frame_data._Ptr->point_data[index_triangle_1].normal.x += vec_cross.x;
+			now_frame_data._Ptr->point_data[index_triangle_1].normal.y += vec_cross.y;
+			now_frame_data._Ptr->point_data[index_triangle_1].normal.z += vec_cross.z;
+
+			now_frame_data._Ptr->point_data[index_triangle_2].normal.x += vec_cross.x;
+			now_frame_data._Ptr->point_data[index_triangle_2].normal.y += vec_cross.y;
+			now_frame_data._Ptr->point_data[index_triangle_2].normal.z += vec_cross.z;
+			*/
+			//求面法线
+			XMFLOAT3 face_normal;
+			face_normal.x += now_frame_data._Ptr->point_data[index_triangle_0].normal.x;
+			face_normal.y += now_frame_data._Ptr->point_data[index_triangle_0].normal.y;
+			face_normal.z += now_frame_data._Ptr->point_data[index_triangle_0].normal.z;
+
+			face_normal.x += now_frame_data._Ptr->point_data[index_triangle_1].normal.x;
+			face_normal.y += now_frame_data._Ptr->point_data[index_triangle_1].normal.y;
+			face_normal.z += now_frame_data._Ptr->point_data[index_triangle_1].normal.z;
+
+			face_normal.x += now_frame_data._Ptr->point_data[index_triangle_2].normal.x;
+			face_normal.y += now_frame_data._Ptr->point_data[index_triangle_2].normal.y;
+			face_normal.z += now_frame_data._Ptr->point_data[index_triangle_2].normal.z;
+
+			XMStoreFloat3(&face_normal, XMVector3Normalize(XMLoadFloat3(&face_normal)));
+
+			//还原点法线
+			new_normal[index_triangle_0].x += face_normal.x;
+			new_normal[index_triangle_0].y += face_normal.y;
+			new_normal[index_triangle_0].z += face_normal.z;
+
+			new_normal[index_triangle_1].x += face_normal.x;
+			new_normal[index_triangle_1].y += face_normal.y;
+			new_normal[index_triangle_1].z += face_normal.z;
+
+			new_normal[index_triangle_2].x += face_normal.x;
+			new_normal[index_triangle_2].y += face_normal.y;
+			new_normal[index_triangle_2].z += face_normal.z;
+
+		}
+		
+		for (int i = 0; i <  now_frame_data._Ptr->point_num; ++i)
+		{
+			//法向量归一化
+			//XMFLOAT3 vec_normal = now_frame_data._Ptr->point_data[i].normal;
+			XMFLOAT3 vec_normal = new_normal[i];
+			//XMFLOAT3 vec_normal = normals[i];
+			//XMFLOAT3 vec_normal = now_frame_data._Ptr->point_data[i].normal;
+			XMFLOAT3 vec_normal_normalize;
+			XMStoreFloat3(&vec_normal_normalize, XMVector3Normalize(XMLoadFloat3(&vec_normal)));
+			now_frame_data._Ptr->point_data[i].normal = vec_normal_normalize;
+		}
+		int a = 0;
+	}
+}
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~骨骼动画~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 model_reader_skin::model_reader_skin(const char* filename, const char* texture_path) : model_reader_assimp(filename, texture_path)
 {

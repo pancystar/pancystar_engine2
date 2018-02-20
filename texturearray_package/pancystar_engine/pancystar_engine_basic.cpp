@@ -195,7 +195,7 @@ void extra_perspective_message::get_FrustumNearCorner(DirectX::XMFLOAT4 *Frustum
 //Õ∏ ”Õ∂”∞
 perspective_message::perspective_message() 
 {
-	reset_perpective_message(800,600,0.1f,1000.0f, DirectX::XM_PIDIV4);
+	reset_perpective_message(800,600,0.1f,3000.0f, DirectX::XM_PIDIV4);
 }
 DirectX::XMFLOAT4X4 perspective_message::get_proj_matrix() 
 {

@@ -29,6 +29,7 @@ protected:
 	gbuffer_out_message       *gbuffer_texture_data;//预处理纹理存储
 	postRTGR_out_message      *post_buffer_target;  //后处理的渲染目标
 	postHDR_out_message       *HDR_buffer_target;   //HDR渲染目标
+	pancy_physx_scene         *physic_scene;        //场景物理系统
 public:
 	scene_root();
 	virtual engine_basic::engine_fail_reason create() = 0;
@@ -137,6 +138,10 @@ class scene_test_environment : public scene_root
 	environment_IBL_control  *test_IBL;
 	pancy_model_ID ID_model_sky;
 	int model_ID_sky;
+
+	pancy_model_ID ID_model_box;
+	int model_ID_box;
+	unsigned __int64 box_physx;
 	/*
 	gbuffer_out_message      *environment_texture_data;
 	Geometry_basic           *fullscreen_buffer;
@@ -170,6 +175,7 @@ private:
 	void show_animation_test();
 	void show_terrain();
 	void show_particle();
+	void show_physic_box();
 	//engine_basic::engine_fail_reason create_cubemap();
 };
 class scene_test_plant : public scene_root

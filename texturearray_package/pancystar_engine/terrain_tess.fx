@@ -12,7 +12,7 @@ Texture2D	terrain_tangent;    //地形切线图
 Texture2D	terrain_blend;      //地形纹理混合图
 Texture2DArray   ColorTexture_pack_albedo;  //纹理贴图包
 Texture2DArray   ColorTexture_pack_normal;  //法线贴图包
-
+Texture2D	fog_color;     //雾效图
 struct patch_tess
 {
 	float edge_tess[4]: SV_TessFactor;
@@ -77,6 +77,7 @@ int count_divide_num(float3 final_pos)
 	float near_way = 50;
 	float delta = (far_way - dist_2d) / (far_way - near_way);
 	delta = clamp(delta, 0, 1);
+	delta = delta * delta * 0.4;
 	return max(64 * delta, 2);
 }
 patch_tess ConstantHS(InputPatch<VertexOut_terrain, 4> patch, uint PatchID:SV_PrimitiveID)
@@ -211,6 +212,14 @@ PixelOut PS_terrain(DominOut_terrain pin) :SV_TARGET
 	ans_pix.final_color = diffuse * float4(blend_color.rgb, 1.0f);
 	//ans_pix.reflect_message.rgb = blend_color.rgb;
 	ans_pix.reflect_message.r = 0.0;
+	
+	float distance_need = distance(eye_pos, pin.pos_before);
+	float4 color_fog = float4(0.75f, 0.75f, 0.75f, 1.0f);
+	float s_need = saturate((distance_need - 200.0) /1000.0);
+	float4 color_final = lerp(ans_pix.final_color, color_fog, s_need);
+	ans_pix.final_color = color_final;
+
+
 	return ans_pix;
 }
 technique11 LightTerrain

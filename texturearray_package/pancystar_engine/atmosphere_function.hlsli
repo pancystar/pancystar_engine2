@@ -66,6 +66,7 @@ float mod(float x, float y)
 	//return rec;
 }
 #include"atmosphere_define.hlsli"
+/*
 static const AtmosphereParameters ATMOSPHERE =
 {
 	float3(1.474000, 1.850400, 1.911980),
@@ -86,6 +87,49 @@ static const AtmosphereParameters ATMOSPHERE =
 	float3(0.100000, 0.100000, 0.100000),
 	-0.207912,
 };
+*/
+#define meter_scal = 1000;
+static const AtmosphereParameters ATMOSPHERE =
+{
+	float3(1.474000, 1.850400, 1.911980),
+	0.004675,
+	6360000.000000,
+	6420000.000000,
+	{ 0.000000, 0.000000, 0.000000, 0.000000, 0.000000 },
+	{ 0.000000, 1.000000, -0.000125, 0.000000, 0.000000 },
+	float3(0.000006, 0.000014, 0.000033),
+	{ 0.000000, 0.000000, 0.000000, 0.000000, 0.000000 },
+	{ 0.000000, 1.000000, -0.000833, 0.000000, 0.000000 },
+	float3(0.000004, 0.000004, 0.000004),
+	float3(0.000004, 0.000004, 0.000004),
+	0.800000,
+	{ 25000.000000, 0.000000, 0.000000, 0.000067, -0.666667 },
+	{ 0.000000, 0.000000, 0.000000, -0.000067, 2.666667 },
+	float3(0.000001, 0.000002, 0.000000),
+	float3(0.100000, 0.100000, 0.100000),
+	-0.207912
+};
+/*
+const AtmosphereParameters ATMOSPHERE = AtmosphereParameters{
+	float3(1.474000, 1.850400, 1.911980),
+	0.004675,
+	6360000.000000,
+	6420000.000000,
+	{ 0.000000, 0.000000, 0.000000, 0.000000, 0.000000 },
+	{ 0.000000, 1.000000, -0.000125, 0.000000, 0.000000 },
+	float3(0.000006, 0.000014, 0.000033),
+	{ 0.000000, 0.000000, 0.000000, 0.000000, 0.000000 },
+	{ 0.000000, 1.000000, -0.000833, 0.000000, 0.000000 },
+	float3(0.000004, 0.000004, 0.000004),
+	float3(0.000004, 0.000004, 0.000004),
+	0.800000,
+	{ 25000.000000, 0.000000, 0.000000, 0.000067, -0.666667 },
+	{ 0.000000, 0.000000, 0.000000, -0.000067, 2.666667 },
+	float3(0.000001, 0.000002, 0.000000),
+	float3(0.100000, 0.100000, 0.100000),
+	-0.207912 
+};
+*/
 Number ClampCosine(Number mu) {
 	return clamp(mu, Number(-1.0), Number(1.0));
 }
@@ -1547,7 +1591,6 @@ RadianceSpectrum GetSkyRadiance(
 	Number mu_s = dot(camera, sun_direction) / r;
 	Number nu = dot(view_ray, sun_direction);
 	bool ray_r_mu_intersects_ground = RayIntersectsGround(atmosphere, r, mu);
-
 	transmittance = ray_r_mu_intersects_ground ? DimensionlessSpectrum(0.0f,0.0f,0.0f) :
 		GetTransmittanceToTopAtmosphereBoundary(
 			atmosphere, transmittance_texture, r, mu);

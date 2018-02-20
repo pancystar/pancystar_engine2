@@ -63,12 +63,14 @@ engine_basic::engine_fail_reason pancy_terrain_part::create()
 void pancy_terrain_part::release()
 {
 	terrain_renderbuffer->release();
+	delete terrain_renderbuffer;
 	terrain_height_tex->Release();
 	terrain_blend_tex->Release();
 	terrain_tangent_tex->Release();
 	terrain_normal_tex->Release();
 	terrain_color_albe_tex->Release();
 	terrain_color_norm_tex->Release();
+	terrain_height_data.clear();
 }
 engine_basic::engine_fail_reason pancy_terrain_part::load_terrain_height()
 {
@@ -84,12 +86,16 @@ engine_basic::engine_fail_reason pancy_terrain_part::load_terrain_height()
 	float *data_need = new float[TexHeight_width*TexHeight_width];
 	//DirectX::PackedVector::HALF *data_need = new DirectX::PackedVector::HALF[TexHeight_width*TexHeight_width];
 	inFile.read(data_pre, size_file * sizeof(char));
+	inFile.close();
 	for (int i = 0; i < TexHeight_width*TexHeight_width; ++i)
 	{
 		unsigned char first_byte = data_pre[2 * i];
 		unsigned char second_byte = data_pre[2 * i + 1];
 		double data = static_cast<double>(first_byte + second_byte * 256) / 65535.0;
 		data_need[i] = static_cast<float>(data);
+		unsigned short data_unsigned = first_byte + second_byte * 256;
+		short data_signed = static_cast<short>(first_byte + second_byte * 256);
+		terrain_height_data.push_back(data_signed);
 		//float rec_height = static_cast<float>(data_pre[2 * i] + data_pre[2 * i + 1] * 256) / 65535.0f;
 		//data_need[i] = DirectX::PackedVector::XMConvertFloatToHalf(rec_height);
 	}
@@ -137,7 +143,7 @@ engine_basic::engine_fail_reason pancy_terrain_part::load_terrain_height()
 		engine_basic::engine_fail_reason error_message(hr, "build terrain height map texdata error");
 		return error_message;
 	}
-
+	delete[] data_need;
 	D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc;
 	srvDesc.Format = texDesc.Format;
 	srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
@@ -415,6 +421,8 @@ terrain_part_resource::terrain_part_resource(
 	neighbour_upright_ID = -1;
 	neighbour_downleft_ID = -1;
 	neighbour_downright_ID = -1;
+	if_loaded_physics = false;
+	if_wakeup_physics = false;
 }
 void terrain_part_resource::get_all_neighbour(int neighbour_ID[9])
 {
@@ -429,7 +437,7 @@ void terrain_part_resource::get_all_neighbour(int neighbour_ID[9])
 	neighbour_ID[8] = neighbour_upright_ID;
 
 }
-engine_basic::engine_fail_reason terrain_part_resource::build_resource()
+engine_basic::engine_fail_reason terrain_part_resource::build_resource(pancy_physx_scene *physic_scene)
 {
 	now_terrain = new pancy_terrain_part(terrain_width, terrain_divide, Terrain_ColorTexScal, Terrain_HeightScal, terrain_offset, file_name);
 	engine_basic::engine_fail_reason check_error = now_terrain->create();
@@ -438,14 +446,71 @@ engine_basic::engine_fail_reason terrain_part_resource::build_resource()
 		return check_error;
 	}
 	if_loaded = true;
+	if (!if_loaded_physics) 
+	{
+		build_physic(physic_scene);
+	}
+	else 
+	{
+		physic_scene->wakeup_a_terrain(terrain_physx_ID);
+	}
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
-void terrain_part_resource::release_resource()
+engine_basic::engine_fail_reason terrain_part_resource::build_physic(pancy_physx_scene *physic_scene)
 {
+	physx::PxHeightFieldSample* samples = new physx::PxHeightFieldSample[now_terrain->get_terrain_height_width() * now_terrain->get_terrain_height_width()];
+	physx::PxHeightFieldDesc hfDesc;
+	hfDesc.format = physx::PxHeightFieldFormat::eS16_TM;
+	hfDesc.nbColumns = now_terrain->get_terrain_height_width();
+	hfDesc.nbRows = now_terrain->get_terrain_height_width();
+	auto height_list = now_terrain->get_terrain_height_data();
+	int data_num = 0;
+	/*
+	for (int i = 0; i < now_terrain->get_terrain_height_width(); ++i) 
+	{
+		for (int j = 0; j < now_terrain->get_terrain_height_width(); ++j)
+		{
+			samples[j*now_terrain->get_terrain_height_width() + i].height = height_list[i*now_terrain->get_terrain_height_width() + j];
+		}
+	}
+	*/
+	float height_scal = Terrain_HeightScal / 65535.0f;
+	for (auto data_vector = height_list.begin(); data_vector != height_list.end(); ++data_vector) 
+	{
+		int i = data_num / now_terrain->get_terrain_height_width();
+		int j = data_num % now_terrain->get_terrain_height_width();
+		samples[j*now_terrain->get_terrain_height_width() + i].height = *data_vector._Ptr;
+		data_num += 1;
+	}
+	hfDesc.samples.data = samples;
+	hfDesc.samples.stride = sizeof(physx::PxHeightFieldSample);
+	float terrain_widht_divide = (1.0 / static_cast<float>(now_terrain->get_terrain_height_width())) * terrain_width;
+	physx::PxVec3 rec_scal(Terrain_HeightScal / 65535.0f, terrain_widht_divide, terrain_widht_divide);
+	engine_basic::engine_fail_reason check_error = physic_scene->add_a_terrain_object(hfDesc, rec_scal, physx::PxTransform(physx::PxVec3(terrain_offset.x - (terrain_width / 2.0f), 0.0f, terrain_offset.y - (terrain_width / 2.0f))), terrain_physx_ID);
+	delete[] samples;
+	if (!check_error.check_if_failed()) 
+	{
+		return check_error;
+	}
+	if_loaded_physics = true;
+	if_wakeup_physics = true;
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+	//hr = physic_scene->create_terrain(hfDesc, rec_scal, physx::PxTransform(physx::PxVec3(-1500.0f, 0.0f, -1500.0f)), terrain_mat_force);
+}
+void terrain_part_resource::release_resource(pancy_physx_scene *physic_scene)
+{
+	//卸载模型信息
 	now_terrain->release();
+	delete now_terrain;
 	now_terrain = NULL;
 	if_loaded = false;
+	//移除物理信息
+	physic_scene->delete_a_terrain(terrain_physx_ID);
+	if_loaded_physics = false;
+	//physic_scene->sleep_a_terrain(terrain_physx_ID);
+	if_wakeup_physics = false;
 }
 void terrain_part_resource::display(XMFLOAT3 view_pos, XMFLOAT4X4 view_mat, XMFLOAT4X4 proj_mat)
 {
@@ -453,6 +518,7 @@ void terrain_part_resource::display(XMFLOAT3 view_pos, XMFLOAT4X4 view_mat, XMFL
 }
 //地形管理器
 pancy_terrain_control::pancy_terrain_control(
+	pancy_physx_scene *physc_in,
 	string terrain_list,
 	float terrain_width_in,
 	int terrain_divide_in,
@@ -461,6 +527,7 @@ pancy_terrain_control::pancy_terrain_control(
 	float rebuild_dis
 	)
 {
+	physic_scene = physc_in;
 	terrain_list_file = terrain_list;
 	terrain_width = terrain_width_in;
 	terrain_divide = terrain_divide_in;
@@ -1015,7 +1082,7 @@ engine_basic::engine_fail_reason pancy_terrain_control::load_a_terrain(int node_
 		//资源在之前已经被加载创建
 		engine_basic::engine_fail_reason error_message(E_FAIL, "the resource have been build, do not rebuild resource");
 	}
-	engine_basic::engine_fail_reason check_error = data_center->build_resource();
+	engine_basic::engine_fail_reason check_error = data_center->build_resource(physic_scene);
 	if (!check_error.check_if_failed())
 	{
 		return check_error;
@@ -1031,7 +1098,7 @@ engine_basic::engine_fail_reason pancy_terrain_control::unload_a_terrain(int nod
 		//资源尚未创建，无法释放
 		engine_basic::engine_fail_reason error_message(E_FAIL, "the resource haven't been build, could not release resource");
 	}
-	data_center->release_resource();
+	data_center->release_resource(physic_scene);
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
@@ -1138,7 +1205,7 @@ void pancy_terrain_control::update(XMFLOAT3 view_pos,XMFLOAT4X4 view_matrix_in,X
 					{
 						if (data_neighbour->second.check_if_loaded()) 
 						{
-							data_neighbour->second.release_resource();
+							data_neighbour->second.release_resource(physic_scene);
 						}
 					}
 				}
@@ -1155,7 +1222,7 @@ void pancy_terrain_control::update(XMFLOAT3 view_pos,XMFLOAT4X4 view_matrix_in,X
 				auto now_new_neighbour = terrain_data_list.find(all_new_neighbour[i]);
 				if (now_new_neighbour->second.check_if_loaded() == false)
 				{
-					now_new_neighbour->second.build_resource();
+					now_new_neighbour->second.build_resource(physic_scene);
 				}
 			}
 		}
@@ -1175,7 +1242,7 @@ void pancy_terrain_control::release()
 			auto data_delete = terrain_data_list.find(data_all[i]);
 			if (data_delete != terrain_data_list.end() && data_delete->second.check_if_loaded())
 			{
-				data_delete->second.release_resource();
+				data_delete->second.release_resource(physic_scene);
 			}
 		}
 	}

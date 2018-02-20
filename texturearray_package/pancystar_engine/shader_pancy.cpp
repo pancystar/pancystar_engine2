@@ -480,6 +480,8 @@ engine_basic::engine_fail_reason shader_pretreat_gbuffer::set_world_matrix_array
 		engine_basic::engine_fail_reason error_message(hr, "set normal_matrix_array error in gbuffer depthnormal part");
 		return error_message;
 	}
+	delete[] world_mat;
+	delete[] normal_mat;
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }

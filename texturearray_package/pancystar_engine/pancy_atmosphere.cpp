@@ -264,7 +264,7 @@ void atmosphere_pretreatment::build_atomosphere_texture()
 	shader_pretreat_lbuffer->set_view_from_clip(clip_matrix);
 	//地球信息
 	float kBottomRadius = 6360000.0;
-	float kLengthUnitInMeters = 1000.0;
+	float kLengthUnitInMeters = 1.0;
 	shader_atmosphere_render->set_earth_center(XMFLOAT3(0.0f, -kBottomRadius / kLengthUnitInMeters, 0.0f));
 	shader_pretreat_lbuffer->set_earth_center(XMFLOAT3(0.0f, -kBottomRadius / kLengthUnitInMeters, 0.0f));
 	//太阳信息

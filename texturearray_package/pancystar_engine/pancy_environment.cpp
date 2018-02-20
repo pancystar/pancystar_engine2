@@ -231,7 +231,7 @@ void environment_IBL_data::display_environment(
 		pancy_camera::get_instance()->count_invview_matrix(look_vec, up_vec, pos_view, &invview_matrix_reflect);
 		XMStoreFloat4x4(&Proj_mat_reflect, DirectX::XMMatrixPerspectiveFovLH(0.5f*XM_PI, 1.0f, engine_basic::perspective_message::get_instance()->get_perspective_near_plane(), engine_basic::perspective_message::get_instance()->get_perspective_far_plane()));
 
-		engine_basic::extra_perspective_message *scene_perspective = new engine_basic::extra_perspective_message(1024.0f * quality_reflect, 1024.0f * quality_reflect, 0.1f, 1000.0f, 0.5f*XM_PI);
+		engine_basic::extra_perspective_message scene_perspective(1024.0f * quality_reflect, 1024.0f * quality_reflect, 0.1f, 1000.0f, 0.5f*XM_PI);
 
 		//·´Í¶Ó°
 		float kFovY = XM_PIDIV2;
@@ -252,8 +252,8 @@ void environment_IBL_data::display_environment(
 		auto shader_pretreat_lbuffer = shader_control::GetInstance()->get_shader_lightbuffer(check_error);
 		shader_pretreat_lbuffer->set_view_from_clip(clip_matrix);
 
-		Pretreatment_gbuffer::get_instance()->render_gbuffer(geometry_buffer, environment_texture_data->get_gbuffer(), view_matrix_reflect, scene_perspective, false);
-		Pretreatment_gbuffer::get_instance()->render_lbuffer(environment_texture_data->get_gbuffer(), pos_view, view_matrix_reflect, invview_matrix_reflect, scene_perspective, false);
+		Pretreatment_gbuffer::get_instance()->render_gbuffer(geometry_buffer, environment_texture_data->get_gbuffer(), view_matrix_reflect, &scene_perspective, false);
+		Pretreatment_gbuffer::get_instance()->render_lbuffer(environment_texture_data->get_gbuffer(), pos_view, view_matrix_reflect, invview_matrix_reflect, &scene_perspective, false);
 
 		ID3D11RenderTargetView* renderTargets[1] = { RTV_singlecube[i] };
 		d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetRenderTargets(1, renderTargets, reflect_cube_DSV);

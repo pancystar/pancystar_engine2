@@ -769,6 +769,7 @@ ID3D11ShaderResourceView * geometry_resource_view::get_bone_matrix_list()
 	memcpy(mappedResource.pData, bone_matrix_CPU_buffer, instance_list.size() * animation_point->get_bone_num()*sizeof(XMFLOAT4X4));
 	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->Unmap(data, 0);
 	data->Release();
+	delete[] bone_matrix_CPU_buffer;
 	/*
 	bone_matrix_array.clear();
 	for (auto data_now = instance_list.begin(); data_now != instance_list.end(); ++data_now)

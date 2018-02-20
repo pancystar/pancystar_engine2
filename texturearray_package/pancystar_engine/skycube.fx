@@ -100,6 +100,15 @@ technique11 draw_sky_cube
 		SetRasterizerState(DisableCulling);
 	}
 }
+technique11 draw_sky_cube_CW
+{
+	Pass p0
+	{
+		SetVertexShader(CompileShader(vs_5_0,VS()));
+		SetGeometryShader(NULL);
+		SetPixelShader(CompileShader(ps_5_0, PS_cube()));
+	}
+}
 technique11 draw_sky_gamma
 {
 	Pass p0

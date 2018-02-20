@@ -1,4 +1,5 @@
 #pragma once
+#include <stdexcept>
 #include"pancystar_engine_basic.h"
 #include"pancy_d3d11_basic.h"
 #include"geometry.h"
@@ -14,6 +15,12 @@ struct mesh_animation_data
 	XMFLOAT3 position;
 	XMFLOAT3 normal;
 	XMFLOAT3 tangent;
+	mesh_animation_data()
+	{
+		position = XMFLOAT3(0, 0, 0);
+		normal = XMFLOAT3(0, 0, 0);
+		tangent = XMFLOAT3(0, 0, 0);
+	}
 };
 struct mesh_animation_per_frame
 {
@@ -33,6 +40,7 @@ class mesh_animation_FBX
 #define IOS_REF (*(pManager->GetIOSettings()))
 #endif
 	//FBX属性
+	bool if_fbx_file;
 	int lVertexCount;
 	FbxString *lFilePath;
 	FbxManager* lSdkManager = NULL;
@@ -52,9 +60,11 @@ class mesh_animation_FBX
 	ID3D11ShaderResourceView *point_buffer;
 public:
 	mesh_animation_FBX(std::string file_name_in, int point_num_in,int point_index_num_in);
-	engine_basic::engine_fail_reason create(UINT *index_buffer_in);
+	engine_basic::engine_fail_reason create(UINT *index_buffer_in, XMFLOAT3 *normal_in, XMFLOAT3 *tangent_in);
 	int get_point_num() { return point_num; };
 	int get_frame_num() { return frame_num; };
+	int get_FPS() { return frame_per_second; };
+	std::vector<mesh_animation_per_frame> get_anim_list() { return anim_data_list; };
 	ID3D11ShaderResourceView *get_buffer() { return point_buffer; };
 	void release();
 private:
@@ -65,10 +75,11 @@ private:
 	bool LoadScene(FbxManager* pManager, FbxDocument* pScene, const char* pFilename);
 	void PreparePointCacheData(FbxScene* pScene, FbxTime &pCache_Start, FbxTime &pCache_Stop);
 	engine_basic::engine_fail_reason ReadVertexCacheData(FbxMesh* pMesh, FbxTime& pTime, FbxVector4* pVertexArray);
-	void UpdateVertexPosition(const FbxMesh * pMesh, const FbxVector4 * pVertices);
+	void UpdateVertexPosition(FbxMesh * pMesh, const FbxVector4 * pVertices, XMFLOAT3 *normal_in, XMFLOAT3 *tangent_in);
 	engine_basic::engine_fail_reason find_tree_mesh(FbxNode *pNode);
+	void compute_normal();
+	XMFLOAT3 get_normal_vert(FbxMesh * pMesh, int vertex_count);
 };
-
 
 struct material_list
 {
@@ -118,11 +129,13 @@ protected:
 	int vertex_final_num;
 	int index_pack_num;
 	UINT *index_pack_list;
-	UINT *index_pack_list_CCW;
+	XMFLOAT3 *normal_buffer;  //法线缓冲区
+	XMFLOAT3 *tangent_buffer; //切线缓冲区
 public:
 	assimp_basic(const char* filename, const char* texture_path);
 	engine_basic::engine_fail_reason model_create(bool if_adj, int alpha_partnum, int* alpha_part);
 	//顶点动画数据
+	mesh_animation_FBX *get_meshanim_data() { return FBXanim_import; };
 	int get_meshnum();
 	int get_animation_point_num() { return FBXanim_import->get_point_num(); };
 	int get_anim_num() { return FBXanim_import->get_frame_num(); };
@@ -193,6 +206,8 @@ engine_basic::engine_fail_reason model_reader_assimp<T>::init_mesh(bool if_adj)
 	}
 	point_pack_list = (T*)malloc(vertex_final_num * sizeof(T));
 	index_pack_list = (unsigned int*)malloc(index_pack_num * sizeof(unsigned int));
+	normal_buffer = new XMFLOAT3[vertex_final_num];
+	tangent_buffer = new XMFLOAT3[vertex_final_num];
 	int count_point_pack = 0;
 	int count_index_pack = 0;
 	T *point_need;
@@ -245,6 +260,8 @@ engine_basic::engine_fail_reason model_reader_assimp<T>::init_mesh(bool if_adj)
 			}
 			point_pack_list[count_point_pack] = point_need[j];
 			point_pack_list[count_point_pack].tex_id.x = i;
+			normal_buffer[count_point_pack] = point_need[j].normal;
+			tangent_buffer[count_point_pack] = point_need[j].tangent;
 			count_point_pack += 1;
 		}
 		//索引缓存区
@@ -267,6 +284,22 @@ engine_basic::engine_fail_reason model_reader_assimp<T>::init_mesh(bool if_adj)
 				return fail_message;
 			}
 		}
+
+
+		/*
+		//检验法线
+		XMFLOAT3 *positions = new XMFLOAT3[paiMesh->mNumVertices];
+		XMFLOAT3 *normals = new XMFLOAT3[paiMesh->mNumVertices];
+		for (int j = 0; j < paiMesh->mNumVertices; ++j)
+		{
+			positions[j] = point_pack_list[j].position;
+		}
+		//ComputeNormals_pancy(index_need, paiMesh->mNumFaces, positions, paiMesh->mNumVertices, normals);
+		for (int j = 0; j < paiMesh->mNumVertices; ++j)
+		{
+		//	point_need[j].normal = normals[j];
+		}
+		*/
 		//模型的第i个模块的顶点及索引信息
 		mesh_need[i].point_buffer = new mesh_model<T>(point_need, index_need, paiMesh->mNumVertices, paiMesh->mNumFaces * 3, if_adj);
 		//根据内存信息创建显存区
@@ -276,12 +309,17 @@ engine_basic::engine_fail_reason model_reader_assimp<T>::init_mesh(bool if_adj)
 			return check_fail;
 		}
 		now_index_start = count_point_pack;
+		
+		
+		
 		//释放内存
 		free(point_need);
 		point_need = NULL;
 		free(index_need);
 		index_need = NULL;
 	}
+	
+
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }

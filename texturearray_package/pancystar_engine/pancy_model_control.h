@@ -363,22 +363,18 @@ void geometry_ResourceView_list<T>::render_gbuffer(XMFLOAT4X4 view_matrix, XMFLO
 {
 	//绘制一种模型
 	ID3DX11EffectTechnique *teque_need;
+
 	for (auto data_need = ModelResourceView_list.begin(); data_need != ModelResourceView_list.end(); ++data_need)
 	{
 		engine_basic::engine_fail_reason check_error;
 		auto shader_gbuffer = shader_control::GetInstance()->get_shader_gbuffer(check_error);
+		
 		//检测当前种类模型的渲染数量是否大于零
 		if (data_need->second.get_matrix_list().size() <= 0) 
 		{
 			continue;
 		}
 		XMFLOAT4X4 final_mat,viewproj_mat;
-		/*
-		//从摄像机获取取景变换矩阵
-		//pancy_camera::get_instance()->count_view_matrix(&view_mat);
-		//从投影单例获得投影变换矩阵
-		//XMMATRIX proj = XMLoadFloat4x4(&engine_basic::perspective_message::get_instance()->get_proj_matrix());
-		*/
 		XMMATRIX proj = XMLoadFloat4x4(&proj_matrix);
 		//从模型访问器获得世界变换矩阵
 		XMFLOAT4X4 world_matrix_rec = data_need->second.get_matrix_list()[0];
@@ -389,6 +385,7 @@ void geometry_ResourceView_list<T>::render_gbuffer(XMFLOAT4X4 view_matrix, XMFLO
 		shader_gbuffer->set_trans_all(&final_mat);
 		shader_gbuffer->set_trans_proj(&proj_matrix);
 		//设置所有instance的世界变换矩阵
+		
 		XMFLOAT4X4 *data_worldmat_array = new XMFLOAT4X4[data_need->second.get_matrix_list().size()];
 		int count_num = 0;
 		auto matrix_list = data_need->second.get_matrix_list();
@@ -396,10 +393,13 @@ void geometry_ResourceView_list<T>::render_gbuffer(XMFLOAT4X4 view_matrix, XMFLO
 		{
 			data_worldmat_array[count_num++] = *mat_need._Ptr;
 		}
-
-
 		shader_gbuffer->set_world_matrix_array(data_worldmat_array, view_matrix, data_need->second.get_matrix_list().size());
 		delete[] data_worldmat_array;
+
+
+		
+
+
 		//设置纹理数据
 		shader_gbuffer->set_texturepack_array(data_need->second.get_texture());
 		

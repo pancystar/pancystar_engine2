@@ -141,6 +141,13 @@ HRESULT engine_windows_main::game_create()
 		fail_message.show_failed_reason();
 		return E_FAIL;
 	}
+	//创建物理系统
+	fail_message = pancy_physx_basic::single_create();
+	if (!fail_message.check_if_failed())
+	{
+		fail_message.show_failed_reason();
+		return E_FAIL;
+	}
 	//创建场景队列
 	scene_main = new pancy_scene_control();
 	fail_message = scene_main->create();
@@ -150,8 +157,8 @@ HRESULT engine_windows_main::game_create()
 		return E_FAIL;
 	}
 	//scene_root *test_scene = new scene_test_square();
-	//scene_root *test_scene = new scene_test_environment();
-	scene_root *test_scene = new scene_test_plant();
+	scene_root *test_scene = new scene_test_environment();
+	//scene_root *test_scene = new scene_test_plant();
 	fail_message = test_scene->create();
 	if (!fail_message.check_if_failed())
 	{

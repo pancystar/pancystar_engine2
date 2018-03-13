@@ -143,6 +143,8 @@
     </FxCompile>
     <FxCompile>
       <ShaderModel>5.0</ShaderModel>
+      <EnableDebuggingInformation>true</EnableDebuggingInformation>
+      <DisableOptimizations>true</DisableOptimizations>
     </FxCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -240,9 +242,13 @@
     <FxCompile Include="virtual_light.fx" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="atmosphere_fog_func.hlsli" />
     <None Include="atmosphere_renderfunc.hlsli" />
     <None Include="HDR_define.hlsli" />
     <None Include="light_count.hlsli" />
+    <None Include="sample.hlsli" />
+    <None Include="skinmesh.hlsli" />
+    <None Include="terrain_tess_basic.hlsli" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

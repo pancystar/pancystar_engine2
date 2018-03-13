@@ -50,6 +50,7 @@ quantities as <code>float</code>, with preprocessor macros (there is no
 power and luminous power (wavelength is also a length, but we distinguish the
 two for increased clarity).
 */
+#include"sample.hlsli"
 #define IN(x) const in x
 #define OUT(x) out x
 #define TEMPLATE(x)
@@ -64,12 +65,6 @@ static const int SCATTERING_TEXTURE_NU_SIZE = 8;
 static const int IRRADIANCE_TEXTURE_WIDTH = 64;
 static const int IRRADIANCE_TEXTURE_HEIGHT = 16;
 #define COMBINED_SCATTERING_TEXTURES
-SamplerState samTex_liner
-{
-	Filter = MIN_MAG_MIP_LINEAR;
-	AddressU = WRAP;
-	AddressV = WRAP;
-};
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #define Length float
 #define Wavelength float

@@ -154,10 +154,11 @@ void count_brdf_reflect(
 	)
 {
 	float3 h_vec = normalize((light_dir_in + direction_view) / 2.0f);
-
+	normal = normalize(normal);
+	direction_view = normalize(direction_view);
 	diffuse_out = (1 - tex_matallic);
 	float pi = 3.141592653;
-	float view_angle = dot(direction_view, normal);//视线夹角
+	float view_angle = max(dot(direction_view, normal), 0);//视线夹角
 	float cos_vh = dot(direction_view, h_vec);
 	//菲涅尔项
 	//float3 fresnel = specular_F0 +(float4(1.0f, 1.0f, 1.0f, 1.0f) - specular_F0)*(1.0f - pow(cos_vh, 5.0f));
@@ -174,8 +175,10 @@ void count_brdf_reflect(
 	float ggx_l = diffuse_angle / (diffuse_angle*(1 - ggx_k) + ggx_k);
 	float ggx = ggx_v * ggx_l;
 	//最终的镜面反射项
-	specular_out = (fresnel * ndf * ggx) / (4 * view_angle * diffuse_angle);
-
+	//specular_out = (fresnel * ndf * ggx) / (4 * view_angle * diffuse_angle);
+	float mid_div = 4 * (view_angle*(1 - ggx_k) + ggx_k) * diffuse_angle;
+	specular_out = (fresnel * ndf *ggx_l) / mid_div;
+	//specular_out = fresnel * ndf * (view_angle);
 
 	//specular_out = tex_roughness;
 }

@@ -7,6 +7,12 @@
 #include<math.h>
 #include<queue>
 using namespace std;
+enum terrain_mat_quality
+{
+	terrain_material_low = 0,
+	terrain_material_mid = 1,
+	terrain_material_high = 2
+};
 struct terrain_file_path
 {
 	string height_rawdata_name;
@@ -35,9 +41,12 @@ class pancy_terrain_part
 	ID3D11ShaderResourceView *terrain_normal_tex;
 	ID3D11ShaderResourceView *terrain_tangent_tex;
 	ID3D11ShaderResourceView *terrain_blend_tex;
-
+	/*
 	ID3D11ShaderResourceView *terrain_color_albe_tex;
 	ID3D11ShaderResourceView *terrain_color_norm_tex;
+	*/
+	//terrain_color_resource terrain_color_tex[4];
+	string terrain_color_tex[4];
 public:
 	pancy_terrain_part(
 		float terrain_width_in,
@@ -47,7 +56,8 @@ public:
 		XMFLOAT2 terrain_offset_in,
 		string file_name
 		);
-	void render_terrain(XMFLOAT3 view_pos, XMFLOAT4X4 view_mat, XMFLOAT4X4 proj_mat);
+	void render_terrain(XMFLOAT3 view_pos, XMFLOAT4X4 view_mat, XMFLOAT4X4 proj_mat,std::unordered_map<std::string, terrain_color_resource> material_list);
+	void render_terrain_gbuffer(XMFLOAT3 view_pos, XMFLOAT4X4 view_mat, XMFLOAT4X4 proj_mat, std::unordered_map<std::string, terrain_color_resource> material_list);
 	engine_basic::engine_fail_reason create();
 	void release();
 	int get_terrain_height_width() { return TexHeight_width; };
@@ -60,8 +70,8 @@ private:
 	engine_basic::engine_fail_reason load_terrain_normal();
 	engine_basic::engine_fail_reason load_terrain_tangent();
 	engine_basic::engine_fail_reason load_terrain_blend();
-	engine_basic::engine_fail_reason load_terrain_color();
-	engine_basic::engine_fail_reason load_tex_array(string texdata_name[4], ID3D11ShaderResourceView **tex_array);
+	//engine_basic::engine_fail_reason load_terrain_color();
+	//engine_basic::engine_fail_reason load_tex_array(string texdata_name[4], ID3D11ShaderResourceView **tex_array);
 };
 class terrain_part_resource
 {
@@ -122,12 +132,16 @@ public:
 	XMFLOAT2 get_offset() { return terrain_offset; }
 	engine_basic::engine_fail_reason build_resource(pancy_physx_scene *physic_scene);
 	void release_resource(pancy_physx_scene *physic_scene);
-	void display(XMFLOAT3 view_pos, XMFLOAT4X4 view_mat, XMFLOAT4X4 proj_mat);
+	void display(XMFLOAT3 view_pos, XMFLOAT4X4 view_mat, XMFLOAT4X4 proj_mat, std::unordered_map<std::string, terrain_color_resource> material_list);
+	void display_gbuffer(XMFLOAT3 view_pos, XMFLOAT4X4 view_mat, XMFLOAT4X4 proj_mat, std::unordered_map<std::string, terrain_color_resource> material_list);
 private:
 	engine_basic::engine_fail_reason build_physic(pancy_physx_scene *physic_scene);
 };
 class pancy_terrain_control
 {
+	//地形材质包
+	std::unordered_map<std::string, terrain_color_resource> terrain_material_map;
+	//地形物理信息
 	pancy_physx_scene *physic_scene;
 	string terrain_list_file;
 	int now_center_terrain = 0;
@@ -169,10 +183,11 @@ public:
 		float rebuild_dis
 		);
 	engine_basic::engine_fail_reason create();
-
+	engine_basic::engine_fail_reason load_terrain_material(string mat_file_name, terrain_mat_quality material_quality);
 	void update(XMFLOAT3 view_pos, XMFLOAT4X4 view_matrix, XMFLOAT4X4 proj_matrix);
 	void release();
 	void display();
+	void display_gbuffer();
 private:
 	string move_string_space(string input);
 	string find_path(string input);

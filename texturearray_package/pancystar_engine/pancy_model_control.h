@@ -2,6 +2,7 @@
 #include"geometry.h"
 #include"shader_pancy.h"
 #include"PancyCamera.h"
+#include"pancy_terrain.h"
 #include<map>
 using namespace std;
 #define MAX_BONE_NUM 100
@@ -206,9 +207,9 @@ public:
 	void specify_animation_time(float animation_time);
 	XMFLOAT4X4* get_bone_matrix();
 	XMFLOAT4X4* get_offset_mat() { return offset_matrix_array; };
-	float get_animation_length() 
+	float get_animation_length()
 	{
-		return animation_list[now_animation_choose].animation_length; 
+		return animation_list[now_animation_choose].animation_length;
 	};
 	int get_bone_num() { return bone_num; };
 	engine_basic::engine_fail_reason load_animation_list(string file_name_animation, int &anim_ID);
@@ -218,7 +219,7 @@ private:
 	//加载骨骼及动画
 	engine_basic::engine_fail_reason load_skintree(string filename);
 	void read_bone_tree(skin_tree *now);
-	
+
 	bool check_ifsame(char a[], char b[]);
 	//查找骨骼信息
 	skin_tree* find_tree(skin_tree* p, char name[]);
@@ -233,7 +234,7 @@ private:
 	void Interpolate(vector_animation& pOut, vector_animation pStart, vector_animation pEnd, float pFactor);
 	//四元数转矩阵
 	void Get_quatMatrix(XMFLOAT4X4 &resMatrix, quaternion_animation& pOut);
-	
+
 };
 
 class geometry_instance_view
@@ -269,16 +270,16 @@ class geometry_resource_view
 	std::unordered_map<int, geometry_instance_view> instance_list;
 	std::vector<XMFLOAT4X4> world_matrix_array;//实例变换矩阵簇
 	//std::vector<XMFLOAT4X4> bone_matrix_array;//骨骼变换矩阵簇
-	
+
 	ID3D11ShaderResourceView *bone_matrix_buffer_SRV;
 public:
-	geometry_resource_view(model_reader_pancymesh *model_data_in,int ID_need,bool if_dynamic_in,bool if_skin_in);
+	geometry_resource_view(model_reader_pancymesh *model_data_in, int ID_need, bool if_dynamic_in, bool if_skin_in);
 	engine_basic::engine_fail_reason create(int max_instance_num_in);
 	engine_basic::engine_fail_reason Load_Animation_FromFile(string file_mame, int &anim_ID);
 
 	std::vector<XMFLOAT4X4> get_matrix_list();
 	ID3D11ShaderResourceView * get_bone_matrix_list();
-	void get_bonematrix_singledata(XMFLOAT4X4 **mat_in,int &bone_num);
+	void get_bonematrix_singledata(XMFLOAT4X4 **mat_in, int &bone_num);
 	int get_bone_mat_num();
 	int add_an_instance(XMFLOAT4X4 world_matrix);
 	engine_basic::engine_fail_reason get_technique(ID3DX11EffectTechnique *teque_need) { return model_data->get_technique(teque_need); };
@@ -295,6 +296,7 @@ public:
 	void release();
 private:
 	engine_basic::engine_fail_reason create_buffer();
+	void update_skinmatbuffer();
 };
 
 template<typename T>
@@ -311,7 +313,8 @@ public:
 	T *get_geometry_byindex(int index_input);
 	int get_geometry_num() { return ModelResourceView_list.size(); };
 	//void render_gbuffer();
-	void render_gbuffer(XMFLOAT4X4 view_matrix, XMFLOAT4X4 proj_matrix,bool if_static);
+	void render_gbuffer(XMFLOAT4X4 view_matrix, XMFLOAT4X4 proj_matrix, bool if_static);
+	void render_gbuffer_post(XMFLOAT4X4 view_matrix, XMFLOAT4X4 proj_matrix, bool if_static);
 	void render_shadowmap(XMFLOAT4X4 shadow_matrix, bool if_static);
 	void release();
 };
@@ -363,18 +366,22 @@ void geometry_ResourceView_list<T>::render_gbuffer(XMFLOAT4X4 view_matrix, XMFLO
 {
 	//绘制一种模型
 	ID3DX11EffectTechnique *teque_need;
-
 	for (auto data_need = ModelResourceView_list.begin(); data_need != ModelResourceView_list.end(); ++data_need)
 	{
+		if (data_need->second.check_if_cullfront())
+		{
+			//天空深度不参与延迟着色
+			continue;
+		}
 		engine_basic::engine_fail_reason check_error;
 		auto shader_gbuffer = shader_control::GetInstance()->get_shader_gbuffer(check_error);
-		
+
 		//检测当前种类模型的渲染数量是否大于零
-		if (data_need->second.get_matrix_list().size() <= 0) 
+		if (data_need->second.get_matrix_list().size() <= 0)
 		{
 			continue;
 		}
-		XMFLOAT4X4 final_mat,viewproj_mat;
+		XMFLOAT4X4 final_mat, viewproj_mat;
 		XMMATRIX proj = XMLoadFloat4x4(&proj_matrix);
 		//从模型访问器获得世界变换矩阵
 		XMFLOAT4X4 world_matrix_rec = data_need->second.get_matrix_list()[0];
@@ -385,7 +392,7 @@ void geometry_ResourceView_list<T>::render_gbuffer(XMFLOAT4X4 view_matrix, XMFLO
 		shader_gbuffer->set_trans_all(&final_mat);
 		shader_gbuffer->set_trans_proj(&proj_matrix);
 		//设置所有instance的世界变换矩阵
-		
+
 		XMFLOAT4X4 *data_worldmat_array = new XMFLOAT4X4[data_need->second.get_matrix_list().size()];
 		int count_num = 0;
 		auto matrix_list = data_need->second.get_matrix_list();
@@ -396,32 +403,133 @@ void geometry_ResourceView_list<T>::render_gbuffer(XMFLOAT4X4 view_matrix, XMFLO
 		shader_gbuffer->set_world_matrix_array(data_worldmat_array, view_matrix, data_need->second.get_matrix_list().size());
 		delete[] data_worldmat_array;
 
-
-		
-
-
 		//设置纹理数据
 		shader_gbuffer->set_texturepack_array(data_need->second.get_texture());
-		
 		if (data_need->second.get_matrix_list().size() == 1)
 		{
-			if (data_need->second.check_if_cullfront()) 
+			if (data_need->second.check_if_cullfront())
 			{
 				shader_gbuffer->get_technique(&teque_need, "NormalDepth_CullFornt");
 			}
-			else 
+			else if (data_need->second.check_if_skin())
 			{
-				shader_gbuffer->get_technique(&teque_need,"NormalDepth_withnormal");
+				XMFLOAT4X4 *mat_list = NULL;
+				int bone_num_now = 0;
+				data_need->second.get_bonematrix_singledata(&mat_list, bone_num_now);
+				shader_gbuffer->set_bone_matrix(mat_list, bone_num_now);
+				shader_gbuffer->set_bone_num(bone_num_now);
+				D3D11_INPUT_ELEMENT_DESC rec_inputdesc[] =
+				{
+					//语义名    语义索引      数据格式          输入槽 起始地址     输入槽的格式 
+					{ "POSITION",0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,0  ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+					{ "NORMAL"  ,0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,12 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+					{ "TANGENT" ,0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,24 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+					{ "TEXINDICES" ,0  ,DXGI_FORMAT_R32G32B32A32_UINT  ,0    ,36 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+					{ "TEXDIFFNORM",0  ,DXGI_FORMAT_R32G32B32A32_FLOAT      ,0    ,52 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+					{ "TEXOTHER",0  ,DXGI_FORMAT_R32G32B32A32_FLOAT      ,0    ,68 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+					{ "BONEINDICES" ,0  ,DXGI_FORMAT_R32G32B32A32_UINT  ,0    ,84 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+					{ "WEIGHTS"     ,0  ,DXGI_FORMAT_R32G32B32A32_FLOAT ,0    ,100 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+				};
+				UINT num_member = sizeof(rec_inputdesc) / sizeof(D3D11_INPUT_ELEMENT_DESC);
+				shader_gbuffer->get_technique(rec_inputdesc, num_member, &teque_need, "NormalDepthSkin_withnormal");
 			}
-			
+			else
+			{
+				shader_gbuffer->get_technique(&teque_need, "NormalDepth_withnormal");
+			}
+
 		}
-		else 
+		else
 		{
-			shader_gbuffer->get_technique(&teque_need, "NormalDepth_withinstance_normal");
+			if (data_need->second.check_if_skin())
+			{
+				std::vector<XMFLOAT4X4> world_mat_list = data_need->second.get_matrix_list();
+				shader_gbuffer->set_world_matrix_array(&world_mat_list[0], view_matrix, world_mat_list.size());
+				shader_gbuffer->set_bonemat_buffer(data_need->second.get_bone_matrix_list());
+				shader_gbuffer->set_bone_num(data_need->second.get_bone_mat_num());
+				D3D11_INPUT_ELEMENT_DESC rec_inputdesc[] =
+				{
+					//语义名    语义索引      数据格式          输入槽 起始地址     输入槽的格式 
+					{ "POSITION",0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,0  ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+					{ "NORMAL"  ,0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,12 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+					{ "TANGENT" ,0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,24 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+					{ "TEXINDICES" ,0  ,DXGI_FORMAT_R32G32B32A32_UINT  ,0    ,36 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+					{ "TEXDIFFNORM",0  ,DXGI_FORMAT_R32G32B32A32_FLOAT      ,0    ,52 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+					{ "TEXOTHER",0  ,DXGI_FORMAT_R32G32B32A32_FLOAT      ,0    ,68 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+					{ "BONEINDICES" ,0  ,DXGI_FORMAT_R32G32B32A32_UINT  ,0    ,84 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+					{ "WEIGHTS"     ,0  ,DXGI_FORMAT_R32G32B32A32_FLOAT ,0    ,100 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+				};
+				UINT num_member = sizeof(rec_inputdesc) / sizeof(D3D11_INPUT_ELEMENT_DESC);
+				shader_gbuffer->get_technique(rec_inputdesc, num_member, &teque_need, "NormalDepthSkin_withinstance_normal");
+			}
+			else
+			{
+				shader_gbuffer->get_technique(&teque_need, "NormalDepth_withinstance_normal");
+			}
 		}
 		data_need->second.get_technique(teque_need);
 		data_need->second.draw(if_static);
 		d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->RSSetState(NULL);
+	}
+	//还原渲染状态
+	ID3D11RenderTargetView* NULL_target[1] = { NULL };
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetRenderTargets(1, NULL_target, NULL);
+	D3DX11_TECHNIQUE_DESC techDesc;
+	teque_need->GetDesc(&techDesc);
+	for (UINT p = 0; p < techDesc.Passes; ++p)
+	{
+		teque_need->GetPassByIndex(p)->Apply(0, d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex());
+	}
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->RSSetState(NULL);
+}
+template<typename T>
+void geometry_ResourceView_list<T>::render_gbuffer_post(XMFLOAT4X4 view_matrix, XMFLOAT4X4 proj_matrix, bool if_static)
+{
+	//绘制一种模型
+	ID3DX11EffectTechnique *teque_need;
+	for (auto data_need = ModelResourceView_list.begin(); data_need != ModelResourceView_list.end(); ++data_need)
+	{
+		if (!data_need->second.check_if_cullfront())
+		{
+			continue;
+		}
+		engine_basic::engine_fail_reason check_error;
+		auto shader_gbuffer = shader_control::GetInstance()->get_shader_gbuffer(check_error);
+
+		//检测当前种类模型的渲染数量是否大于零
+		if (data_need->second.get_matrix_list().size() <= 0)
+		{
+			continue;
+		}
+		XMFLOAT4X4 final_mat, viewproj_mat;
+		XMMATRIX proj = XMLoadFloat4x4(&proj_matrix);
+		//从模型访问器获得世界变换矩阵
+		XMFLOAT4X4 world_matrix_rec = data_need->second.get_matrix_list()[0];
+		XMMATRIX rec_world = XMLoadFloat4x4(&world_matrix_rec) * XMLoadFloat4x4(&view_matrix) * proj;
+		XMStoreFloat4x4(&final_mat, rec_world);
+		//设置单个instance的变换矩阵
+		shader_gbuffer->set_trans_world(&world_matrix_rec, &view_matrix);
+		shader_gbuffer->set_trans_all(&final_mat);
+		shader_gbuffer->set_trans_proj(&proj_matrix);
+		//设置所有instance的世界变换矩阵
+
+		XMFLOAT4X4 *data_worldmat_array = new XMFLOAT4X4[data_need->second.get_matrix_list().size()];
+		int count_num = 0;
+		auto matrix_list = data_need->second.get_matrix_list();
+		for (auto mat_need = matrix_list.begin(); mat_need != matrix_list.end(); ++mat_need)
+		{
+			data_worldmat_array[count_num++] = *mat_need._Ptr;
+		}
+		shader_gbuffer->set_world_matrix_array(data_worldmat_array, view_matrix, data_need->second.get_matrix_list().size());
+		delete[] data_worldmat_array;
+
+		//设置纹理数据
+		shader_gbuffer->set_texturepack_array(data_need->second.get_texture());
+		shader_gbuffer->get_technique(&teque_need, "NormalDepth_CullFornt");
+		data_need->second.get_technique(teque_need);
+		data_need->second.draw(if_static);
+		d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->RSSetState(NULL);
+		break;
 	}
 	//还原渲染状态
 	ID3D11RenderTargetView* NULL_target[1] = { NULL };
@@ -471,11 +579,60 @@ void geometry_ResourceView_list<T>::render_shadowmap(XMFLOAT4X4 shadow_matrix, b
 		ID3DX11EffectTechnique *teque_need;
 		if (data_need->second.get_matrix_list().size() == 1)
 		{
-			shader_shadow_map->get_technique(&teque_need, "ShadowTech");
+			if (data_need->second.check_if_skin())
+			{
+				XMFLOAT4X4 *mat_list = NULL;
+				int bone_num_now = 0;
+				data_need->second.get_bonematrix_singledata(&mat_list, bone_num_now);
+				shader_shadow_map->set_bone_matrix(mat_list, bone_num_now);
+				shader_shadow_map->set_bone_num(bone_num_now);
+				D3D11_INPUT_ELEMENT_DESC rec_inputdesc[] =
+				{
+					//语义名    语义索引      数据格式          输入槽 起始地址     输入槽的格式 
+					{ "POSITION",0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,0  ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+					{ "NORMAL"  ,0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,12 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+					{ "TANGENT" ,0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,24 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+					{ "TEXINDICES" ,0  ,DXGI_FORMAT_R32G32B32A32_UINT  ,0    ,36 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+					{ "TEXDIFFNORM",0  ,DXGI_FORMAT_R32G32B32A32_FLOAT      ,0    ,52 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+					{ "TEXOTHER",0  ,DXGI_FORMAT_R32G32B32A32_FLOAT      ,0    ,68 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+					{ "BONEINDICES" ,0  ,DXGI_FORMAT_R32G32B32A32_UINT  ,0    ,84 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+					{ "WEIGHTS"     ,0  ,DXGI_FORMAT_R32G32B32A32_FLOAT ,0    ,100 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+				};
+				UINT num_member = sizeof(rec_inputdesc) / sizeof(D3D11_INPUT_ELEMENT_DESC);
+				shader_shadow_map->get_technique(rec_inputdesc, num_member, &teque_need, "ShadowTechBone");
+			}
+			else 
+			{
+				shader_shadow_map->get_technique(&teque_need, "ShadowTech");
+			}
 		}
 		else
 		{
-			shader_shadow_map->get_technique(&teque_need, "ShadowTech_instance");
+			if (data_need->second.check_if_skin())
+			{
+				std::vector<XMFLOAT4X4> world_mat_list = data_need->second.get_matrix_list();
+				shader_shadow_map->set_world_matrix_array(&world_mat_list[0], world_mat_list.size());
+				shader_shadow_map->set_bonemat_buffer(data_need->second.get_bone_matrix_list());
+				shader_shadow_map->set_bone_num(data_need->second.get_bone_mat_num());
+				D3D11_INPUT_ELEMENT_DESC rec_inputdesc[] =
+				{
+					//语义名    语义索引      数据格式          输入槽 起始地址     输入槽的格式 
+					{ "POSITION",0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,0  ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+					{ "NORMAL"  ,0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,12 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+					{ "TANGENT" ,0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,24 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+					{ "TEXINDICES" ,0  ,DXGI_FORMAT_R32G32B32A32_UINT  ,0    ,36 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+					{ "TEXDIFFNORM",0  ,DXGI_FORMAT_R32G32B32A32_FLOAT      ,0    ,52 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+					{ "TEXOTHER",0  ,DXGI_FORMAT_R32G32B32A32_FLOAT      ,0    ,68 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+					{ "BONEINDICES" ,0  ,DXGI_FORMAT_R32G32B32A32_UINT  ,0    ,84 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+					{ "WEIGHTS"     ,0  ,DXGI_FORMAT_R32G32B32A32_FLOAT ,0    ,100 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+				};
+				UINT num_member = sizeof(rec_inputdesc) / sizeof(D3D11_INPUT_ELEMENT_DESC);
+				shader_shadow_map->get_technique(rec_inputdesc, num_member, &teque_need, "ShadowTechBone_instance");
+			}
+			else 
+			{
+				shader_shadow_map->get_technique(&teque_need, "ShadowTech_instance");
+			}
 		}
 		data_need->second.get_technique(teque_need);
 		data_need->second.draw(if_static);
@@ -504,37 +661,38 @@ struct pancy_model_ID
 class pancy_geometry_control
 {
 	geometry_ResourceView_list<geometry_resource_view> *model_view_list;
-private:
-	
+	bool if_have_terrain;
+	pancy_terrain_control *terrain_data;
 public:
-	/*
-	//单例
-	static pancy_geometry_control_singleton* get_instance()
-	{
-		static pancy_geometry_control_singleton* this_instance;
-		if (this_instance == NULL)
-		{
-			this_instance = new pancy_geometry_control_singleton();
-		}
-		return this_instance;
-	}
-	*/
+	//地形模型
 	pancy_geometry_control();
+	engine_basic::engine_fail_reason load_terrain(
+		pancy_physx_scene *physc_in,
+		string terrain_list_name,
+		float terrain_width_in,
+		int terrain_divide_in,
+		float Terrain_ColorTexScal_in,
+		float Terrain_HeightScal_in,
+		float rebuild_dis
+		);
+	pancy_terrain_control *get_terrain_data() { return terrain_data; };
+	void delete_terrain_data();
 	//加载和删除一个模型种类
 	engine_basic::engine_fail_reason load_a_model_type(string file_name_mesh, string file_name_mat, bool if_dynamic, int &model_type_ID);
-	engine_basic::engine_fail_reason load_a_skinmodel_type(string file_name_mesh, string file_name_mat, string file_name_bone, bool if_dynamic, int &model_type_ID,int max_instance_num);
+	engine_basic::engine_fail_reason load_a_skinmodel_type(string file_name_mesh, string file_name_mat, string file_name_bone, bool if_dynamic, int &model_type_ID, int max_instance_num);
 	engine_basic::engine_fail_reason load_a_skinmodel_animation(int model_type_ID, string file_name_animation, int& animition_ID);
 	engine_basic::engine_fail_reason delete_a_model_type(int model_type_ID);
 	//添加和删除一个模型实例
-	engine_basic::engine_fail_reason add_a_model_instance(int model_type_ID, XMFLOAT4X4 world_Matrix,pancy_model_ID &model_ID);
-	engine_basic::engine_fail_reason set_a_instance_animation(pancy_model_ID model_ID,int animation_ID);
+	engine_basic::engine_fail_reason add_a_model_instance(int model_type_ID, XMFLOAT4X4 world_Matrix, pancy_model_ID &model_ID);
+	engine_basic::engine_fail_reason set_a_instance_animation(pancy_model_ID model_ID, int animation_ID);
 	engine_basic::engine_fail_reason delete_a_model_instance(pancy_model_ID model_ID);
 	engine_basic::engine_fail_reason update_a_model_instance(pancy_model_ID model_ID, XMFLOAT4X4 world_Matrix, float delta_time);
 	engine_basic::engine_fail_reason sleep_a_model_instance(pancy_model_ID model_ID);
 	engine_basic::engine_fail_reason wakeup_a_model_instance(pancy_model_ID model_ID);
 	//绘制
-	engine_basic::engine_fail_reason get_a_model_type(geometry_resource_view **data_out,int model_type_ID);
-	void render_gbuffer(XMFLOAT4X4 view_matrix, XMFLOAT4X4 proj_matrix, bool if_static) { model_view_list->render_gbuffer(view_matrix, proj_matrix, if_static); };
+	engine_basic::engine_fail_reason get_a_model_type(geometry_resource_view **data_out, int model_type_ID);
+	void render_gbuffer(XMFLOAT4X4 view_matrix, XMFLOAT4X4 proj_matrix, bool if_static);
+	void render_gbuffer_post(XMFLOAT4X4 view_matrix, XMFLOAT4X4 proj_matrix, bool if_static);
 	void render_shadowmap(XMFLOAT4X4 shadow_matrix, bool if_static) { model_view_list->render_shadowmap(shadow_matrix, if_static); };
 	void release();
 };

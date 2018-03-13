@@ -52,11 +52,13 @@ engine_basic::engine_fail_reason pancy_terrain_part::create()
 	{
 		return check_error;
 	}
+	/*
 	check_error = load_terrain_color();
 	if (!check_error.check_if_failed())
 	{
 		return check_error;
 	}
+	*/
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
@@ -68,8 +70,8 @@ void pancy_terrain_part::release()
 	terrain_blend_tex->Release();
 	terrain_tangent_tex->Release();
 	terrain_normal_tex->Release();
-	terrain_color_albe_tex->Release();
-	terrain_color_norm_tex->Release();
+	//terrain_color_albe_tex->Release();
+	//terrain_color_norm_tex->Release();
 	terrain_height_data.clear();
 }
 engine_basic::engine_fail_reason pancy_terrain_part::load_terrain_height()
@@ -207,6 +209,7 @@ engine_basic::engine_fail_reason pancy_terrain_part::load_terrain_blend()
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
+/*
 engine_basic::engine_fail_reason pancy_terrain_part::load_terrain_color()
 {
 	engine_basic::engine_fail_reason check_error;
@@ -223,6 +226,7 @@ engine_basic::engine_fail_reason pancy_terrain_part::load_terrain_color()
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
+
 engine_basic::engine_fail_reason pancy_terrain_part::load_tex_array(string texdata_name[4], ID3D11ShaderResourceView **tex_array)
 {
 	std::vector<ID3D11Texture2D*> srcTex(4);
@@ -298,6 +302,7 @@ engine_basic::engine_fail_reason pancy_terrain_part::load_tex_array(string texda
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
+*/
 string pancy_terrain_part::find_path(string input)
 {
 	string check_out;
@@ -356,23 +361,28 @@ engine_basic::engine_fail_reason pancy_terrain_part::load_terrain_file()
 	load_file.getline(data, 100);
 	terrain_file.blend_texdata_name = path_terrain + move_string_space(data);
 	//颜色纹理信息
-	string tex_albedo_name[4];
-	string tex_normal_name[4];
+	//string tex_albedo_name[4];
+	//string tex_normal_name[4];
 	for (int i = 0; i < 4; ++i)
 	{
+		load_file.getline(data, 100);
+		terrain_color_tex[i] = move_string_space(data);
+		/*
 		load_file.getline(data, 100);
 		load_file.getline(data, 100);
 		terrain_file.color_albe_texdata_name[i] = path_terrain + data;
 		load_file.getline(data, 100);
 		terrain_file.color_norm_texdata_name[i] = path_terrain + data;
+		*/
 	}
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
-void pancy_terrain_part::render_terrain(XMFLOAT3 view_pos, XMFLOAT4X4 view_mat, XMFLOAT4X4 proj_mat)
+void pancy_terrain_part::render_terrain(XMFLOAT3 view_pos, XMFLOAT4X4 view_mat, XMFLOAT4X4 proj_mat, std::unordered_map<std::string, terrain_color_resource> material_list)
 {
 	engine_basic::engine_fail_reason check_error;
-	auto shader_terrain = shader_control::GetInstance()->get_shader_terrain_test(check_error);
+	auto shader_terrain = shader_control::GetInstance()->get_shader_lightdeffered(check_error);
+	//auto shader_terrain = shader_control::GetInstance()->get_shader_terrain_test(check_error);
 	XMFLOAT4X4 world_mat, final_mat;
 	XMStoreFloat4x4(&world_mat, XMMatrixTranslation(terrain_offset.x - (terrain_width / 2.0f), 0, terrain_offset.y - (terrain_width / 2.0f)));
 	XMStoreFloat4x4(&final_mat, XMMatrixTranslation(terrain_offset.x - (terrain_width / 2.0f), 0, terrain_offset.y - (terrain_width / 2.0f)) * XMLoadFloat4x4(&view_mat) * XMLoadFloat4x4(&proj_mat));
@@ -384,10 +394,71 @@ void pancy_terrain_part::render_terrain(XMFLOAT3 view_pos, XMFLOAT4X4 view_mat, 
 	shader_terrain->set_texture_normal(terrain_normal_tex);
 	shader_terrain->set_texture_tangnt(terrain_tangent_tex);
 	shader_terrain->set_texture_blend(terrain_blend_tex);
-	shader_terrain->set_texture_color(terrain_color_albe_tex, terrain_color_norm_tex);
+
+	terrain_color_resource tex_color_mat[4];
+	for (int i = 0; i < 4; ++i) 
+	{
+		auto data_mat = material_list.find(terrain_color_tex[i]);
+		tex_color_mat[i] = data_mat->second;
+	}
+	shader_terrain->set_texture_color(tex_color_mat);
 
 	ID3DX11EffectTechnique* tech_need;
-	shader_terrain->get_technique(&tech_need, "LightTerrain");
+	/**/
+	UINT num_member;
+	D3D11_INPUT_ELEMENT_DESC member_point[] =
+	{
+		//语义名    语义索引      数据格式          输入槽 起始地址     输入槽的格式 
+		{ "POSITION",0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,0  ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TEXHEIGHT",0  ,DXGI_FORMAT_R32G32_FLOAT      ,0    ,12 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TEXDIFFUSE",0  ,DXGI_FORMAT_R32G32_FLOAT      ,0    ,20 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 }
+	};
+	num_member = sizeof(member_point) / sizeof(D3D11_INPUT_ELEMENT_DESC);
+
+	shader_terrain->get_technique(member_point, num_member,&tech_need, "LightTech_Terrain");
+	terrain_renderbuffer->get_teque(tech_need);
+	terrain_renderbuffer->show_mesh();
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->HSSetShader(NULL, 0, 0);
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->DSSetShader(NULL, 0, 0);
+}
+void pancy_terrain_part::render_terrain_gbuffer(XMFLOAT3 view_pos, XMFLOAT4X4 view_mat, XMFLOAT4X4 proj_mat, std::unordered_map<std::string, terrain_color_resource> material_list)
+{
+	engine_basic::engine_fail_reason check_error;
+	auto shader_terrain = shader_control::GetInstance()->get_shader_gbuffer(check_error);
+	XMFLOAT4X4 world_mat, final_mat;
+	XMStoreFloat4x4(&world_mat, XMMatrixTranslation(terrain_offset.x - (terrain_width / 2.0f), 0, terrain_offset.y - (terrain_width / 2.0f)));
+	XMStoreFloat4x4(&final_mat, XMMatrixTranslation(terrain_offset.x - (terrain_width / 2.0f), 0, terrain_offset.y - (terrain_width / 2.0f)) * XMLoadFloat4x4(&view_mat) * XMLoadFloat4x4(&proj_mat));
+	//XMFLOAT4X4 identity;
+	//XMStoreFloat4x4(&identity,XMMatrixIdentity());
+	shader_terrain->set_trans_world(&world_mat,&view_mat);
+	shader_terrain->set_trans_all(&final_mat);
+	shader_terrain->set_terrain_size(terrain_width, TexHeight_width, Terrain_HeightScal);
+	shader_terrain->set_view_pos(view_pos);
+	shader_terrain->set_texture_height(terrain_height_tex);
+	shader_terrain->set_texture_normal(terrain_normal_tex);
+	shader_terrain->set_texture_tangnt(terrain_tangent_tex);
+	shader_terrain->set_texture_blend(terrain_blend_tex);
+
+	terrain_color_resource tex_color_mat[4];
+	for (int i = 0; i < 4; ++i)
+	{
+		auto data_mat = material_list.find(terrain_color_tex[i]);
+		tex_color_mat[i] = data_mat->second;
+	}
+	shader_terrain->set_texture_color(tex_color_mat);
+
+	ID3DX11EffectTechnique* tech_need;
+	//设置顶点声明
+	UINT num_member;
+	D3D11_INPUT_ELEMENT_DESC member_point[] =
+	{
+		//语义名    语义索引      数据格式          输入槽 起始地址     输入槽的格式 
+		{ "POSITION",0  ,DXGI_FORMAT_R32G32B32_FLOAT   ,0    ,0  ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TEXHEIGHT",0  ,DXGI_FORMAT_R32G32_FLOAT      ,0    ,12 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 },
+		{ "TEXDIFFUSE",0  ,DXGI_FORMAT_R32G32_FLOAT      ,0    ,20 ,D3D11_INPUT_PER_VERTEX_DATA  ,0 }
+	};
+	num_member = sizeof(member_point) / sizeof(D3D11_INPUT_ELEMENT_DESC);
+	shader_terrain->get_technique(member_point, num_member, &tech_need,"NormalDepth_Terrain");
 	terrain_renderbuffer->get_teque(tech_need);
 	terrain_renderbuffer->show_mesh();
 	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->HSSetShader(NULL, 0, 0);
@@ -512,9 +583,13 @@ void terrain_part_resource::release_resource(pancy_physx_scene *physic_scene)
 	//physic_scene->sleep_a_terrain(terrain_physx_ID);
 	if_wakeup_physics = false;
 }
-void terrain_part_resource::display(XMFLOAT3 view_pos, XMFLOAT4X4 view_mat, XMFLOAT4X4 proj_mat)
+void terrain_part_resource::display(XMFLOAT3 view_pos, XMFLOAT4X4 view_mat, XMFLOAT4X4 proj_mat, std::unordered_map<std::string, terrain_color_resource> material_list)
 {
-	now_terrain->render_terrain(view_pos, view_mat, proj_mat);
+	now_terrain->render_terrain(view_pos, view_mat, proj_mat, material_list);
+}
+void terrain_part_resource::display_gbuffer(XMFLOAT3 view_pos, XMFLOAT4X4 view_mat, XMFLOAT4X4 proj_mat, std::unordered_map<std::string, terrain_color_resource> material_list) 
+{
+	now_terrain->render_terrain_gbuffer(view_pos, view_mat, proj_mat, material_list);
 }
 //地形管理器
 pancy_terrain_control::pancy_terrain_control(
@@ -535,6 +610,84 @@ pancy_terrain_control::pancy_terrain_control(
 	Terrain_HeightScal = Terrain_HeightScal_in;
 	rebuild_distance_quality = rebuild_dis;
 	if_created = false;
+}
+engine_basic::engine_fail_reason pancy_terrain_control::load_terrain_material(string mat_file_name, terrain_mat_quality material_quality)
+{
+	string name_mat;
+	terrain_color_resource new_resource;
+	std::ifstream load_file;
+	load_file.open(mat_file_name);
+	if (!load_file.is_open())
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "load terrain maerial file " + mat_file_name + " error");
+		return error_message;
+	}
+	string path_terrain = find_path(mat_file_name);
+	if (material_quality == terrain_mat_quality::terrain_material_high) 
+	{
+		path_terrain += "2048\\";
+	}
+	else if (material_quality == terrain_mat_quality::terrain_material_mid)
+	{
+		path_terrain += "1024\\";
+	}
+	else
+	{
+		path_terrain += "512\\";
+	}
+	char data[100];
+	int length = 0;
+	load_file.getline(data, 100);
+	//地形纹理信息
+	load_file.getline(data, 100);
+	name_mat = move_string_space(data);
+	string texture_file_name;
+	wstring unicode_texture_file_name;
+	//漫反射贴图纹理
+	load_file.getline(data, 100);
+	texture_file_name = path_terrain + move_string_space(data) + ".dds";
+	unicode_texture_file_name = engine_basic::engine_string::string2wstring(texture_file_name);
+	HRESULT hr = CreateDDSTextureFromFile(d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device(), unicode_texture_file_name.c_str(), NULL, &new_resource.terrain_color_albedo_tex);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "load terrain texture" + texture_file_name + "error");
+		return error_message;
+	}
+	//法线贴图纹理
+	load_file.getline(data, 100);
+	texture_file_name = path_terrain + move_string_space(data) + ".dds";
+	unicode_texture_file_name = engine_basic::engine_string::string2wstring(texture_file_name);
+	hr = CreateDDSTextureFromFile(d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device(), unicode_texture_file_name.c_str(), NULL, &new_resource.terrain_color_normal_tex);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "load terrain texture" + texture_file_name + "error");
+		return error_message;
+	}
+	//金属度贴图纹理
+	load_file.getline(data, 100);
+	texture_file_name = path_terrain + move_string_space(data) + ".dds";
+	unicode_texture_file_name = engine_basic::engine_string::string2wstring(texture_file_name);
+	hr = CreateDDSTextureFromFile(d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device(), unicode_texture_file_name.c_str(), NULL, &new_resource.terrain_color_metallic_tex);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "load terrain texture" + texture_file_name + "error");
+		return error_message;
+	}
+	//粗糙度贴图纹理
+	load_file.getline(data, 100);
+	texture_file_name = path_terrain + move_string_space(data) + ".dds";
+	unicode_texture_file_name = engine_basic::engine_string::string2wstring(texture_file_name);
+	hr = CreateDDSTextureFromFile(d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device(), unicode_texture_file_name.c_str(), NULL, &new_resource.terrain_color_roughness_tex);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "load terrain texture" + texture_file_name + "error");
+		return error_message;
+	}
+	//插入到材质map中
+	std::pair<std::string, terrain_color_resource> texture_insert(name_mat, new_resource);
+	terrain_material_map.insert(texture_insert);
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
 }
 string pancy_terrain_control::move_string_space(string input)
 {
@@ -1230,7 +1383,7 @@ void pancy_terrain_control::update(XMFLOAT3 view_pos,XMFLOAT4X4 view_matrix_in,X
 	}
 
 }
-void pancy_terrain_control::release() 
+void pancy_terrain_control::release()
 {
 	auto data_center = &terrain_data_list.find(now_center_terrain)->second;
 	int data_all[9];
@@ -1246,6 +1399,14 @@ void pancy_terrain_control::release()
 			}
 		}
 	}
+	for (auto data_tex = terrain_material_map.begin(); data_tex != terrain_material_map.end(); data_tex++)
+	{
+		data_tex->second.terrain_color_albedo_tex->Release();
+		data_tex->second.terrain_color_normal_tex->Release();
+		data_tex->second.terrain_color_metallic_tex->Release();
+		data_tex->second.terrain_color_roughness_tex->Release();
+	}
+	terrain_material_map.clear();
 }
 void pancy_terrain_control::display() 
 {
@@ -1263,10 +1424,34 @@ void pancy_terrain_control::display()
 				XMFLOAT2 distance;
 				distance.x = abs(offset_pos.x - now_view_pos.x);
 				distance.y = abs(offset_pos.y - now_view_pos.z);
-				if (distance.x < (terrain_width / 2.0f + terrain_width / 3.0f) && distance.y < (terrain_width / 2.0f + terrain_width / 3.0f)) 
-				{
-					data_render->second.display(now_view_pos,view_matrix,proj_matrix);
-				}
+				//if (distance.x < (terrain_width / 2.0f + terrain_width / 3.0f) && distance.y < (terrain_width / 2.0f + terrain_width / 3.0f)) 
+				//{
+					data_render->second.display(now_view_pos,view_matrix,proj_matrix, terrain_material_map);
+				//}
+			}
+		}
+	}
+}
+void pancy_terrain_control::display_gbuffer()
+{
+	auto data_center = &terrain_data_list.find(now_center_terrain)->second;
+	int data_all[9];
+	data_center->get_all_neighbour(data_all);
+	for (int i = 0; i < 9; ++i)
+	{
+		if (data_all[i] != -1)
+		{
+			auto data_render = terrain_data_list.find(data_all[i]);
+			if (data_render != terrain_data_list.end() && data_render->second.check_if_loaded())
+			{
+				XMFLOAT2 offset_pos = data_render->second.get_offset();
+				XMFLOAT2 distance;
+				distance.x = abs(offset_pos.x - now_view_pos.x);
+				distance.y = abs(offset_pos.y - now_view_pos.z);
+				//if (distance.x < (terrain_width / 2.0f + terrain_width / 3.0f) && distance.y < (terrain_width / 2.0f + terrain_width / 3.0f))
+				//{
+					data_render->second.display_gbuffer(now_view_pos, view_matrix, proj_matrix, terrain_material_map);
+				//}
 			}
 		}
 	}

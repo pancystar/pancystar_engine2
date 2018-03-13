@@ -119,4 +119,9 @@ namespace engine_basic
 		static DirectX::XMFLOAT3 vec3_linear_inter(DirectX::XMFLOAT3 vec1_in, DirectX::XMFLOAT3 vec2_in, float distance);
 		static DirectX::XMFLOAT3 vec3_nilinear_inter(DirectX::XMFLOAT3 vec1_in, DirectX::XMFLOAT3 vec2_in, DirectX::XMFLOAT3 vec3_in, DirectX::XMFLOAT3 vec4_in, float distance_1, float distance_2);
 	};
+	class engine_string 
+	{
+	public:
+		static std::wstring string2wstring(std::string name_char);
+	};
 }

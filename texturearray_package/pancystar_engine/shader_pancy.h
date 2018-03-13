@@ -58,6 +58,22 @@ struct pancy_material//材质结构
 	XMFLOAT4 specular;
 	XMFLOAT4 reflect;
 };
+struct terrain_color_resource
+{
+	ID3D11ShaderResourceView *terrain_color_albedo_tex;
+	ID3D11ShaderResourceView *terrain_color_normal_tex;
+	ID3D11ShaderResourceView *terrain_color_metallic_tex;
+	ID3D11ShaderResourceView *terrain_color_roughness_tex;
+};
+struct terrain_color_handle
+{
+	ID3DX11EffectShaderResourceVariable *terrain_color_albedo_handle;
+	ID3DX11EffectShaderResourceVariable *terrain_color_normal_handle;
+	ID3DX11EffectShaderResourceVariable *terrain_color_metallic_handle;
+	ID3DX11EffectShaderResourceVariable *terrain_color_roughness_handle;
+};
+
+
 
 class shader_basic
 {
@@ -89,6 +105,31 @@ protected:
 		}
 	}
 };
+
+class terrain_shader_basic : public shader_basic
+{
+	ID3DX11EffectVariable                    *terrain_size;
+	ID3DX11EffectVariable                    *view_pos_handle;
+
+	ID3DX11EffectShaderResourceVariable      *tex_height_handle;
+	ID3DX11EffectShaderResourceVariable      *tex_normalt_handle;
+	ID3DX11EffectShaderResourceVariable      *tex_tangnt_handle;
+	ID3DX11EffectShaderResourceVariable      *tex_blend_handle;
+	terrain_color_handle tex_MaterialArray_handle[4];
+public:
+	terrain_shader_basic(LPCWSTR filename);
+	engine_basic::engine_fail_reason set_view_pos(XMFLOAT3 eye_pos);
+	engine_basic::engine_fail_reason set_texture_height(ID3D11ShaderResourceView *tex_input);
+	engine_basic::engine_fail_reason set_texture_normal(ID3D11ShaderResourceView *tex_input);
+	engine_basic::engine_fail_reason set_texture_blend(ID3D11ShaderResourceView *tex_input);
+	engine_basic::engine_fail_reason set_texture_tangnt(ID3D11ShaderResourceView *tex_input);
+	engine_basic::engine_fail_reason set_terrain_size(float world_size, float texture_size, float height_scal);
+	engine_basic::engine_fail_reason set_texture_color(terrain_color_resource tex_color_in[4]);
+protected:
+	void init_handle_terrain();
+};
+
+
 class color_shader : public shader_basic 
 {
 	ID3DX11EffectMatrixVariable           *project_matrix_handle;      //全套几何变换句柄
@@ -100,7 +141,6 @@ private:
 	void init_handle();                 //注册全局变量句柄
 	void set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member);
 };
-
 class picture_show_shader : public shader_basic
 {
 	ID3DX11EffectVariable                    *UI_scal_handle;
@@ -147,7 +187,7 @@ private:
 	void init_handle();                 //注册全局变量句柄
 	void set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member);
 };
-class shader_pretreat_gbuffer : public shader_basic
+class shader_pretreat_gbuffer : public terrain_shader_basic
 {
 	ID3DX11EffectMatrixVariable           *project_matrix_handle;      //全套几何变换句柄
 	ID3DX11EffectMatrixVariable           *world_matrix_handle;        //世界变换句柄
@@ -155,8 +195,12 @@ class shader_pretreat_gbuffer : public shader_basic
 	ID3DX11EffectMatrixVariable           *world_matrix_array_handle;  //世界变换组矩阵
 	ID3DX11EffectMatrixVariable           *normal_matrix_array_handle;  //法线变换组矩阵
 	ID3DX11EffectMatrixVariable           *proj_matrix_handle;         //取景*投影变换矩阵
-
+	ID3DX11EffectMatrixVariable           *view_matrix_handle;         //取景变换矩阵
 	ID3DX11EffectShaderResourceVariable   *texture_packarray_handle;     //贴图数组
+
+	ID3DX11EffectMatrixVariable           *BoneTransforms;             //骨骼变换矩阵
+	ID3DX11EffectShaderResourceVariable   *bone_matrix_buffer;         //骨骼矩阵缓冲区资源句柄
+	ID3DX11EffectVariable                 *bone_num_handle;            //骨骼数量
 public:
 	shader_pretreat_gbuffer(LPCWSTR filename);
 	engine_basic::engine_fail_reason set_trans_world(XMFLOAT4X4 *mat_world, XMFLOAT4X4 *mat_view);
@@ -164,6 +208,10 @@ public:
 	engine_basic::engine_fail_reason set_trans_proj(XMFLOAT4X4 *mat_need);               //设置取景*投影变换
 	engine_basic::engine_fail_reason set_texturepack_array(ID3D11ShaderResourceView *tex_in);
 	engine_basic::engine_fail_reason set_world_matrix_array(const XMFLOAT4X4* M, XMFLOAT4X4 mat_view, int cnt);	 //设置世界变换组矩阵
+	
+	engine_basic::engine_fail_reason set_bone_matrix(const XMFLOAT4X4* M, int cnt);		                     //设置骨骼变换矩阵
+	engine_basic::engine_fail_reason set_bonemat_buffer(ID3D11ShaderResourceView *buffer_in);		//设置骨骼矩阵缓冲区
+	engine_basic::engine_fail_reason set_bone_num(UINT bone_num);                                   //设置骨骼数量
 	void release();
 private:
 	void init_handle();//注册shader中所有全局变量的句柄
@@ -230,12 +278,20 @@ class light_shadow : public shader_basic
 	ID3DX11EffectShaderResourceVariable   *texture_need;
 	ID3DX11EffectMatrixVariable           *world_matrix_array_handle;//世界变换组矩阵
 	ID3DX11EffectMatrixVariable           *viewproj_matrix_handle;   //取景*投影变换矩阵
+
+	ID3DX11EffectMatrixVariable           *BoneTransforms;             //骨骼变换矩阵
+	ID3DX11EffectShaderResourceVariable   *bone_matrix_buffer;         //骨骼矩阵缓冲区资源句柄
+	ID3DX11EffectVariable                 *bone_num_handle;            //骨骼数量
 public:
 	light_shadow(LPCWSTR filename);
 	engine_basic::engine_fail_reason set_trans_all(XMFLOAT4X4 *mat_need);        //设置总变换
 	engine_basic::engine_fail_reason set_texturepack_array(ID3D11ShaderResourceView *tex_in);
 	engine_basic::engine_fail_reason set_world_matrix_array(const XMFLOAT4X4* M, int cnt);	 //设置世界变换组矩阵
 	engine_basic::engine_fail_reason set_trans_viewproj(XMFLOAT4X4 *mat_need);               //设置取景*投影变换
+
+	engine_basic::engine_fail_reason set_bone_matrix(const XMFLOAT4X4* M, int cnt);		     //设置骨骼变换矩阵
+	engine_basic::engine_fail_reason set_bonemat_buffer(ID3D11ShaderResourceView *buffer_in);//设置骨骼矩阵缓冲区
+	engine_basic::engine_fail_reason set_bone_num(UINT bone_num);                            //设置骨骼数量
 	void release();
 private:
 	void init_handle();                 //注册全局变量句柄
@@ -322,10 +378,10 @@ private:
 	void init_handle();                 //注册全局变量句柄
 	void set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member);
 };
-class light_defered_draw : public shader_basic
+class light_defered_draw : public terrain_shader_basic
 {
 	ID3DX11EffectVariable                 *material_need;            //材质
-	ID3DX11EffectVariable                 *view_pos_handle;          //视点位置
+	//ID3DX11EffectVariable                 *view_pos_handle;          //视点位置
 	ID3DX11EffectMatrixVariable           *world_matrix_handle;      //世界变换句柄
 	ID3DX11EffectMatrixVariable           *view_matrix_handle;       //取景变换句柄
 	ID3DX11EffectMatrixVariable           *invview_matrix_handle;    //取景变换逆变换句柄
@@ -335,6 +391,8 @@ class light_defered_draw : public shader_basic
 	ID3DX11EffectMatrixVariable           *world_matrix_array_handle;//世界变换组矩阵
 	ID3DX11EffectMatrixVariable           *viewproj_matrix_handle;   //取景*投影变换矩阵
 
+	ID3DX11EffectShaderResourceVariable   *atomosphere_fog;            //大气雾效表
+	ID3DX11EffectShaderResourceVariable   *atomosphere_occlusion;      //大气贴图遮蔽
 	ID3DX11EffectShaderResourceVariable   *tex_light_diffuse_handle; //漫反射光纹理资源句柄
 	ID3DX11EffectShaderResourceVariable   *tex_light_specular_handle;//镜面光纹理资源句柄
 	ID3DX11EffectShaderResourceVariable   *texture_ssao_handle;      //环境光纹理资源句柄
@@ -344,11 +402,12 @@ class light_defered_draw : public shader_basic
 	ID3DX11EffectShaderResourceVariable   *tex_specroughness;        //镜面光&粗糙度
 	ID3DX11EffectShaderResourceVariable   *tex_brdf_list;            //brdf表
 
+
 	ID3DX11EffectShaderResourceVariable   *bone_matrix_buffer;        //骨骼矩阵缓冲区资源句柄
 	ID3DX11EffectVariable                 *bone_num_handle;                 //骨骼数量
 public:
 	light_defered_draw(LPCWSTR filename);
-	engine_basic::engine_fail_reason set_view_pos(XMFLOAT3 eye_pos);
+	//engine_basic::engine_fail_reason set_view_pos(XMFLOAT3 eye_pos);
 	engine_basic::engine_fail_reason set_trans_ssao(XMFLOAT4X4 *mat_need);                                   //设置环境光变换
 	engine_basic::engine_fail_reason set_trans_world(XMFLOAT4X4 *mat_need);                                  //设置世界变换
 	engine_basic::engine_fail_reason set_trans_view(XMFLOAT4X4 *mat_need);                                   //设置取景变换
@@ -367,6 +426,8 @@ public:
 	engine_basic::engine_fail_reason set_tex_specroughness_resource(ID3D11ShaderResourceView *buffer_input); //设置镜面光&粗糙度纹理
 	engine_basic::engine_fail_reason set_tex_brdflist_resource(ID3D11ShaderResourceView *buffer_input);      //设置brdf查找表
 	engine_basic::engine_fail_reason set_world_matrix_array(const XMFLOAT4X4* M, int cnt);	                 //设置世界变换组矩阵
+	engine_basic::engine_fail_reason set_tex_atmosphere_occlusion(ID3D11ShaderResourceView* tex_in);         //设置大气遮蔽纹理资源
+	engine_basic::engine_fail_reason set_tex_atmosphere_fog(ID3D11ShaderResourceView* tex_in);               //设置大气雾效纹理资源
 
 	engine_basic::engine_fail_reason set_bonemat_buffer(ID3D11ShaderResourceView *buffer_in);		//设置骨骼矩阵缓冲区
 	engine_basic::engine_fail_reason set_bone_num(UINT bone_num);                                   //设置骨骼数量
@@ -490,6 +551,7 @@ class shader_skycube : public shader_basic
 	ID3DX11EffectVariable                 *view_pos_handle;            //视点位置
 	ID3DX11EffectShaderResourceVariable   *cubemap_texture;            //立方贴图资源
 	ID3DX11EffectShaderResourceVariable   *atomosphere_texture;        //大气贴图资源
+	ID3DX11EffectShaderResourceVariable   *atomosphere_occlusion;      //大气贴图遮蔽
 public:
 	shader_skycube(LPCWSTR filename);
 	engine_basic::engine_fail_reason set_view_pos(XMFLOAT3 eye_pos);                                 //设置视点位置
@@ -498,6 +560,7 @@ public:
 	engine_basic::engine_fail_reason set_trans_texproj(XMFLOAT4X4 *mat_need);                        //设置投影纹理变换
 	engine_basic::engine_fail_reason set_tex_resource(ID3D11ShaderResourceView* tex_cube);           //设置立方纹理资源
 	engine_basic::engine_fail_reason set_tex_atmosphere(ID3D11ShaderResourceView* tex_in);           //设置大气纹理资源
+	engine_basic::engine_fail_reason set_tex_atmosphere_occlusion(ID3D11ShaderResourceView* tex_in); //设置大气遮蔽纹理资源
 	void release();
 private:
 	void init_handle();//注册shader中所有全局变量的句柄
@@ -799,40 +862,21 @@ private:
 	void init_handle();//注册shader中所有全局变量的句柄
 	void set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member);
 };
-class shader_terrain_render : public shader_basic
+class shader_terrain_render : public terrain_shader_basic
 {
-	ID3DX11EffectVariable                    *terrain_size;
-	ID3DX11EffectVariable                    *view_pos_handle;
-
 	ID3DX11EffectMatrixVariable              *world_matrix_handle;      //世界变换句柄
 	ID3DX11EffectMatrixVariable              *normal_matrix_handle;       //取景变换句柄
 	ID3DX11EffectMatrixVariable              *final_matrix_handle;      //全套几何变换句柄
-
-	ID3DX11EffectShaderResourceVariable      *tex_height_handle;
-	ID3DX11EffectShaderResourceVariable      *tex_normalt_handle;
-	ID3DX11EffectShaderResourceVariable      *tex_tangnt_handle;
-	ID3DX11EffectShaderResourceVariable      *tex_blend_handle;
-
-	ID3DX11EffectShaderResourceVariable      *tex_ColorArray_handle;
-	ID3DX11EffectShaderResourceVariable      *tex_NormalArray_handle;
 public:
 	shader_terrain_render(LPCWSTR filename);
-	engine_basic::engine_fail_reason set_view_pos(XMFLOAT3 eye_pos);
 	engine_basic::engine_fail_reason set_trans_world(XMFLOAT4X4 *mat_world);
 	engine_basic::engine_fail_reason set_trans_all(XMFLOAT4X4 *mat_world);
-
-	engine_basic::engine_fail_reason set_texture_height(ID3D11ShaderResourceView *tex_input);
-	engine_basic::engine_fail_reason set_texture_normal(ID3D11ShaderResourceView *tex_input);
-	engine_basic::engine_fail_reason set_texture_blend(ID3D11ShaderResourceView *tex_input);
-	engine_basic::engine_fail_reason set_texture_tangnt(ID3D11ShaderResourceView *tex_input);
-
-	engine_basic::engine_fail_reason set_terrain_size(float world_size,float texture_size, float height_scal);
-	engine_basic::engine_fail_reason set_texture_color(ID3D11ShaderResourceView *tex_color_in, ID3D11ShaderResourceView *tex_normal_in);
 	void release();
 private:
 	void init_handle();//注册shader中所有全局变量的句柄
 	void set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member);
 };
+
 class shader_particle : public shader_basic
 {
 	ID3DX11EffectVariable         *view_pos_handle;                //视点位置
@@ -920,4 +964,5 @@ public:
 	void release();
 private:
 	engine_basic::engine_fail_reason init_basic();
+	std::wstring get_path_name(std::string name_char);
 };

@@ -243,5 +243,17 @@
     <None Include="HDR_define.hlsli">
       <Filter>源文件</Filter>
     </None>
+    <None Include="skinmesh.hlsli">
+      <Filter>源文件</Filter>
+    </None>
+    <None Include="terrain_tess_basic.hlsli">
+      <Filter>源文件</Filter>
+    </None>
+    <None Include="sample.hlsli">
+      <Filter>源文件</Filter>
+    </None>
+    <None Include="atmosphere_fog_func.hlsli">
+      <Filter>源文件</Filter>
+    </None>
   </ItemGroup>
 </Project>

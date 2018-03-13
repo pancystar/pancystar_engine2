@@ -742,6 +742,7 @@ void geometry_resource_view::get_bonematrix_singledata(XMFLOAT4X4 **mat_in, int 
 }
 ID3D11ShaderResourceView * geometry_resource_view::get_bone_matrix_list()
 {
+	/*
 	if (!if_skin)
 	{
 		return NULL;
@@ -758,7 +759,6 @@ ID3D11ShaderResourceView * geometry_resource_view::get_bone_matrix_list()
 		for (int i = 0; i < bone_num; ++i)
 		{
 			XMStoreFloat4x4(&bone_matrix_CPU_buffer[now_point++],XMMatrixTranspose(XMLoadFloat4x4(&data[i])));
-			//bone_matrix_CPU_buffer[now_point++] = data[i];
 		}
 	}
 	ID3D11Resource *data;
@@ -770,22 +770,6 @@ ID3D11ShaderResourceView * geometry_resource_view::get_bone_matrix_list()
 	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->Unmap(data, 0);
 	data->Release();
 	delete[] bone_matrix_CPU_buffer;
-	/*
-	bone_matrix_array.clear();
-	for (auto data_now = instance_list.begin(); data_now != instance_list.end(); ++data_now)
-	{
-		if (data_now->second.check_if_show())
-		{
-			XMFLOAT4X4 *data;
-			int bone_num;
-			engine_basic::engine_fail_reason check_error = data_now->second.get_bone_matrix(&data, bone_num);
-			for (int i = 0; i < bone_num; ++i)
-			{
-				bone_matrix_array.push_back(data[i]);
-			}
-		}
-	}
-	return bone_matrix_array;
 	*/
 	return bone_matrix_buffer_SRV;
 }
@@ -911,6 +895,49 @@ engine_basic::engine_fail_reason geometry_resource_view::set_a_instance_anim(int
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
+void geometry_resource_view::update_skinmatbuffer() 
+{
+	if (!if_skin)
+	{
+		return;
+	}
+	//子类为骨骼动画类，可以直接转换
+	auto animation_point = dynamic_cast<model_reader_PancySkinMesh*>(model_data);
+	XMFLOAT4X4 *bone_matrix_CPU_buffer;
+	int now_point = 0;
+	bone_matrix_CPU_buffer = new XMFLOAT4X4[instance_list.size() * animation_point->get_bone_num()];
+	//收集所有instance的骨骼变换信息
+	int count_show_num = 0;
+	for (auto data_now = instance_list.begin(); data_now != instance_list.end(); ++data_now)
+	{
+		if (data_now->second.check_if_show())
+		{
+			XMFLOAT4X4 *data;
+			int bone_num;
+			engine_basic::engine_fail_reason check_error = data_now->second.get_bone_matrix(&data, bone_num);
+			for (int i = 0; i < bone_num; ++i)
+			{
+				XMStoreFloat4x4(&bone_matrix_CPU_buffer[now_point++], XMMatrixTranspose(XMLoadFloat4x4(&data[i])));
+			}
+			count_show_num += 1;
+		}
+	}
+	if (count_show_num == 0) 
+	{
+		return;
+	}
+	//将信息拷贝至GPU
+	ID3D11Resource *data;
+	bone_matrix_buffer_SRV->GetResource(&data);
+	D3D11_MAPPED_SUBRESOURCE mappedResource;
+	ZeroMemory(&mappedResource, sizeof(D3D11_MAPPED_SUBRESOURCE));
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->Map(data, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+	memcpy(mappedResource.pData, bone_matrix_CPU_buffer, count_show_num * animation_point->get_bone_num()*sizeof(XMFLOAT4X4));
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->Unmap(data, 0);
+	//释放资源
+	data->Release();
+	delete[] bone_matrix_CPU_buffer;
+}
 engine_basic::engine_fail_reason geometry_resource_view::update(int instance_ID, XMFLOAT4X4 mat_world, float delta_time)
 {
 	auto data_now = instance_list.find(instance_ID);
@@ -924,6 +951,7 @@ engine_basic::engine_fail_reason geometry_resource_view::update(int instance_ID,
 		engine_basic::engine_fail_reason error_message(string("could not find instance of the model") + "instanceID:" + string_temp + "modelID:" + string_temp2);
 	}
 	data_now->second.update(mat_world, delta_time);
+	update_skinmatbuffer();
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
@@ -961,7 +989,59 @@ void geometry_resource_view::release()
 
 pancy_geometry_control::pancy_geometry_control()
 {
+	if_have_terrain = false;
+	terrain_data = NULL;
 	model_view_list = new geometry_ResourceView_list<geometry_resource_view>();
+}
+engine_basic::engine_fail_reason pancy_geometry_control::load_terrain(
+	pancy_physx_scene *physc_in,
+	string terrain_list_name,
+	float terrain_width_in,
+	int terrain_divide_in,
+	float Terrain_ColorTexScal_in,
+	float Terrain_HeightScal_in,
+	float rebuild_dis
+	)
+{
+	if (if_have_terrain) 
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "the terrain have been loaded, do not reload resource");
+		return error_message;
+	}
+	if_have_terrain = true;
+	engine_basic::engine_fail_reason check_error;
+	//加载地形
+	terrain_data = new pancy_terrain_control(physc_in, terrain_list_name, terrain_width_in, terrain_divide_in, Terrain_ColorTexScal_in, Terrain_HeightScal_in, rebuild_dis);
+	check_error = terrain_data->create();
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+//预处理渲染
+void pancy_geometry_control::render_gbuffer(XMFLOAT4X4 view_matrix, XMFLOAT4X4 proj_matrix, bool if_static)
+{ 
+	if (if_have_terrain) 
+	{
+		terrain_data->display_gbuffer();
+	}
+	model_view_list->render_gbuffer(view_matrix, proj_matrix, if_static);
+} 
+void pancy_geometry_control::render_gbuffer_post(XMFLOAT4X4 view_matrix, XMFLOAT4X4 proj_matrix, bool if_static) 
+{
+	model_view_list->render_gbuffer_post(view_matrix, proj_matrix, if_static);
+}
+//加载动画模型
+void pancy_geometry_control::delete_terrain_data()
+{
+	if (if_have_terrain) 
+	{
+		terrain_data->release();
+		terrain_data = NULL;
+		if_have_terrain = false;
+	}
 }
 engine_basic::engine_fail_reason pancy_geometry_control::load_a_model_type(string file_name_mesh, string file_name_mat, bool if_dynamic, int &model_type_ID)
 {
@@ -1149,4 +1229,8 @@ engine_basic::engine_fail_reason pancy_geometry_control::wakeup_a_model_instance
 void pancy_geometry_control::release()
 {
 	model_view_list->release();
+	if (if_have_terrain)
+	{
+		terrain_data->release();
+	}
 }

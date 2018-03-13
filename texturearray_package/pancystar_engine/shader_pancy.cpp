@@ -124,6 +124,109 @@ engine_basic::engine_fail_reason shader_basic::set_matrix(ID3DX11EffectMatrixVar
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~地形处理~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+terrain_shader_basic::terrain_shader_basic(LPCWSTR filename) : shader_basic(filename)
+{
+}
+engine_basic::engine_fail_reason terrain_shader_basic::set_texture_height(ID3D11ShaderResourceView *tex_input)
+{
+	HRESULT hr = tex_height_handle->SetResource(tex_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "an error when setting terrain height map");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason terrain_shader_basic::set_texture_normal(ID3D11ShaderResourceView *tex_input)
+{
+	HRESULT hr = tex_normalt_handle->SetResource(tex_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "an error when setting terrain normal map");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason terrain_shader_basic::set_texture_blend(ID3D11ShaderResourceView *tex_input)
+{
+	HRESULT hr = tex_blend_handle->SetResource(tex_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "an error when setting terrain tangent map");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason terrain_shader_basic::set_texture_tangnt(ID3D11ShaderResourceView *tex_input)
+{
+	HRESULT hr = tex_tangnt_handle->SetResource(tex_input);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "an error when setting terrain blend map");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason terrain_shader_basic::set_terrain_size(float world_size, float texture_size, float height_scal)
+{
+	XMFLOAT4 terrain_size_data(world_size, texture_size, height_scal, 0.0f);
+	HRESULT hr = terrain_size->SetRawValue((void*)&terrain_size_data, 0, sizeof(terrain_size_data));
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set terrain size error in terrain shader");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason terrain_shader_basic::set_view_pos(XMFLOAT3 eye_pos)
+{
+	HRESULT hr = view_pos_handle->SetRawValue((void*)&eye_pos, 0, sizeof(eye_pos));
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason error_message(hr, "terrain draw error when setting view position");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason terrain_shader_basic::set_texture_color(terrain_color_resource tex_color_in[4])
+{
+	for (int i = 0; i < 4; ++i)
+	{
+		tex_MaterialArray_handle[i].terrain_color_albedo_handle->SetResource(tex_color_in[i].terrain_color_albedo_tex);
+		tex_MaterialArray_handle[i].terrain_color_normal_handle->SetResource(tex_color_in[i].terrain_color_normal_tex);
+		tex_MaterialArray_handle[i].terrain_color_metallic_handle->SetResource(tex_color_in[i].terrain_color_metallic_tex);
+		tex_MaterialArray_handle[i].terrain_color_roughness_handle->SetResource(tex_color_in[i].terrain_color_roughness_tex);
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+void terrain_shader_basic::init_handle_terrain()
+{
+	terrain_size = fx_need->GetVariableByName("terrain_size");
+	view_pos_handle = fx_need->GetVariableByName("eye_pos");
+	tex_height_handle = fx_need->GetVariableByName("terrain_height")->AsShaderResource();
+	tex_normalt_handle = fx_need->GetVariableByName("terrain_normal")->AsShaderResource();
+	tex_tangnt_handle = fx_need->GetVariableByName("terrain_tangent")->AsShaderResource();
+	tex_blend_handle = fx_need->GetVariableByName("terrain_blend")->AsShaderResource();
+	for (int i = 0; i < 4; ++i)
+	{
+		std::string now_tex_turn = "_";
+		now_tex_turn += '0' + i;
+		tex_MaterialArray_handle[i].terrain_color_albedo_handle = fx_need->GetVariableByName(("ColorTexture_pack_albedo" + now_tex_turn).c_str())->AsShaderResource();
+		tex_MaterialArray_handle[i].terrain_color_normal_handle = fx_need->GetVariableByName(("ColorTexture_pack_normal" + now_tex_turn).c_str())->AsShaderResource();
+		tex_MaterialArray_handle[i].terrain_color_metallic_handle = fx_need->GetVariableByName(("ColorTexture_pack_metallic" + now_tex_turn).c_str())->AsShaderResource();
+		tex_MaterialArray_handle[i].terrain_color_roughness_handle = fx_need->GetVariableByName(("ColorTexture_pack_roughness" + now_tex_turn).c_str())->AsShaderResource();
+	}
+	//tex_ColorArray_handle = fx_need->GetVariableByName("ColorTexture_pack_albedo")->AsShaderResource();
+	//tex_NormalArray_handle = fx_need->GetVariableByName("ColorTexture_pack_normal")->AsShaderResource();
+}
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~颜色测试~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 color_shader::color_shader(LPCWSTR filename) : shader_basic(filename)
 {
@@ -378,11 +481,12 @@ engine_basic::engine_fail_reason picture_show_shader::set_UI_position(XMFLOAT4 r
 	return succeed;
 }
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~gbuffer记录~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-shader_pretreat_gbuffer::shader_pretreat_gbuffer(LPCWSTR filename) :shader_basic(filename)
+shader_pretreat_gbuffer::shader_pretreat_gbuffer(LPCWSTR filename) :terrain_shader_basic(filename)
 {
 }
 void shader_pretreat_gbuffer::init_handle()
 {
+	init_handle_terrain();
 	world_matrix_handle = fx_need->GetVariableByName("world_matrix")->AsMatrix();
 	normal_matrix_handle = fx_need->GetVariableByName("normal_matrix")->AsMatrix();
 	project_matrix_handle = fx_need->GetVariableByName("final_matrix")->AsMatrix();
@@ -390,9 +494,20 @@ void shader_pretreat_gbuffer::init_handle()
 	world_matrix_array_handle = fx_need->GetVariableByName("world_matrix_array")->AsMatrix();//世界变换组矩阵
 	normal_matrix_array_handle = fx_need->GetVariableByName("normal_matrix_array")->AsMatrix();//法线变换组矩阵
 	proj_matrix_handle = fx_need->GetVariableByName("proj_matrix")->AsMatrix();   //取景*投影变换矩阵
+	view_matrix_handle = fx_need->GetVariableByName("view_matrix")->AsMatrix();   //取景变换矩阵
+	BoneTransforms = fx_need->GetVariableByName("gBoneTransforms")->AsMatrix();
+	bone_matrix_buffer = fx_need->GetVariableByName("input_buffer")->AsShaderResource();
+	bone_num_handle = fx_need->GetVariableByName("bone_num");
 }
 engine_basic::engine_fail_reason shader_pretreat_gbuffer::set_trans_world(XMFLOAT4X4 *mat_world, XMFLOAT4X4 *mat_view)
 {
+	HRESULT hr;
+	auto check_error = set_matrix(view_matrix_handle, mat_view);
+	if (!check_error.check_if_failed()) 
+	{
+		return check_error;
+	}
+	
 	XMVECTOR x_delta;
 	XMMATRIX world_need = XMLoadFloat4x4(mat_world);
 	XMMATRIX view_need = XMLoadFloat4x4(mat_view);
@@ -401,14 +516,15 @@ engine_basic::engine_fail_reason shader_pretreat_gbuffer::set_trans_world(XMFLOA
 	normal_need.r[1].m128_f32[3] = 0;
 	normal_need.r[2].m128_f32[3] = 0;
 	normal_need.r[3].m128_f32[3] = 1;
-	HRESULT hr;
-	hr = world_matrix_handle->SetMatrix(reinterpret_cast<float*>(&(world_need*view_need)));
+	//hr = world_matrix_handle->SetMatrix(reinterpret_cast<float*>(&(world_need*view_need)));
+	hr = world_matrix_handle->SetMatrix(reinterpret_cast<float*>(&(world_need)));
 	if (FAILED(hr))
 	{
 		engine_basic::engine_fail_reason error_message(hr, "set world matrix error in gbuffer depthnormal part");
 		return error_message;
 	}
-	hr = normal_matrix_handle->SetMatrix(reinterpret_cast<float*>(&(normal_need*view_need)));
+	//hr = normal_matrix_handle->SetMatrix(reinterpret_cast<float*>(&(normal_need*view_need)));
+	hr = normal_matrix_handle->SetMatrix(reinterpret_cast<float*>(&(normal_need)));
 	if (FAILED(hr))
 	{
 		engine_basic::engine_fail_reason error_message(hr, "set normal matrix error in gbuffer depthnormal part");
@@ -453,6 +569,11 @@ engine_basic::engine_fail_reason shader_pretreat_gbuffer::set_world_matrix_array
 {
 	XMFLOAT4X4 *world_mat = new XMFLOAT4X4[cnt];
 	XMFLOAT4X4 *normal_mat = new XMFLOAT4X4[cnt];
+	auto check_error = set_matrix(view_matrix_handle, &mat_view);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
 	for (int i = 0; i < cnt; ++i) 
 	{
 		XMVECTOR x_delta;
@@ -464,8 +585,10 @@ engine_basic::engine_fail_reason shader_pretreat_gbuffer::set_world_matrix_array
 		normal_need.r[2].m128_f32[3] = 0;
 		normal_need.r[3].m128_f32[3] = 1;
 
-		XMStoreFloat4x4(&world_mat[i], world_need * view_need);
-		XMStoreFloat4x4(&normal_mat[i], normal_need * view_need);
+		//XMStoreFloat4x4(&world_mat[i], world_need * view_need);
+		//XMStoreFloat4x4(&normal_mat[i], normal_need * view_need);
+		XMStoreFloat4x4(&world_mat[i], world_need);
+		XMStoreFloat4x4(&normal_mat[i], normal_need);
 	}
 	
 	HRESULT hr = world_matrix_array_handle->SetMatrixArray(reinterpret_cast<const float*>(world_mat), 0, cnt);
@@ -482,6 +605,40 @@ engine_basic::engine_fail_reason shader_pretreat_gbuffer::set_world_matrix_array
 	}
 	delete[] world_mat;
 	delete[] normal_mat;
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_pretreat_gbuffer::set_bone_matrix(const XMFLOAT4X4* M, int cnt)
+{
+	HRESULT hr = BoneTransforms->SetMatrixArray(reinterpret_cast<const float*>(M), 0, cnt);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "deffered light draw error when setting bone_matrix");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_pretreat_gbuffer::set_bonemat_buffer(ID3D11ShaderResourceView *buffer_in)
+{
+	HRESULT hr;
+	hr = bone_matrix_buffer->SetResource(buffer_in);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set bone_matrix_buffer error in gbuffer");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason shader_pretreat_gbuffer::set_bone_num(UINT bone_num)
+{
+	HRESULT hr = bone_num_handle->SetRawValue((void*)&bone_num, 0, sizeof(bone_num));
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason error_message(hr, "gbuffer error when setting bone_num_handle");
+		return error_message;
+	}
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
@@ -800,12 +957,49 @@ engine_basic::engine_fail_reason light_shadow::set_texturepack_array(ID3D11Shade
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
+engine_basic::engine_fail_reason light_shadow::set_bone_matrix(const XMFLOAT4X4* M, int cnt)
+{
+	HRESULT hr = BoneTransforms->SetMatrixArray(reinterpret_cast<const float*>(M), 0, cnt);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "deffered light draw error when setting bone_matrix");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason light_shadow::set_bonemat_buffer(ID3D11ShaderResourceView *buffer_in)
+{
+	HRESULT hr;
+	hr = bone_matrix_buffer->SetResource(buffer_in);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "set bone_matrix_buffer error in gbuffer");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason light_shadow::set_bone_num(UINT bone_num)
+{
+	HRESULT hr = bone_num_handle->SetRawValue((void*)&bone_num, 0, sizeof(bone_num));
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason error_message(hr, "gbuffer error when setting bone_num_handle");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
 void light_shadow::init_handle()
 {
 	project_matrix_handle = fx_need->GetVariableByName("final_matrix")->AsMatrix();         //全套几何变换句柄
 	texture_need = fx_need->GetVariableByName("texture_pack_array")->AsShaderResource();
 	world_matrix_array_handle = fx_need->GetVariableByName("world_matrix_array")->AsMatrix();//世界变换组矩阵
 	viewproj_matrix_handle = fx_need->GetVariableByName("view_proj_matrix")->AsMatrix();   //取景*投影变换矩阵
+	BoneTransforms = fx_need->GetVariableByName("gBoneTransforms")->AsMatrix();
+	bone_matrix_buffer = fx_need->GetVariableByName("input_buffer")->AsShaderResource();
+	bone_num_handle = fx_need->GetVariableByName("bone_num");
 }
 void light_shadow::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member)
 {
@@ -1216,9 +1410,10 @@ void light_defered_lightbuffer::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *me
 	}
 }
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~延迟光照算法最终渲染~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-light_defered_draw::light_defered_draw(LPCWSTR filename) : shader_basic(filename)
+light_defered_draw::light_defered_draw(LPCWSTR filename) : terrain_shader_basic(filename)
 {
 }
+/*
 engine_basic::engine_fail_reason light_defered_draw::set_view_pos(XMFLOAT3 eye_pos)
 {
 	HRESULT hr = view_pos_handle->SetRawValue((void*)&eye_pos, 0, sizeof(eye_pos));
@@ -1230,6 +1425,7 @@ engine_basic::engine_fail_reason light_defered_draw::set_view_pos(XMFLOAT3 eye_p
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
+*/
 engine_basic::engine_fail_reason light_defered_draw::set_trans_world(XMFLOAT4X4 *mat_need)
 {
 	auto check_error = set_matrix(world_matrix_handle, mat_need);
@@ -1413,6 +1609,31 @@ engine_basic::engine_fail_reason light_defered_draw::set_IBL_tex(ID3D11ShaderRes
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
+engine_basic::engine_fail_reason light_defered_draw::set_tex_atmosphere_occlusion(ID3D11ShaderResourceView* tex_in)
+{
+	HRESULT hr;
+	hr = atomosphere_occlusion->SetResource(tex_in);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "cubemap shader error when setting atomosphere texture");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason light_defered_draw::set_tex_atmosphere_fog(ID3D11ShaderResourceView* tex_in)
+{
+	HRESULT hr;
+	hr = atomosphere_fog->SetResource(tex_in);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "cubemap shader error when setting atomosphere fog texture");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+
 engine_basic::engine_fail_reason light_defered_draw::set_bonemat_buffer(ID3D11ShaderResourceView *buffer_in)
 {
 	HRESULT hr;
@@ -1461,6 +1682,9 @@ void light_defered_draw::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_po
 }
 void light_defered_draw::init_handle()
 {
+	init_handle_terrain();
+	atomosphere_fog = fx_need->GetVariableByName("fog_color_tex")->AsShaderResource();
+	atomosphere_occlusion = fx_need->GetVariableByName("atmosphere_occlusion")->AsShaderResource();
 	texture_ibl_handle = fx_need->GetVariableByName("IBL_cube")->AsShaderResource();
 	tex_specroughness = fx_need->GetVariableByName("gInputspecular_roughness")->AsShaderResource();
 	tex_brdf_list = fx_need->GetVariableByName("gInputbrdf")->AsShaderResource();
@@ -1470,7 +1694,7 @@ void light_defered_draw::init_handle()
 	tex_light_specular_handle = fx_need->GetVariableByName("texture_light_specular")->AsShaderResource();
 	texture_ssao_handle = fx_need->GetVariableByName("texture_ssao")->AsShaderResource();
 	//几何变换句柄
-	view_pos_handle = fx_need->GetVariableByName("position_view");
+	//view_pos_handle = fx_need->GetVariableByName("position_view");
 	world_matrix_handle = fx_need->GetVariableByName("world_matrix")->AsMatrix();
 	view_matrix_handle = fx_need->GetVariableByName("view_matrix")->AsMatrix();
 	invview_matrix_handle = fx_need->GetVariableByName("invview_matrix")->AsMatrix();
@@ -1478,9 +1702,10 @@ void light_defered_draw::init_handle()
 	ssao_matrix_handle = fx_need->GetVariableByName("ssao_matrix")->AsMatrix();
 	world_matrix_array_handle = fx_need->GetVariableByName("world_matrix_array")->AsMatrix();
 	viewproj_matrix_handle = fx_need->GetVariableByName("view_proj_matrix")->AsMatrix();
-	BoneTransforms = fx_need->GetVariableByName("gBoneTransforms")->AsMatrix();
+	
 	material_need = fx_need->GetVariableByName("material_need");
 
+	BoneTransforms = fx_need->GetVariableByName("gBoneTransforms")->AsMatrix();
 	bone_matrix_buffer = fx_need->GetVariableByName("input_buffer")->AsShaderResource();
 	bone_num_handle = fx_need->GetVariableByName("bone_num");
 }
@@ -2074,6 +2299,18 @@ engine_basic::engine_fail_reason shader_skycube::set_tex_atmosphere(ID3D11Shader
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
+engine_basic::engine_fail_reason shader_skycube::set_tex_atmosphere_occlusion(ID3D11ShaderResourceView* tex_in)
+{
+	HRESULT hr;
+	hr = atomosphere_occlusion->SetResource(tex_in);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "cubemap shader error when setting atomosphere texture");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
 void shader_skycube::init_handle()
 {
 	project_matrix_handle = fx_need->GetVariableByName("final_matrix")->AsMatrix();         //全套几何变换句柄
@@ -2083,6 +2320,7 @@ void shader_skycube::init_handle()
 	view_pos_handle = fx_need->GetVariableByName("position_view");
 	cubemap_texture = fx_need->GetVariableByName("texture_cube")->AsShaderResource();  //shader中的纹理资源句柄
 	atomosphere_texture = fx_need->GetVariableByName("atmosphere_mask")->AsShaderResource();
+	atomosphere_occlusion = fx_need->GetVariableByName("atmosphere_occlusion")->AsShaderResource();
 }
 void shader_skycube::release()
 {
@@ -3449,94 +3687,8 @@ void shader_IBL_specular::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_p
 	}
 }
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~地形渲染~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-shader_terrain_render::shader_terrain_render(LPCWSTR filename) : shader_basic(filename)
+shader_terrain_render::shader_terrain_render(LPCWSTR filename) : terrain_shader_basic(filename)
 {
-}
-engine_basic::engine_fail_reason shader_terrain_render::set_texture_height(ID3D11ShaderResourceView *tex_input)
-{
-	HRESULT hr = tex_height_handle->SetResource(tex_input);
-	if (FAILED(hr))
-	{
-		engine_basic::engine_fail_reason error_message(hr, "an error when setting terrain height map");
-		return error_message;
-	}
-	engine_basic::engine_fail_reason succeed;
-	return succeed;
-}
-engine_basic::engine_fail_reason shader_terrain_render::set_texture_normal(ID3D11ShaderResourceView *tex_input)
-{
-	HRESULT hr = tex_normalt_handle->SetResource(tex_input);
-	if (FAILED(hr))
-	{
-		engine_basic::engine_fail_reason error_message(hr, "an error when setting terrain normal map");
-		return error_message;
-	}
-	engine_basic::engine_fail_reason succeed;
-	return succeed;
-}
-engine_basic::engine_fail_reason shader_terrain_render::set_texture_blend(ID3D11ShaderResourceView *tex_input)
-{
-	HRESULT hr = tex_blend_handle->SetResource(tex_input);
-	if (FAILED(hr))
-	{
-		engine_basic::engine_fail_reason error_message(hr, "an error when setting terrain tangent map");
-		return error_message;
-	}
-	engine_basic::engine_fail_reason succeed;
-	return succeed;
-}
-engine_basic::engine_fail_reason shader_terrain_render::set_texture_tangnt(ID3D11ShaderResourceView *tex_input)
-{
-	HRESULT hr = tex_tangnt_handle->SetResource(tex_input);
-	if (FAILED(hr))
-	{
-		engine_basic::engine_fail_reason error_message(hr, "an error when setting terrain blend map");
-		return error_message;
-	}
-	engine_basic::engine_fail_reason succeed;
-	return succeed;
-}
-
-
-engine_basic::engine_fail_reason shader_terrain_render::set_terrain_size(float world_size, float texture_size, float height_scal) 
-{
-	XMFLOAT4 terrain_size_data(world_size, texture_size, height_scal,0.0f);
-	HRESULT hr = terrain_size->SetRawValue((void*)&terrain_size_data, 0, sizeof(terrain_size_data));
-	if (FAILED(hr))
-	{
-		engine_basic::engine_fail_reason error_message(hr, "set terrain size error in terrain shader");
-		return error_message;
-	}
-	engine_basic::engine_fail_reason succeed;
-	return succeed;
-}
-engine_basic::engine_fail_reason shader_terrain_render::set_view_pos(XMFLOAT3 eye_pos)
-{
-	HRESULT hr = view_pos_handle->SetRawValue((void*)&eye_pos, 0, sizeof(eye_pos));
-	if (hr != S_OK)
-	{
-		engine_basic::engine_fail_reason error_message(hr, "terrain draw error when setting view position");
-		return error_message;
-	}
-	engine_basic::engine_fail_reason succeed;
-	return succeed;
-}
-engine_basic::engine_fail_reason shader_terrain_render::set_texture_color(ID3D11ShaderResourceView *tex_color_in, ID3D11ShaderResourceView *tex_normal_in) 
-{
-	HRESULT hr = tex_ColorArray_handle->SetResource(tex_color_in);
-	if (FAILED(hr))
-	{
-		engine_basic::engine_fail_reason error_message(hr, "an error when setting terrain color array");
-		return error_message;
-	}
-	hr = tex_NormalArray_handle->SetResource(tex_normal_in);
-	if (FAILED(hr))
-	{
-		engine_basic::engine_fail_reason error_message(hr, "an error when setting terrain normal array");
-		return error_message;
-	}
-	engine_basic::engine_fail_reason succeed;
-	return succeed;
 }
 engine_basic::engine_fail_reason shader_terrain_render::set_trans_world(XMFLOAT4X4 *mat_world)
 {
@@ -3578,19 +3730,10 @@ void shader_terrain_render::release()
 }
 void shader_terrain_render::init_handle()
 {
+	init_handle_terrain();
 	world_matrix_handle = fx_need->GetVariableByName("world_matrix")->AsMatrix();
 	normal_matrix_handle = fx_need->GetVariableByName("normal_matrix")->AsMatrix();
 	final_matrix_handle = fx_need->GetVariableByName("final_matrix")->AsMatrix();
-
-	terrain_size = fx_need->GetVariableByName("terrain_size");
-	view_pos_handle = fx_need->GetVariableByName("eye_pos");
-	tex_height_handle = fx_need->GetVariableByName("terrain_height")->AsShaderResource();
-	tex_normalt_handle = fx_need->GetVariableByName("terrain_normal")->AsShaderResource();
-	tex_tangnt_handle = fx_need->GetVariableByName("terrain_tangent")->AsShaderResource();
-	tex_blend_handle = fx_need->GetVariableByName("terrain_blend")->AsShaderResource();
-
-	tex_ColorArray_handle = fx_need->GetVariableByName("ColorTexture_pack_albedo")->AsShaderResource();
-	tex_NormalArray_handle = fx_need->GetVariableByName("ColorTexture_pack_normal")->AsShaderResource();
 }
 void shader_terrain_render::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member)
 {
@@ -3754,10 +3897,23 @@ engine_basic::engine_fail_reason shader_control::init()
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
+std::wstring shader_control::get_path_name(std::string name_char)
+{
+	std::wstring rec_data;
+	int nLen = (int)name_char.length();
+	rec_data.resize(nLen, L' ');
+	int nResult = MultiByteToWideChar(CP_ACP, 0, (LPCSTR)name_char.c_str(), nLen, (LPWSTR)rec_data.c_str(), nLen);
+	return rec_data;
+}
 engine_basic::engine_fail_reason shader_control::init_basic()
 {
-	/*
-	std::shared_ptr<color_shader> shader_color_test = std::make_shared<color_shader>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Release\\color_test.cso");
+	std::string shader_path;
+#ifdef _DEBUG
+	shader_path = "F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\";
+#else
+	shader_path = "F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Release\\";
+#endif
+	std::shared_ptr<color_shader> shader_color_test = std::make_shared<color_shader>(get_path_name(shader_path +"color_test.cso").c_str());
 	engine_basic::engine_fail_reason check_error = shader_color_test->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -3770,7 +3926,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 	}
 
 
-	std::shared_ptr<virtual_light_shader> shader_vlight_test = std::make_shared<virtual_light_shader>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Release\\virtual_light.cso");
+	std::shared_ptr<virtual_light_shader> shader_vlight_test = std::make_shared<virtual_light_shader>(get_path_name(shader_path +"virtual_light.cso").c_str());
 	check_error = shader_vlight_test->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -3782,7 +3938,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
-	std::shared_ptr<picture_show_shader> shader_picture_test = std::make_shared<picture_show_shader>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Release\\show_pic.cso");
+	std::shared_ptr<picture_show_shader> shader_picture_test = std::make_shared<picture_show_shader>(get_path_name(shader_path +"show_pic.cso").c_str());
 	check_error = shader_picture_test->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -3794,7 +3950,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
-	std::shared_ptr<shader_pretreat_gbuffer> shader_gbuffer = std::make_shared<shader_pretreat_gbuffer>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Release\\gbuffer_pretreat.cso");
+	std::shared_ptr<shader_pretreat_gbuffer> shader_gbuffer = std::make_shared<shader_pretreat_gbuffer>(get_path_name(shader_path +"gbuffer_pretreat.cso").c_str());
 	check_error = shader_gbuffer->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -3806,7 +3962,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
-	std::shared_ptr<shader_resolvedepth> shader_resolvemassdepth = std::make_shared<shader_resolvedepth>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Release\\ResolveMSAAdepthstencil.cso");
+	std::shared_ptr<shader_resolvedepth> shader_resolvemassdepth = std::make_shared<shader_resolvedepth>(get_path_name(shader_path +"ResolveMSAAdepthstencil.cso").c_str());
 	check_error = shader_resolvemassdepth->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -3818,7 +3974,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
-	std::shared_ptr<shader_ssaomap> shader_ssaomap_rec = std::make_shared<shader_ssaomap>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Release\\ssao_draw_aomap.cso");
+	std::shared_ptr<shader_ssaomap> shader_ssaomap_rec= std::make_shared<shader_ssaomap>(get_path_name(shader_path +"ssao_draw_aomap.cso").c_str());
 	check_error = shader_ssaomap_rec->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -3830,7 +3986,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
-	std::shared_ptr<shader_ssaoblur> shader_ssaoblur_rec = std::make_shared<shader_ssaoblur>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Release\\ssao_blur_map.cso");
+	std::shared_ptr<shader_ssaoblur> shader_ssaoblur_rec = std::make_shared<shader_ssaoblur>(get_path_name(shader_path +"ssao_blur_map.cso").c_str());
 	check_error = shader_ssaoblur_rec->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -3842,7 +3998,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
-	std::shared_ptr<light_shadow> shader_shadowmap = std::make_shared<light_shadow>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Release\\shadowmap.cso");
+	std::shared_ptr<light_shadow> shader_shadowmap = std::make_shared<light_shadow>(get_path_name(shader_path +"shadowmap.cso").c_str());
 	check_error = shader_shadowmap->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -3854,116 +4010,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
-	std::shared_ptr<light_defered_lightbuffer> shader_defered_lightbuffer = std::make_shared<light_defered_lightbuffer>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Release\\light_buffer_pretreat.cso");
-	check_error = shader_defered_lightbuffer->shder_create();
-	if (!check_error.check_if_failed())
-	{
-		return check_error;
-	}
-	check_error = add_a_new_shader(std::type_index(typeid(light_defered_lightbuffer)), shader_defered_lightbuffer);
-	if (!check_error.check_if_failed())
-	{
-		return check_error;
-	}
-	*/
-	std::shared_ptr<color_shader> shader_color_test = std::make_shared<color_shader>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\color_test.cso");
-	engine_basic::engine_fail_reason check_error = shader_color_test->shder_create();
-	if (!check_error.check_if_failed())
-	{
-		return check_error;
-	}
-	check_error = add_a_new_shader(std::type_index(typeid(color_shader)), shader_color_test);
-	if (!check_error.check_if_failed())
-	{
-		return check_error;
-	}
-
-
-	std::shared_ptr<virtual_light_shader> shader_vlight_test = std::make_shared<virtual_light_shader>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\virtual_light.cso");
-	check_error = shader_vlight_test->shder_create();
-	if (!check_error.check_if_failed())
-	{
-		return check_error;
-	}
-	check_error = add_a_new_shader(std::type_index(typeid(virtual_light_shader)), shader_vlight_test);
-	if (!check_error.check_if_failed())
-	{
-		return check_error;
-	}
-
-	std::shared_ptr<picture_show_shader> shader_picture_test = std::make_shared<picture_show_shader>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\show_pic.cso");
-	check_error = shader_picture_test->shder_create();
-	if (!check_error.check_if_failed())
-	{
-		return check_error;
-	}
-	check_error = add_a_new_shader(std::type_index(typeid(picture_show_shader)), shader_picture_test);
-	if (!check_error.check_if_failed())
-	{
-		return check_error;
-	}
-
-	std::shared_ptr<shader_pretreat_gbuffer> shader_gbuffer = std::make_shared<shader_pretreat_gbuffer>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\gbuffer_pretreat.cso");
-	check_error = shader_gbuffer->shder_create();
-	if (!check_error.check_if_failed())
-	{
-		return check_error;
-	}
-	check_error = add_a_new_shader(std::type_index(typeid(shader_pretreat_gbuffer)), shader_gbuffer);
-	if (!check_error.check_if_failed())
-	{
-		return check_error;
-	}
-
-	std::shared_ptr<shader_resolvedepth> shader_resolvemassdepth = std::make_shared<shader_resolvedepth>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\ResolveMSAAdepthstencil.cso");
-	check_error = shader_resolvemassdepth->shder_create();
-	if (!check_error.check_if_failed())
-	{
-		return check_error;
-	}
-	check_error = add_a_new_shader(std::type_index(typeid(shader_resolvedepth)), shader_resolvemassdepth);
-	if (!check_error.check_if_failed())
-	{
-		return check_error;
-	}
-
-	std::shared_ptr<shader_ssaomap> shader_ssaomap_rec= std::make_shared<shader_ssaomap>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\ssao_draw_aomap.cso");
-	check_error = shader_ssaomap_rec->shder_create();
-	if (!check_error.check_if_failed())
-	{
-		return check_error;
-	}
-	check_error = add_a_new_shader(std::type_index(typeid(shader_ssaomap)), shader_ssaomap_rec);
-	if (!check_error.check_if_failed())
-	{
-		return check_error;
-	}
-
-	std::shared_ptr<shader_ssaoblur> shader_ssaoblur_rec = std::make_shared<shader_ssaoblur>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\ssao_blur_map.cso");
-	check_error = shader_ssaoblur_rec->shder_create();
-	if (!check_error.check_if_failed())
-	{
-		return check_error;
-	}
-	check_error = add_a_new_shader(std::type_index(typeid(shader_ssaoblur)), shader_ssaoblur_rec);
-	if (!check_error.check_if_failed())
-	{
-		return check_error;
-	}
-
-	std::shared_ptr<light_shadow> shader_shadowmap = std::make_shared<light_shadow>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\shadowmap.cso");
-	check_error = shader_shadowmap->shder_create();
-	if (!check_error.check_if_failed())
-	{
-		return check_error;
-	}
-	check_error = add_a_new_shader(std::type_index(typeid(light_shadow)), shader_shadowmap);
-	if (!check_error.check_if_failed())
-	{
-		return check_error;
-	}
-
-	std::shared_ptr<light_defered_lightbuffer> shader_defered_lightbuffer = std::make_shared<light_defered_lightbuffer>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\light_buffer_pretreat.cso");
+	std::shared_ptr<light_defered_lightbuffer> shader_defered_lightbuffer = std::make_shared<light_defered_lightbuffer>(get_path_name(shader_path +"light_buffer_pretreat.cso").c_str());
 	check_error = shader_defered_lightbuffer->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -3975,7 +4022,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 	return check_error;
 	}
 
-	std::shared_ptr<light_defered_draw> shader_defered_draw = std::make_shared<light_defered_draw>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\light_deffered.cso");
+	std::shared_ptr<light_defered_draw> shader_defered_draw = std::make_shared<light_defered_draw>(get_path_name(shader_path +"light_deffered.cso").c_str());
 	check_error = shader_defered_draw->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -3987,7 +4034,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
-	std::shared_ptr<shader_reflect_save_depth> shader_reflect_depthsave = std::make_shared<shader_reflect_save_depth>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\save_cube_depthstencil.cso");
+	std::shared_ptr<shader_reflect_save_depth> shader_reflect_depthsave = std::make_shared<shader_reflect_save_depth>(get_path_name(shader_path +"save_cube_depthstencil.cso").c_str());
 	check_error = shader_reflect_depthsave->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -3999,7 +4046,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
-	std::shared_ptr<rtgr_reflect> shader_rtgr_reflect = std::make_shared<rtgr_reflect>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\RTGR.cso");
+	std::shared_ptr<rtgr_reflect> shader_rtgr_reflect = std::make_shared<rtgr_reflect>(get_path_name(shader_path +"RTGR.cso").c_str());
 	check_error = shader_rtgr_reflect->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -4011,7 +4058,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
-	std::shared_ptr<rtgr_reflect_blur> shader_rtgr_reflect_blur = std::make_shared<rtgr_reflect_blur>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\reflect_blur.cso");
+	std::shared_ptr<rtgr_reflect_blur> shader_rtgr_reflect_blur = std::make_shared<rtgr_reflect_blur>(get_path_name(shader_path +"reflect_blur.cso").c_str());
 	check_error = shader_rtgr_reflect_blur->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -4023,7 +4070,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
-	std::shared_ptr<rtgr_reflect_final> shader_rtgr_reflect_final = std::make_shared<rtgr_reflect_final>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\reflect_final.cso");
+	std::shared_ptr<rtgr_reflect_final> shader_rtgr_reflect_final = std::make_shared<rtgr_reflect_final>(get_path_name(shader_path +"reflect_final.cso").c_str());
 	check_error = shader_rtgr_reflect_final->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -4035,7 +4082,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
-	std::shared_ptr<shader_skycube> shader_sky_draw = std::make_shared<shader_skycube>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\skycube.cso");
+	std::shared_ptr<shader_skycube> shader_sky_draw = std::make_shared<shader_skycube>(get_path_name(shader_path +"skycube.cso").c_str());
 	check_error = shader_sky_draw->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -4047,7 +4094,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
-	std::shared_ptr<brdf_envpre_shader> shader_brdf_draw = std::make_shared<brdf_envpre_shader>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\render_brdf_list.cso");
+	std::shared_ptr<brdf_envpre_shader> shader_brdf_draw = std::make_shared<brdf_envpre_shader>(get_path_name(shader_path +"render_brdf_list.cso").c_str());
 	check_error = shader_brdf_draw->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -4059,7 +4106,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
-	std::shared_ptr<compute_averagelight> shader_compute_averagelight = std::make_shared<compute_averagelight>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\HDR_average_pass.cso");
+	std::shared_ptr<compute_averagelight> shader_compute_averagelight = std::make_shared<compute_averagelight>(get_path_name(shader_path +"HDR_average_pass.cso").c_str());
 	check_error = shader_compute_averagelight->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -4071,7 +4118,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
-	std::shared_ptr<shader_HDRpreblur> shader_hdr_preblur = std::make_shared<shader_HDRpreblur>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\HDR_preblur_pass.cso");
+	std::shared_ptr<shader_HDRpreblur> shader_hdr_preblur = std::make_shared<shader_HDRpreblur>(get_path_name(shader_path +"HDR_preblur_pass.cso").c_str());
 	check_error = shader_hdr_preblur->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -4083,7 +4130,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
-	std::shared_ptr<shader_HDRblur> shader_hdr_blur = std::make_shared<shader_HDRblur>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\HDR_blur_pass.cso");
+	std::shared_ptr<shader_HDRblur> shader_hdr_blur = std::make_shared<shader_HDRblur>(get_path_name(shader_path +"HDR_blur_pass.cso").c_str());
 	check_error = shader_hdr_blur->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -4095,7 +4142,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
-	std::shared_ptr<shader_HDRfinal> shader_hdr_final = std::make_shared<shader_HDRfinal>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\HDR_final.cso");
+	std::shared_ptr<shader_HDRfinal> shader_hdr_final = std::make_shared<shader_HDRfinal>(get_path_name(shader_path +"HDR_final.cso").c_str());
 	check_error = shader_hdr_final->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -4107,7 +4154,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
-	std::shared_ptr<shader_atmosphere_pretreat> shader_atmospherepretreat = std::make_shared<shader_atmosphere_pretreat>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\atmosphere_precompute.cso");
+	std::shared_ptr<shader_atmosphere_pretreat> shader_atmospherepretreat = std::make_shared<shader_atmosphere_pretreat>(get_path_name(shader_path +"atmosphere_precompute.cso").c_str());
 	check_error = shader_atmospherepretreat->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -4119,7 +4166,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
-	std::shared_ptr<shader_atmosphere_render> shader_atmosphererender = std::make_shared<shader_atmosphere_render>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\atmosphere_render.cso");
+	std::shared_ptr<shader_atmosphere_render> shader_atmosphererender = std::make_shared<shader_atmosphere_render>(get_path_name(shader_path +"atmosphere_render.cso").c_str());
 	check_error = shader_atmosphererender->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -4131,7 +4178,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
-	std::shared_ptr<compute_FFT> shader_compute_FFT = std::make_shared<compute_FFT>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\fft_512x512_c2c.cso");
+	std::shared_ptr<compute_FFT> shader_compute_FFT = std::make_shared<compute_FFT>(get_path_name(shader_path +"fft_512x512_c2c.cso").c_str());
 	check_error = shader_compute_FFT->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -4143,7 +4190,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
-	std::shared_ptr<shader_ocean_simulateCS> shader_oceanpre_cs = std::make_shared<shader_ocean_simulateCS>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\ocean_simulator_cs.cso");
+	std::shared_ptr<shader_ocean_simulateCS> shader_oceanpre_cs = std::make_shared<shader_ocean_simulateCS>(get_path_name(shader_path +"ocean_simulator_cs.cso").c_str());
 	check_error = shader_oceanpre_cs->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -4155,7 +4202,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
-	std::shared_ptr<shader_ocean_simulateVPS> shader_oceanpre_vps = std::make_shared<shader_ocean_simulateVPS>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\ocean_simulator_vs_ps.cso");
+	std::shared_ptr<shader_ocean_simulateVPS> shader_oceanpre_vps = std::make_shared<shader_ocean_simulateVPS>(get_path_name(shader_path +"ocean_simulator_vs_ps.cso").c_str());
 	check_error = shader_oceanpre_vps->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -4167,7 +4214,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
-	std::shared_ptr<shader_ocean_render> shader_oceanrender_vps = std::make_shared<shader_ocean_render>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\ocean_shading.cso");
+	std::shared_ptr<shader_ocean_render> shader_oceanrender_vps = std::make_shared<shader_ocean_render>(get_path_name(shader_path +"ocean_shading.cso").c_str());
 	check_error = shader_oceanrender_vps->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -4179,7 +4226,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
-	std::shared_ptr<shader_ocean_draw> shader_oceandraw_tess = std::make_shared<shader_ocean_draw>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\ocean_draw.cso");
+	std::shared_ptr<shader_ocean_draw> shader_oceandraw_tess = std::make_shared<shader_ocean_draw>(get_path_name(shader_path +"ocean_draw.cso").c_str());
 	check_error = shader_oceandraw_tess->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -4191,7 +4238,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
-	std::shared_ptr<shader_IBL_specular> shader_IBL_spec = std::make_shared<shader_IBL_specular>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\IBL_gen.cso");
+	std::shared_ptr<shader_IBL_specular> shader_IBL_spec = std::make_shared<shader_IBL_specular>(get_path_name(shader_path +"IBL_gen.cso").c_str());
 	check_error = shader_IBL_spec->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -4203,7 +4250,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
-	std::shared_ptr<shader_terrain_render> shader_terrain_test = std::make_shared<shader_terrain_render>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\terrain_tess.cso");
+	std::shared_ptr<shader_terrain_render> shader_terrain_test = std::make_shared<shader_terrain_render>(get_path_name(shader_path +"terrain_tess.cso").c_str());
 	check_error = shader_terrain_test->shder_create();
 	if (!check_error.check_if_failed())
 	{
@@ -4215,7 +4262,7 @@ engine_basic::engine_fail_reason shader_control::init_basic()
 		return check_error;
 	}
 
-	std::shared_ptr<shader_particle> shader_particle_test = std::make_shared<shader_particle>(L"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\Debug\\basic_particle.cso");
+	std::shared_ptr<shader_particle> shader_particle_test = std::make_shared<shader_particle>(get_path_name(shader_path +"basic_particle.cso").c_str());
 	check_error = shader_particle_test->shder_create();
 	if (!check_error.check_if_failed())
 	{

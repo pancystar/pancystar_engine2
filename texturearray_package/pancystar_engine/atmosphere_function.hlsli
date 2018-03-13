@@ -89,6 +89,8 @@ static const AtmosphereParameters ATMOSPHERE =
 };
 */
 #define meter_scal = 1000;
+
+
 static const AtmosphereParameters ATMOSPHERE =
 {
 	float3(1.474000, 1.850400, 1.911980),
@@ -109,6 +111,7 @@ static const AtmosphereParameters ATMOSPHERE =
 	float3(0.100000, 0.100000, 0.100000),
 	-0.207912
 };
+
 /*
 const AtmosphereParameters ATMOSPHERE = AtmosphereParameters{
 	float3(1.474000, 1.850400, 1.911980),
@@ -1530,18 +1533,13 @@ IrradianceSpectrum GetCombinedScattering(
 	float3 uvw1 = float3((tex_x + 1.0 + uvwz.y) / Number(SCATTERING_TEXTURE_NU_SIZE),
 		uvwz.z, uvwz.w);
 #ifdef COMBINED_SCATTERING_TEXTURES
-	float4 combined_scattering =
-		scattering_texture.Sample(samTex_liner,uvw0) * (1.0 - lerp) +
-		scattering_texture.Sample(samTex_liner,uvw1) * lerp;
+	float4 combined_scattering = scattering_texture.Sample(samTex_liner, uvw0) * (1.0 - lerp)+scattering_texture.Sample(samTex_liner, uvw1) * lerp;
+	
 	IrradianceSpectrum scattering = IrradianceSpectrum(combined_scattering.xyz);
-	single_mie_scattering =
-		GetExtrapolatedSingleMieScattering(atmosphere, combined_scattering);
+	single_mie_scattering = GetExtrapolatedSingleMieScattering(atmosphere, combined_scattering);
 #else
-	IrradianceSpectrum scattering = IrradianceSpectrum(
-		scattering_texture.Sample(samTex_liner,uvw0) * (1.0 - lerp) +
-		scattering_texture.Sample(samTex_liner,uvw1) * lerp);
-	single_mie_scattering = IrradianceSpectrum(
-		single_mie_scattering_texture.Sample(samTex_liner,uvw0) * (1.0 - lerp) +
+	IrradianceSpectrum scattering = IrradianceSpectrum(scattering_texture.Sample(samTex_liner,uvw0) * (1.0 - lerp) +scattering_texture.Sample(samTex_liner,uvw1) * lerp);
+	single_mie_scattering = IrradianceSpectrum(single_mie_scattering_texture.Sample(samTex_liner,uvw0) * (1.0 - lerp) +
 		single_mie_scattering_texture.Sample(samTex_liner,uvw1) * lerp);
 #endif
 	return scattering;
@@ -1596,13 +1594,12 @@ RadianceSpectrum GetSkyRadiance(
 			atmosphere, transmittance_texture, r, mu);
 	IrradianceSpectrum single_mie_scattering;
 	IrradianceSpectrum scattering;
-	if (shadow_length == 0.0 * m) {
-		scattering = GetCombinedScattering(
-			atmosphere, scattering_texture, single_mie_scattering_texture,
-			r, mu, mu_s, nu, ray_r_mu_intersects_ground,
-			single_mie_scattering);
+	if (shadow_length == 0.0 * m) 
+	{
+		scattering = GetCombinedScattering(atmosphere, scattering_texture, single_mie_scattering_texture,r, mu, mu_s, nu, ray_r_mu_intersects_ground,single_mie_scattering);
+
 	}
-	else {
+	else {		scattering = 0;
 		// Case of light shafts (shadow_length is the total length noted l in our
 		// paper): we omit the scattering between the camera and the position_point at
 		// distance l, by implementing Eq. (18) of the paper (shadow_transmittance
@@ -1613,13 +1610,9 @@ RadianceSpectrum GetSkyRadiance(
 		Number mu_p = (r * mu + d) / r_p;
 		Number mu_s_p = (r * mu_s + d * nu) / r_p;
 
-		scattering = GetCombinedScattering(
-			atmosphere, scattering_texture, single_mie_scattering_texture,
-			r_p, mu_p, mu_s_p, nu, ray_r_mu_intersects_ground,
-			single_mie_scattering);
-		DimensionlessSpectrum shadow_transmittance =
-			GetTransmittance(atmosphere, transmittance_texture,
-				r, mu, shadow_length, ray_r_mu_intersects_ground);
+		scattering = GetCombinedScattering(atmosphere, scattering_texture, single_mie_scattering_texture,r_p, mu_p, mu_s_p, nu, ray_r_mu_intersects_ground,single_mie_scattering);
+		
+		DimensionlessSpectrum shadow_transmittance = GetTransmittance(atmosphere, transmittance_texture,r, mu, shadow_length, ray_r_mu_intersects_ground);
 		scattering = scattering * shadow_transmittance;
 		single_mie_scattering = single_mie_scattering * shadow_transmittance;
 	}

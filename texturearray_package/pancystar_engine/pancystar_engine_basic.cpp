@@ -1,5 +1,13 @@
 #include"pancystar_engine_basic.h"
 using namespace engine_basic;
+std::wstring engine_string::string2wstring(std::string name_char)
+{
+	std::wstring rec_data;
+	int nLen = (int)name_char.length();
+	rec_data.resize(nLen, L' ');
+	int nResult = MultiByteToWideChar(CP_ACP, 0, (LPCSTR)name_char.c_str(), nLen, (LPWSTR)rec_data.c_str(), nLen);
+	return rec_data;
+}
 //错误信息
 engine_fail_reason::engine_fail_reason() 
 {
@@ -195,7 +203,7 @@ void extra_perspective_message::get_FrustumNearCorner(DirectX::XMFLOAT4 *Frustum
 //透视投影
 perspective_message::perspective_message() 
 {
-	reset_perpective_message(800,600,0.1f,3000.0f, DirectX::XM_PIDIV4);
+	reset_perpective_message(800,600,0.1f,4000.0f, DirectX::XM_PIDIV4);
 }
 DirectX::XMFLOAT4X4 perspective_message::get_proj_matrix() 
 {

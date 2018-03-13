@@ -1,7 +1,7 @@
 /*延迟光照效果*/
 #include"light_count.hlsli"
 #include"atmosphere_renderfunc.hlsli"
-cbuffer per_environment 
+cbuffer per_environment
 {
 	float exposure;
 	float3 white_point_in;
@@ -24,20 +24,14 @@ cbuffer perframe
 	float4              gFrustumCorners[4];   //3D重建的四个角，用于借助光栅化插值
 	float3              proj_desc;            //投影参数，用于还原深度信息
 	float3              camera;               //视点位置
-}; 
+	//todo：视点位置重复定义
+};
 Texture2DArray texture_sunshadow;//太阳光阴影贴图
 Texture2DArray texture_shadow;   //阴影贴图
 Texture2D gNormalspecMap;        //屏幕空间法线&镜面反射强度纹理
 Texture2D gSpecRoughnessMap;     //屏幕空间镜面&粗糙度纹理
 Texture2D gdepth_map;            //屏幕空间深度纹理
 Texture2D render_mask;           //大气散射掩码
-SamplerState samTex
-{
-	Filter = ANISOTROPIC;
-	MaxAnisotropy = 4;
-	AddressU = WRAP;
-	AddressV = WRAP;
-};
 SamplerComparisonState samShadow
 {
 	Filter = COMPARISON_MIN_MAG_LINEAR_MIP_POINT;
@@ -60,7 +54,7 @@ float CalcShadowFactor(SamplerComparisonState samShadow, Texture2DArray shadowMa
 	shadowPosH.xyz /= shadowPosH.w;
 
 	//采集光源投影后的深度
-	float depth = shadowPosH.z-0.0005f;
+	float depth = shadowPosH.z - 0.0005f;
 
 	//阴影贴图的步长
 	const float dx = 1.0f / 1024.0f;
@@ -114,7 +108,11 @@ struct PixelOut_high
 	float4 specular           : SV_TARGET1;
 	float4 atmosphereblend    : SV_TARGET2;
 };
-
+struct PixelOut
+{
+	float4 final_color;
+	float4 reflect_message;
+};
 static const float3 kSphereAlbedo = float3(0.8, 0.8, 0.8);
 static const float3 kGroundAlbedo = float3(0.0, 0.0, 0.04);
 //大气散射光照运算
@@ -124,15 +122,25 @@ static const float3 kGroundAlbedo = float3(0.0, 0.0, 0.04);
 #define GetSkyRadianceToPoint GetSkyLuminanceToPoint
 #define GetSunAndSkyIrradiance GetSunAndSkyIlluminance
 #endif
-float3 count_normal_sphereradiance(float pz,VertexOut pin, float render_check, float fragment_angular_size, out float sphere_alpha,out float3 transmittance,out float3 in_scatter)
+float3 count_normal_sphereradiance
+(
+	float pz, VertexOut pin,
+	float render_check,
+	float fragment_angular_size,
+	out float sphere_alpha,
+	out float3 transmittance,
+	out float3 in_scatter,
+	out float3 pos
+	)
 {
 	float ray_sphere_angular_distance = 10;
 	sphere_alpha = min(ray_sphere_angular_distance / fragment_angular_size, render_check);
 	//还原点的世界坐标
 	float4 normalDepth = gNormalspecMap.Sample(samNormalDepth, pin.Tex);
-	float3 n = normalDepth.xyz;
+	float3 n = normalize(normalDepth.xyz);
 	float3 p = (pz / pin.ToFarPlane.z)*pin.ToFarPlane;
 	float3 point_in = mul(float4(p, 1.0f), invview_matrix).xyz;
+	pos = point_in;
 	float3 normal = mul(float4(n, 0.0f), invview_matrix).xyz;
 	// Compute the radiance reflected by the sphere.
 	float3 sky_irradiance;
@@ -149,35 +157,72 @@ float3 count_normal_sphereradiance(float pz,VertexOut pin, float render_check, f
 	//sphere_radiance = sun_irradiance;
 
 	//float3 sphere_radiance = kSphereAlbedo * (1.0 / PI) * (sun_irradiance + sky_irradiance)
-	float3 sphere_radiance = sun_irradiance + sky_irradiance;
+	float3 sphere_radiance = (sun_irradiance + sky_irradiance);
 	//float shadow_length = max(0.0, min(shadow_out, distance_to_intersection) - shadow_in) * lightshaft_fadein_hack;
 	float shadow_length = 0.5f;
 	//float3 transmittance;
-	in_scatter = GetSkyRadianceToPoint(float3(0, 2, 5) - earth_center, point_in - earth_center, shadow_length, rec_dir, transmittance);
+	in_scatter = GetSkyRadianceToPoint(camera - earth_center, point_in - earth_center, shadow_length, rec_dir, transmittance);
 	//sphere_radiance = sphere_radiance * transmittance + in_scatter;
-	return minus_hack * sphere_radiance * render_check;
-	
+	//sphere_radiance = pow(float3(1.0f, 1.0f, 1.0f) - exp(-sphere_radiance / white_point_in * exposure), float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2));
+	sphere_radiance.r = max(0, sphere_radiance.r);
+	sphere_radiance.g = max(0, sphere_radiance.g);
+	sphere_radiance.b = max(0, sphere_radiance.b);
+	return minus_hack * sphere_radiance * render_check * transmittance * (1.0 / 3.1415926);
+	//return(0.3, 0.3, 0.3);
 }
-float3 count_sky_radiance(float3 view_direction)
+
+
+float3 count_ground_radiance(float3 point_in, float3 view_direction)
+{
+	float3 ground_radiance = float3(0.0f, 0.0f, 0.0f);
+
+	float3 normal = normalize(point_in - earth_center);
+
+	// Compute the radiance reflected by the ground.
+	float3 sky_irradiance;
+	float3 sun_irradiance = GetSunAndSkyIrradiance(point_in - earth_center, normal, sun_light.dir, sky_irradiance);
+	ground_radiance = kGroundAlbedo * (1.0 / PI) * (sun_irradiance  + sky_irradiance);
+
+	//float shadow_length = max(0.0, min(shadow_out, distance_to_intersection) - shadow_in) * lightshaft_fadein_hack;
+	float shadow_length = 0.0f;
+	float3 transmittance;
+	float3 in_scatter = GetSkyRadianceToPoint(camera - earth_center, point_in - earth_center, shadow_length, sun_light.dir, transmittance);
+	ground_radiance = ground_radiance * transmittance + in_scatter;
+	return ground_radiance;
+}
+float3 count_sky_radiance(float3 pos, float3 view_direction, float3 sphere_radiance, float3 transmittance_in, float render_check)
 {
 	float3 rec_dir = sun_light.dir;
 	rec_dir.x = -rec_dir.x;
 	rec_dir.y = -rec_dir.y;
 	float minus_hack = 1.0f;
-	if (rec_dir.y < 0.0f) 
+
+	if (rec_dir.y < 0.0f)
 	{
-		minus_hack = max(0.0f,1.0f + 3.0f*rec_dir.y);
+		minus_hack = max(0.0f, 1.0f + 3.0f*rec_dir.y);
 		rec_dir.y = 0.0f;
 	}
 	float shadow_length = 0.0f;;
 	float3 transmittance;
 	//+camera.y*0.0014f;
-	float3 radiance = GetSkyRadiance(float3(0,camera.y,5) - earth_center, normalize(float3(view_direction.x, view_direction.y, view_direction.z)), shadow_length, rec_dir, transmittance);
+	float3 radiance = GetSkyRadiance(camera - earth_center, normalize(float3(view_direction.x, view_direction.y, view_direction.z)), shadow_length, rec_dir, transmittance);
+	float3 view_dir_check = view_direction;
+	if (view_dir_check.y > -0.05f) 
+	{
+		view_dir_check.y = -(view_dir_check.y + 0.05f) - 0.05f;
+		//view_dir_check.y = -view_dir_check.y;
+	}
+	float3 radiance_floor = GetSkyRadiance(camera - earth_center, normalize(view_dir_check), shadow_length, rec_dir, transmittance);
 	//float3 radiance2 = GetSkyRadiance(float3(0, 2, 5) - earth_center, normalize(float3(view_direction.x, view_direction.y + camera.y*0.0014f, view_direction.z)), shadow_length, rec_dir, transmittance);
 	//if (dot(view_direction, rec_dir) > sun_size.y)
 	//{
 	//	radiance = radiance + transmittance * GetSolarRadiance();
 	//}
+	float distance_need = distance(camera, pos);
+	float s_need = saturate((distance_need - 500.0) / 2000.0);
+	float3 radiance_mid = lerp(sphere_radiance * render_check, radiance_floor, s_need);
+	//radiance = count_ground_radiance(pos, view_direction);
+	radiance = radiance * (1.0f - render_check) + radiance_mid * render_check;
 	float3 rgb_color = pow(float3(1.0f, 1.0f, 1.0f) - exp(-radiance / white_point_in * exposure), float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2));
 	//float3 rgb_color = float3(1.0f, 1.0f, 1.0f) - exp(-radiance / white_point_in * exposure);
 	return minus_hack * rgb_color;
@@ -229,7 +274,8 @@ PixelOut_high count_common_lighting(VertexOut pin, float pz, float shadow_mask)
 	float render_check = render_mask.Sample(samNormalDepth, pin.Tex).r;
 	float3 transmittance_out;
 	float3 in_scatter_out;
-	rec_sunlight.diffuse.rgb = count_normal_sphereradiance(pz, pin, render_check, fragment_angular_size, sphere_alpha, transmittance_out, in_scatter_out);
+	float3 now_pos;
+	rec_sunlight.diffuse.rgb = count_normal_sphereradiance(pz, pin, render_check, fragment_angular_size, sphere_alpha, transmittance_out, in_scatter_out, now_pos);
 	D.rgb = D.rgb * transmittance_out + in_scatter_out;
 	//S.rgb = S.rgb * transmittance_out + in_scatter_out;
 	pout.atmosphereblend.r = sphere_alpha;
@@ -331,7 +377,7 @@ PixelOut_high count_common_lighting(VertexOut pin, float pz, float shadow_mask)
 	}
 	return pout;
 }
-PixelOut_high count_pbr_lighting(VertexOut pin, float pz,float shadow_mask) 
+PixelOut_high count_pbr_lighting(VertexOut pin, float pz, float shadow_mask)
 {
 	PixelOut_high pout;
 	pout.diffuse = float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -341,10 +387,6 @@ PixelOut_high count_pbr_lighting(VertexOut pin, float pz,float shadow_mask)
 	float4 specrough = gSpecRoughnessMap.Sample(samNormalDepth, pin.Tex);
 	float3 normal_need = normalspec.xyz;
 	float3 position_need = (pz / pin.ToFarPlane.z)*pin.ToFarPlane;
-	pancy_material material_need;
-	material_need.ambient = float4(1.0f, 1.0f, 1.0f, 0.0f);
-	material_need.diffuse = float4(1.0f, 1.0f, 1.0f, 0.0f);
-	material_need.specular = float4(1.0f, 1.0f, 1.0f, normalspec.a);
 	int count_shadow = 0;
 	//~~~~~~~~~~~~~~~~~~~视线空间着色~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	//[unroll]
@@ -354,20 +396,19 @@ PixelOut_high count_pbr_lighting(VertexOut pin, float pz,float shadow_mask)
 	float3 position_view_sun = float3(0.0f, 0.0f, 0.0f);
 	float3 eye_direct_sun = normalize(position_view_sun - position_need);
 	rec_sunlight.dir = mul(float4(sun_light.dir, 0.0f), view_matrix).xyz;
+
+
 	//计算大气光散射
 	pout.atmosphereblend = float4(0.0f, 0.0f, 0.0f, 0.0f);
 	float3 view_direction = normalize(pin.view_ray);
 	float fragment_angular_size = length(ddx(pin.view_ray) + ddy(pin.view_ray)) / length(pin.view_ray);
 	float sphere_alpha = 0.0;
-	//float3 sphere_radiance = float3(0.0f, 0.0f, 0.0f);
 	float render_check = render_mask.Sample(samNormalDepth, pin.Tex).r;
-
 	float3 transmittance_out;
 	float3 in_scatter_out;
-	rec_sunlight.diffuse.rgb = count_normal_sphereradiance(pz,pin, render_check, fragment_angular_size, sphere_alpha, transmittance_out, in_scatter_out);
-	//rec_sunlight.diffuse.rgb = float3(0.8f, 0.8f, 0.8f);
-	pout.atmosphereblend.rgb = count_sky_radiance(view_direction);
-	//pout.atmosphereblend.rgb = view_direction;
+	float3 now_pos;
+	rec_sunlight.diffuse.rgb = count_normal_sphereradiance(pz, pin, render_check, fragment_angular_size, sphere_alpha, transmittance_out, in_scatter_out, now_pos);
+	pout.atmosphereblend.rgb = count_sky_radiance(now_pos, view_direction, rec_sunlight.diffuse.rgb, transmittance_out, render_check);
 	pout.atmosphereblend.a = sphere_alpha;
 
 	rec_sunlight.diffuse.a = 1.0f;
@@ -378,6 +419,7 @@ PixelOut_high count_pbr_lighting(VertexOut pin, float pz,float shadow_mask)
 	//return pout;
 	//计算太阳光pbr
 	compute_dirlight_pbr(specrough.rgb, normalspec.a, specrough.a, rec_sunlight, normal_need, eye_direct_sun, D, S);
+
 	float3 light_dir_rec = normalize(rec_sunlight.dir);
 	float diffuse_angle = dot(-light_dir_rec, normal_need); //漫反射夹角
 	//D.rgb = D.rgb * transmittance_out + in_scatter_out;
@@ -403,9 +445,9 @@ PixelOut_high count_pbr_lighting(VertexOut pin, float pz,float shadow_mask)
 	float4 pos_shadow = mul(pos_shadow_world, sunlight_shadowmat[count_sunlight]);
 	float rec_shadow = max(CalcShadowFactor(samShadow, texture_sunshadow, count_sunlight, pos_shadow), shadow_mask);
 
-	
-	pout.diffuse += 0.5f * (0.2f + 0.8f * rec_shadow) * (D / diffuse_angle);
-	pout.specular += 0.5f *(0.2f + 0.8f * rec_shadow) * (S / diffuse_angle);
+
+	pout.diffuse += (0.2f + 0.8f * rec_shadow) * (D) * 2;
+	pout.specular += (0.2f + 0.8f * rec_shadow) * (S);
 	//再计算普通光
 	int count_all = 0;
 	for (uint i = 0; i < shadow_num.x; ++i)
@@ -414,13 +456,12 @@ PixelOut_high count_pbr_lighting(VertexOut pin, float pz,float shadow_mask)
 		rec_light.dir = mul(float4(light_need[count_all].dir, 0.0f), view_matrix).xyz;
 		float3 position_view = float3(0.0f, 0.0f, 0.0f);
 		float3 eye_direct = normalize(position_view - position_need);
-		//compute_dirlight(material_need, rec_light, normal_need, eye_direct, A, D, S);
 		compute_dirlight_pbr(specrough.rgb, normalspec.a, specrough.a, rec_light, normal_need, eye_direct_sun, D, S);
 		float4 pos_shadow_world = mul(float4(position_need, 1.0f), invview_matrix);
 		float4 pos_shadow = mul(pos_shadow_world, shadowmap_matrix[count_all]);
 		float rec_shadow = max(CalcShadowFactor(samShadow, texture_shadow, count_all, pos_shadow), shadow_mask);
-		pout.diffuse += (0.2f + 0.8f*rec_shadow)*D;
-		pout.specular += (0.2f + 0.8f*rec_shadow)*S;
+		pout.diffuse = (0.2f + 0.8f*rec_shadow)*D;
+		pout.specular = (0.2f + 0.8f*rec_shadow)*S;
 		count_all += 1;
 	}
 	for (uint i = 0; i < shadow_num.z; ++i)
@@ -446,7 +487,6 @@ PixelOut_high count_pbr_lighting(VertexOut pin, float pz,float shadow_mask)
 		rec_light.dir = mul(float4(light_need[count_all].dir, 0.0f), view_matrix).xyz;
 		float3 position_view = float3(0.0f, 0.0f, 0.0f);
 		float3 eye_direct = normalize(position_view - position_need);
-		//compute_dirlight(material_need, rec_light, normal_need, eye_direct, A, D, S);
 		compute_dirlight_pbr(specrough.rgb, normalspec.a, specrough.a, rec_light, normal_need, eye_direct, D, S);
 		pout.diffuse += D;
 		pout.specular += S;
@@ -459,7 +499,6 @@ PixelOut_high count_pbr_lighting(VertexOut pin, float pz,float shadow_mask)
 		rec_light.dir = mul(float4(light_need[count_all].dir, 0.0f), view_matrix).xyz;
 		float3 position_view = float3(0.0f, 0.0f, 0.0f);
 		float3 eye_direct = normalize(position_view - position_need);
-		//compute_pointlight(material_need, rec_light, position_need, normal_need, position_view, A, D, S);
 		compute_pointlight_pbr(specrough.rgb, normalspec.a, specrough.a, rec_light, position_need, normal_need, position_view, D, S);
 		pout.diffuse += D;
 		pout.specular += S;
@@ -484,9 +523,9 @@ PixelOut_high count_pbr_lighting(VertexOut pin, float pz,float shadow_mask)
 PixelOut_high PS(VertexOut pin)
 {
 	float pz = gdepth_map.Sample(samNormalDepth, pin.Tex).r;
-	return count_common_lighting(pin, pz,0.0f);
+	return count_common_lighting(pin, pz, 0.0f);
 }
-PixelOut_high PS_PBR(VertexOut pin) 
+PixelOut_high PS_PBR(VertexOut pin)
 {
 	float pz = gdepth_map.Sample(samNormalDepth, pin.Tex).r;
 	return count_pbr_lighting(pin, pz, 0.0f);
@@ -510,7 +549,7 @@ PixelOut_high PS_withoutshadow(VertexOut pin)
 	float pz = gdepth_map.Sample(samNormalDepth, pin.Tex).r;
 	return count_common_lighting(pin, pz, 1.0f);
 }
-PixelOut_high PS_PBR_withoutshadow(VertexOut pin) 
+PixelOut_high PS_PBR_withoutshadow(VertexOut pin)
 {
 	float pz = gdepth_map.Sample(samNormalDepth, pin.Tex).r;
 	return count_pbr_lighting(pin, pz, 1.0f);

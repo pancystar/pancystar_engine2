@@ -245,7 +245,8 @@ void real_time_environment::display_backbuffer(scene_root *environment_scene)
 	XMFLOAT4X4 view_matrix_reflect, inv_view_matrix_reflect;
 	get_ViewMatrix(&view_matrix_reflect, &inv_view_matrix_reflect);
 
-	Pretreatment_gbuffer::get_instance()->render_gbuffer(environment_scene->get_geometry_buffer(), gbuffer_texture_data->get_gbuffer(), view_matrix_reflect, scene_perspective, true);
+	Pretreatment_gbuffer::get_instance()->render_gbuffer(environment_scene->get_geometry_buffer(), gbuffer_texture_data->get_gbuffer(), view_matrix_reflect, scene_perspective, true,false);
+	Pretreatment_gbuffer::get_instance()->render_gbuffer(environment_scene->get_geometry_buffer(), gbuffer_texture_data->get_gbuffer(), view_matrix_reflect, scene_perspective, true, true);
 	Pretreatment_gbuffer::get_instance()->render_lbuffer(gbuffer_texture_data->get_gbuffer(), center_position, view_matrix_reflect, inv_view_matrix_reflect, scene_perspective, true);
 
 	engine_basic::engine_fail_reason check_error;
@@ -872,6 +873,19 @@ engine_basic::engine_fail_reason scene_test_environment::create()
 	pt->update_animation(1 / 100.0f);
 	XMFLOAT4X4 mat_world;
 	XMStoreFloat4x4(&mat_world, XMMatrixIdentity());
+	//加载城堡
+	/*
+	check_error = geometry_buffer->load_a_model_type("castelmodel\\outmodel.pancymesh", "castelmodel\\outmodel.pancymat", false, model_ID_castel);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = geometry_buffer->add_a_model_instance(model_ID_castel, mat_world, ID_model_castel);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	*/
 	//加载天空
 	check_error = geometry_buffer->load_a_model_type("ballmodel\\outmodel.pancymesh", "ballmodel\\outmodel.pancymat", false, model_ID_sky);
 	if (!check_error.check_if_failed())
@@ -922,7 +936,6 @@ engine_basic::engine_fail_reason scene_test_environment::create()
 		return check_error;
 	}
 	*/
-	//加载测试山脉
 	/*
 	terrain_file_path terrain_file;
 
@@ -951,12 +964,40 @@ engine_basic::engine_fail_reason scene_test_environment::create()
 		return check_error;
 	}
 	*/
+	//加载测试山脉
+	check_error = geometry_buffer->load_terrain(physic_scene, "terrain_data\\pancy.ptn", 4096.0f, 30, 100.0f, 2000.0f, 1.0f - 1.0f / 3.0f);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = geometry_buffer->get_terrain_data()->load_terrain_material("terrain_data\\terrain_material\\Ground_NeedlyDirtGround\\Ground_NeedlyDirtGround.ptt",terrain_material_mid);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = geometry_buffer->get_terrain_data()->load_terrain_material("terrain_data\\terrain_material\\Ground_RainforestCover\\Ground_RainforestCover.ptt", terrain_material_mid);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = geometry_buffer->get_terrain_data()->load_terrain_material("terrain_data\\terrain_material\\grass_MixedAutumnGrass\\grass_MixedAutumnGrass.ptt", terrain_material_mid);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = geometry_buffer->get_terrain_data()->load_terrain_material("terrain_data\\terrain_material\\Brick_RuinsBrickWithMixedRubble\\Brick_RuinsBrickWithMixedRubble.ptt", terrain_material_mid);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	/*
 	terrain_test = new pancy_terrain_control(physic_scene,"terrain_data\\pancy.ptn", 2048.0f, 200, 100.0f, 1000.0f, 1.0f - 1.0f / 3.0f);
 	check_error = terrain_test->create();
 	if (!check_error.check_if_failed())
 	{
 		return check_error;
 	}
+	*/
 	//加载测试粒子
 	particle_fire = new particle_looping<point_ParticleBasic>(5000);
 	check_error = particle_fire->create(L"flare0.dds");
@@ -975,25 +1016,23 @@ engine_basic::engine_fail_reason scene_test_environment::create()
 	{
 		return check_error;
 	}
-	physx::PxTransform box_pos = physx::PxTransform(physx::PxVec3(0.0f, 200.0f, 0.0f));
+	physx::PxTransform box_pos = physx::PxTransform(physx::PxVec3(0.0f, 1200.0f, 0.0f));
 	physx::PxBoxGeometry box_geo = physx::PxBoxGeometry(physx::PxVec3(0.5f, 0.5f, 0.5f));
 	physic_scene->add_a_dynamic_object(box_pos, box_geo,XMFLOAT3(0.5,0.5,0.5),box_physx);
 	physic_scene->wakeup_a_dynamic(box_physx);
 	//todo物理
-	
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
 void scene_test_environment::display()
 {
-	
+	//show_model_single("LightTech");
 	show_animation_test();
 	show_sky_single();
 	show_terrain();
 	show_particle();
 	show_sky_cube();
 	show_physic_box();
-	
 }
 void scene_test_environment::show_particle()
 {
@@ -1054,12 +1093,20 @@ void scene_test_environment::update(float delta_time)
 
 	XMFLOAT4X4 world_matrix;
 	XMFLOAT4X4 final_matrix;
+	//更新城堡
+	/*
+	trans_world = XMMatrixTranslation(0.0, 5.0, 0.0);
+	scal_world = XMMatrixScaling(1, 1, 1);
+	XMStoreFloat4x4(&world_matrix, scal_world *  trans_world);
+	geometry_resource_view *data_need;
+	geometry_buffer->update_a_model_instance(ID_model_castel, world_matrix, delta_time);
+	*/
 	//更新天空
 	test_IBL->update_sky_data(delta_time);
 	XMFLOAT3 view_pos;
 	scene_camera->get_view_position(&view_pos);
 	trans_world = XMMatrixTranslation(view_pos.x, view_pos.y, view_pos.z);
-	scal_world = XMMatrixScaling(50, 50, 50);
+	scal_world = XMMatrixScaling(150, 150, 150);
 	XMStoreFloat4x4(&world_matrix, scal_world *  trans_world);
 	geometry_buffer->update_a_model_instance(ID_model_sky, world_matrix, delta_time);
 	//更新粒子
@@ -1072,7 +1119,7 @@ void scene_test_environment::update(float delta_time)
 	particle_fire->update(delta_time, rand_time, &part_proj, &view_pos);
 	particle_fire->set_particle_direct(&XMFLOAT3(0, 0, 0), &XMFLOAT3(0, 0, 0));
 	//更新地面
-	terrain_test->update(view_pos, view_mat, proj_mat);
+	geometry_buffer->get_terrain_data()->update(view_pos, view_mat, proj_mat);
 	//更新物理
 
 	physic_scene->update(0.003);
@@ -1094,7 +1141,7 @@ void scene_test_environment::release()
 	test_IBL->release();
 
 	//terrain_need->release();
-	terrain_test->release();
+	//terrain_test->release();
 	test_model->release();
 	//pancy_geometry_control_singleton::get_instance()->release();
 	/*
@@ -1140,6 +1187,7 @@ void scene_test_environment::show_sky_single()
 	{
 		shader_test->set_tex_resource(sky_data->get_SRV_spec());
 	}
+	//shader_test->set_tex_atmosphere_occlusion();
 	//shader_test->set_tex_resource(tex_cubesky);
 	//设定总变换
 	XMFLOAT4X4 view_mat, final_mat, viewproj;
@@ -1339,7 +1387,56 @@ void scene_test_environment::show_sky_cube()
 	}
 	*/
 }
+void scene_test_environment::show_model_single(string tech_name, XMFLOAT4X4 *view_matrix, XMFLOAT4X4 *proj_matrix)
+{
+	engine_basic::engine_fail_reason check_error;
+	auto shader_need = shader_control::GetInstance()->get_shader_lightdeffered(check_error);
 
+	geometry_resource_view *data_view = NULL;
+	geometry_buffer->get_a_model_type(&data_view, model_ID_castel);
+	XMFLOAT4X4 view_mat, final_mat;
+	if (view_matrix == NULL)
+	{
+		pancy_camera::get_instance()->count_view_matrix(&view_mat);
+	}
+	else
+	{
+		view_mat = *view_matrix;
+	}
+	XMMATRIX proj;
+	if (proj_matrix == NULL)
+	{
+		proj = XMLoadFloat4x4(&engine_basic::perspective_message::get_instance()->get_proj_matrix());
+	}
+	else
+	{
+		proj = XMLoadFloat4x4(proj_matrix);
+	}
+	XMMATRIX rec_world = XMLoadFloat4x4(&data_view->get_matrix_list()[0]) * XMLoadFloat4x4(&view_mat) * proj;
+	XMStoreFloat4x4(&final_mat, rec_world);
+
+
+	shader_need->set_trans_world(&data_view->get_matrix_list()[0]);
+	shader_need->set_trans_all(&final_mat);
+	shader_need->set_tex_diffuse_array(data_view->get_texture());
+
+	pancy_material test_Mt;
+	XMFLOAT4 rec_ambient2(1.0f, 1.0f, 1.0f, 1.0f);
+	XMFLOAT4 rec_diffuse2(1.0f, 1.0f, 1.0f, 1.0f);
+	XMFLOAT4 rec_specular2(0.2f, 0.2f, 0.2f, 6.0f);
+	test_Mt.ambient = rec_ambient2;
+	test_Mt.diffuse = rec_diffuse2;
+	test_Mt.specular = rec_specular2;
+	test_Mt.reflect = rec_ambient2;
+	shader_need->set_material(test_Mt);
+
+	ID3DX11EffectTechnique *teque_need;
+	shader_need->get_technique(&teque_need, tech_name.c_str());
+
+	data_view->get_technique(teque_need);
+
+	data_view->draw(false);
+}
 void scene_test_environment::show_animation_test()
 {
 	engine_basic::engine_fail_reason check_error;
@@ -1369,7 +1466,7 @@ void scene_test_environment::show_animation_test()
 	geometry_resource_view *data_view = NULL;
 	geometry_buffer->get_a_model_type(&data_view, model_ID_skin);
 	data_view->update(ID_model_skin.model_instance, world_mat, 0.2f);
-	data_view->update(ID_model_skin2.model_instance, world_mat, 0.1f);
+	data_view->update(ID_model_skin2.model_instance, world_mat2, 0.1f);
 	auto data_bone_matlist = data_view->get_bone_matrix_list();
 	//XMFLOAT4X4 bone_mat[100];
 	XMFLOAT4X4 world_mat_list[] = { world_mat ,world_mat2 };
@@ -1416,7 +1513,7 @@ void scene_test_environment::show_terrain()
 	XMStoreFloat4x4(&proj_mat, proj);
 	terrain_need->render_terrain(view_pos, view_mat, proj_mat);
 	*/
-	terrain_test->display();
+	geometry_buffer->get_terrain_data()->display();
 
 }
 /*
@@ -2301,9 +2398,9 @@ void pancy_scene_control::update(float delta_time)
 			{
 				time_count -= XM_2PI;
 			}
-			sundir.x = 0;
+			sundir.x = cos(time_count);
 			sundir.y = -sin(time_count);
-			sundir.z = cos(time_count);
+			sundir.z = 0;
 		}
 	}
 	if (scene_now_show >= 0 && scene_now_show < scene_list.size())
@@ -2327,6 +2424,7 @@ void pancy_scene_control::display()
 	shader_deffered->set_trans_invview(&inv_view_mat);
 	shader_deffered->set_view_pos(view_pos);
 	//渲染gbuffer
+
 	if (scene_now_show >= 0 && scene_now_show < scene_list.size())
 	{
 		//反投影
@@ -2347,7 +2445,7 @@ void pancy_scene_control::display()
 		
 		//gbuffer
 		engine_basic::extra_perspective_message scene_perspective(d3d_pancy_basic_singleton::GetInstance()->get_wind_width(), d3d_pancy_basic_singleton::GetInstance()->get_wind_height(), engine_basic::perspective_message::get_instance()->get_perspective_near_plane(), engine_basic::perspective_message::get_instance()->get_perspective_far_plane(), DirectX::XM_PIDIV4);
-		Pretreatment_gbuffer::get_instance()->render_gbuffer(scene_list[scene_now_show]->get_geometry_buffer(), scene_list[scene_now_show]->get_gbuffer_renderdata(), view_mat, &scene_perspective, false);
+		Pretreatment_gbuffer::get_instance()->render_gbuffer(scene_list[scene_now_show]->get_geometry_buffer(), scene_list[scene_now_show]->get_gbuffer_renderdata(), view_mat, &scene_perspective, false,false);
 
 		//渲染AO
 		ssao_render->get_normaldepthmap(scene_list[scene_now_show]->get_gbuffer_renderdata()->normalspec_tex, scene_list[scene_now_show]->get_gbuffer_renderdata()->depthmap_single_tex);
@@ -2359,13 +2457,15 @@ void pancy_scene_control::display()
 		light_control_singleton::GetInstance()->draw_shadow(scene_list[scene_now_show]->get_geometry_buffer());
 		//计算光照
 		Pretreatment_gbuffer::get_instance()->render_lbuffer(scene_list[scene_now_show]->get_gbuffer_renderdata(), view_pos, view_mat, inv_view_mat, &scene_perspective, true);
+		//非延迟光照深度记录
+		Pretreatment_gbuffer::get_instance()->render_gbuffer(scene_list[scene_now_show]->get_geometry_buffer(), scene_list[scene_now_show]->get_gbuffer_renderdata(), view_mat, &scene_perspective, false,true);
 		//设置光照贴图
 		auto shader_deffered = shader_control::GetInstance()->get_shader_lightdeffered(check_error);
 		shader_deffered->set_diffuse_light_tex(scene_list[scene_now_show]->get_gbuffer_renderdata()->gbuffer_diffuse_tex);
 		shader_deffered->set_specular_light_tex(scene_list[scene_now_show]->get_gbuffer_renderdata()->gbuffer_specular_tex);
 		shader_deffered->set_normal_tex(scene_list[scene_now_show]->get_gbuffer_renderdata()->normalspec_tex);
 		shader_deffered->set_tex_specroughness_resource(scene_list[scene_now_show]->get_gbuffer_renderdata()->specroughness_tex);
-		
+		shader_deffered->set_tex_atmosphere_fog(scene_list[scene_now_show]->get_gbuffer_renderdata()->gbuffer_atmosphere_tex);
 		//deffered shading颜色渲染
 		auto reflect_buffer = scene_list[scene_now_show]->get_postbuffer_data();
 		ID3D11RenderTargetView* renderTargets[2] = { reflect_buffer->rtgr_input_target,reflect_buffer->rtgr_InputMask_target };
@@ -2376,10 +2476,8 @@ void pancy_scene_control::display()
 		float mask_clearColor[] = { 1.0f, 0.0f, 0.0f, 1.0f };
 		d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearRenderTargetView(reflect_buffer->rtgr_input_target, clearColor);
 		d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->ClearRenderTargetView(reflect_buffer->rtgr_InputMask_target, mask_clearColor);
-		
 		scene_list[scene_now_show]->display();
 		scene_list[scene_now_show]->display_nopost();
-		
 		//反射颜色计算
 		render_posttreatment_RTGR::get_instance()->draw_reflect(
 			scene_list[scene_now_show]->get_gbuffer_renderdata(),
@@ -2393,6 +2491,7 @@ void pancy_scene_control::display()
 			scene_list[scene_now_show]->get_HDRbuffer_data(),
 			d3d_pancy_basic_singleton::GetInstance()->get_back_buffer()
 			);
+		
 		environment_map_list->display_a_turn(scene_list[scene_now_show]);
 	}
 	d3d_pancy_basic_singleton::GetInstance()->restore_render_target();

@@ -252,7 +252,7 @@ void environment_IBL_data::display_environment(
 		auto shader_pretreat_lbuffer = shader_control::GetInstance()->get_shader_lightbuffer(check_error);
 		shader_pretreat_lbuffer->set_view_from_clip(clip_matrix);
 
-		Pretreatment_gbuffer::get_instance()->render_gbuffer(geometry_buffer, environment_texture_data->get_gbuffer(), view_matrix_reflect, &scene_perspective, false);
+		Pretreatment_gbuffer::get_instance()->render_gbuffer(geometry_buffer, environment_texture_data->get_gbuffer(), view_matrix_reflect, &scene_perspective, false,true);
 		Pretreatment_gbuffer::get_instance()->render_lbuffer(environment_texture_data->get_gbuffer(), pos_view, view_matrix_reflect, invview_matrix_reflect, &scene_perspective, false);
 
 		ID3D11RenderTargetView* renderTargets[1] = { RTV_singlecube[i] };
@@ -425,6 +425,9 @@ engine_basic::engine_fail_reason environment_IBL_control::create()
 	{
 		return check_error;
 	}
+	geometry_resource_view *data_view = NULL;
+	geometry_sky->get_a_model_type(&data_view, model_ID_sky);
+	data_view->set_cull_front();
 	//È«ÆÁÄ»Æ½Ãæ
 	fullscreen_buffer = new mesh_square(false);
 	check_error = fullscreen_buffer->create_object();
@@ -441,9 +444,9 @@ engine_basic::engine_fail_reason environment_IBL_control::create()
 		//float vector_angle = time_range.x + static_cast<float>(i) * vector_delta;
 		float vector_angle = Transform_IntTime_ToFloat(i);
 		fmod(vector_angle, XM_2PI);
-		sun_dir.x = 0;
+		sun_dir.x = cos(vector_angle);
 		sun_dir.y = -sin(vector_angle);
-		sun_dir.z = cos(vector_angle);
+		sun_dir.z = 0;
 
 		check_error = add_an_IBL_data(i, quality_sky, sun_dir);
 		if (!check_error.check_if_failed())

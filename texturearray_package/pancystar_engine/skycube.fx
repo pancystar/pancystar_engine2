@@ -8,6 +8,7 @@ cbuffer PerFrame
 };
 TextureCube texture_cube;
 Texture2D atmosphere_mask;           //大气散射掩码
+Texture2D atmosphere_occlusion;      //大气散射遮蔽
 SamplerState samTex
 {
 	Filter = MIN_MAG_MIP_LINEAR;

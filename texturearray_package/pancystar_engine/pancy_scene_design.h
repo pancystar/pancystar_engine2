@@ -124,10 +124,11 @@ private:
 };
 class scene_test_environment : public scene_root
 {
-	
+	pancy_model_ID ID_model_castel;
+	int model_ID_castel;
 	particle_looping<point_ParticleBasic>          *particle_fire;
 	//pancy_terrain_part        *terrain_need;
-	pancy_terrain_control *terrain_test;
+	//pancy_terrain_control *terrain_test;
 	bool if_finish = false;
 	float time_need = 0;
 	pancy_model_ID ID_model_skin;
@@ -176,6 +177,7 @@ private:
 	void show_terrain();
 	void show_particle();
 	void show_physic_box();
+	void show_model_single(string tech_name, XMFLOAT4X4 *view_matrix = NULL, XMFLOAT4X4 *proj_matrix = NULL);
 	//engine_basic::engine_fail_reason create_cubemap();
 };
 class scene_test_plant : public scene_root

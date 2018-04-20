@@ -15,6 +15,14 @@ Texture2D        texturet_roughness;   //粗糙度贴图
 Texture2D        texture_rdfluv;   //粗糙度贴图
 
 Texture2DArray   texture_pack_diffuse;
+Texture2DArray   texture_pack_normal;
+Texture2DArray   texture_pack_metallic;
+Texture2DArray   texture_pack_roughness;
+BlendState CommonBlending
+{
+	AlphaToCoverageEnable = TRUE;
+	BlendEnable[0] = FALSE;
+};
 TextureCube      texture_environment;
 struct mesh_anim 
 {
@@ -27,10 +35,11 @@ uint4 offset_num;
 
 SamplerState samTex_liner
 {
+	//Filter = MIN_MAG_MIP_LINEAR;
 	Filter = ANISOTROPIC;
 	MaxAnisotropy = 16;
-	AddressU = Wrap;
-	AddressV = Wrap;
+	AddressU = wrap;
+	AddressV = wrap;
 };
 RasterizerState DisableCulling
 {
@@ -76,6 +85,45 @@ struct VertexOut
 	float4  tex2         : TEXOTHER;     //顶点纹理坐标(其它纹理)
 	float3 position_bef  : POSITION;       //变换前的顶点坐标
 };
+
+struct Vertex_IN_array
+{
+	float3	pos 	 : POSITION;     //顶点位置
+	float3	normal   : NORMAL;       //顶点法向量
+	float3	tangent  : TANGENT;      //顶点切向量
+	float3  tex      : TEXCOORD;     //数组采样纹理
+	float4  texrange : TEXRANGE;     //纹理范围
+};
+struct Vertex_IN_anim_array
+{
+	uint   vertIndex		: SV_VertexID;
+	float3	pos 	 : POSITION;     //顶点位置
+	float3	normal   : NORMAL;       //顶点法向量
+	float3	tangent  : TANGENT;      //顶点切向量
+	float3  tex      : TEXCOORD;     //数组采样纹理
+	float4  texrange : TEXRANGE;     //纹理范围
+};
+struct Vertex_IN_bone_array
+{
+	float3	pos 	: POSITION;     //顶点位置
+	float3	normal 	: NORMAL;       //顶点法向量
+	float3	tangent : TANGENT;      //顶点切向量
+	uint4   texid   : TEXINDICES;   //纹理索引
+	float3  tex      : TEXCOORD;     //数组采样纹理
+	float4  texrange : TEXRANGE;     //纹理范围
+	uint4   bone_id     : BONEINDICES;  //骨骼ID号
+	float4  bone_weight : WEIGHTS;      //骨骼权重
+};
+struct VertexOut_array
+{
+	float4 position      : SV_POSITION;    //变换后的顶点坐标
+	float3 normal        : NORMAL;         //变换后的法向量
+	float3 tangent       : TANGENT;        //顶点切向量
+	float3  tex          : TEXCOORD;       //数组采样纹理
+	float4  texrange     : TEXRANGE;       //纹理范围
+	float3 position_bef  : POSITION;       //变换前的顶点坐标
+};
+
 void count_pbr_reflect(
 	float4 tex_albedo_in,
 	float  tex_matallic,
@@ -182,6 +230,7 @@ VertexOut VS(Vertex_IN vin)
 }
 VertexOut VS_anim(Vertex_IN_anim vin)
 {
+	
 	VertexOut vout;
 	int offset_ID = vin.vertIndex + offset_num.x + offset_num.y * offset_num.z;
 	mesh_anim data = input_point[offset_ID];
@@ -225,6 +274,20 @@ VertexOut VS_bone(Vertex_IN_bone vin)
 	vout.position_bef = mul(float4(vin.pos, 1.0f), world_matrix).xyz;
 	return vout;
 }
+
+VertexOut_array VS_array(Vertex_IN_array vin)
+{
+	VertexOut_array vout;
+	vout.position = mul(float4(vin.pos, 1.0f), final_matrix);
+	vout.normal = mul(float4(vin.normal, 0.0f), normal_matrix).xyz;
+	vout.tangent = mul(float4(vin.tangent, 0.0f), normal_matrix).xyz;
+	vout.tex = vin.tex;
+	vout.texrange = vin.texrange;
+	vout.position_bef = mul(float4(vin.pos, 1.0f), world_matrix).xyz;
+	return vout;
+}
+
+
 float4 PS_pbr(VertexOut pin) :SV_TARGET
 {
 	float4 A,D,S;
@@ -233,8 +296,8 @@ float4 PS_pbr(VertexOut pin) :SV_TARGET
 	light_dir.diffuse = float4(1.0f, 1.0f, 1.0f, 1.0f);
 	light_dir.specular = float4(1.5f, 1.5f, 1.5f, 1.0f);
 	light_dir.dir = normalize(float3(1.0f,0.0f, 0.0f));
-
 	float4 tex_albedo = texture_diffuse.Sample(samTex_liner, pin.tex1.xy);
+	clip(tex_albedo.a - 0.3f);
 	float tex_metallic = texture_metallic.Sample(samTex_liner, pin.tex1.xy).r;
 	float tex_roughness = texturet_roughness.Sample(samTex_liner, pin.tex1.xy).r;
 
@@ -294,38 +357,61 @@ float4 PS(VertexOut pin) :SV_TARGET
 	float4 final_color = tex_color *(A + D) + S;
 	return final_color;
 }
-float4 PS_array(VertexOut pin) :SV_TARGET
+float2 exchange_wrap(float2 uv, float4 uv_range) 
+{
+	//还原出原始纹理的采样范围
+	float2 uv_range_tex = float2(uv_range.y - uv_range.x, uv_range.w - uv_range.z);
+	float2 uv_st_tex = float2(uv_range.x, uv_range.z);
+	float2 uv_ed_tex = float2(uv_range.y, uv_range.w);
+	float2 uv_out = uv - uv_st_tex;
+	uv_out = frac(frac(uv_out / uv_range_tex)+1);
+	uv_out = uv_out * uv_range_tex + uv_st_tex;
+
+	uv_out = clamp(uv_out, uv_st_tex, uv_ed_tex);
+	/*
+	//计算横向坐标
+	float uv_x = uv.x - uv_range.x;
+	float new_pos_x = fmod(uv_x, range_x) + range_x;
+	uv_out.x = fmod(new_pos_x, range_x) + uv_range.x;
+	//计算纵向坐标
+	float uv_y = uv.y - uv_range.z;
+	float new_pos_y = fmod(uv_y, range_y) + range_y;
+	uv_out.y = fmod(new_pos_y, range_y) + uv_range.z;
+	*/
+	return uv_out;
+}
+float4 PS_array(VertexOut_array pin) :SV_TARGET
 {
 	float4 A,D,S;
-	pancy_light_basic light_dir;
-	light_dir.ambient = float4(0.5f, 0.5f, 0.5f,1.0f);
-	light_dir.diffuse = float4(1.0f, 1.0f, 1.0f, 1.0f);
-	light_dir.specular = float4(0.5f, 0.5f, 0.5f, 1.0f);
-	light_dir.dir = float3(1.0f,0.0f, 0.0f);
 
-	pancy_material material_need;
-	material_need.ambient = float4(1.0f, 1.0f, 1.0f, 1.0f);
-	material_need.diffuse = float4(1.0f, 1.0f, 1.0f, 1.0f);
-	material_need.specular = float4(1.0f, 1.0f, 1.0f, 1.0f);
-	material_need.reflect = float4(0.0f, 0.0f, 0.0f, 1.0f);
+	pancy_light_basic light_dir;
+	light_dir.ambient = float4(1.0f, 1.0f, 1.0f,1.0f);
+	light_dir.diffuse = float4(1.0f, 1.0f, 1.0f, 1.0f);
+	light_dir.specular = float4(1.5f, 1.5f, 1.5f, 1.0f);
+	light_dir.dir = normalize(float3(1.0f,0.0f, 0.0f));
+	//float texID_data = pin.texid.y;
+	float3 tex_out = pin.tex;
+	tex_out.xy = exchange_wrap(pin.tex.xy, pin.texrange);
+	float4 tex_albedo = texture_pack_diffuse.SampleGrad(samTex_liner, tex_out,ddx(pin.tex),ddy(pin.tex));
+	clip(tex_albedo.a - 0.3f);
+	float tex_metallic = texture_pack_metallic.SampleGrad(samTex_liner, tex_out, ddx(pin.tex), ddy(pin.tex)).r;
+	float tex_roughness = texture_pack_roughness.SampleGrad(samTex_liner, tex_out, ddx(pin.tex), ddy(pin.tex)).r;
 
 	float3 normal_need = normalize(pin.normal);
-	float3 view_dir = float3(0.0f, 0.0f, 1.0f);
-	compute_dirlight(material_need, light_dir, normal_need, view_dir,A,D,S);
-	float texID_data = pin.texid.y;
-	if (texID_data > 1.0f)
-	{
-		texID_data *= 1.001;
-	}
-	float4 tex_color = texture_pack_diffuse.Sample(samTex_liner, float3(pin.tex1.zw, texID_data));
+	float3 view_dir = normalize(position_view - pin.position_bef);
+
+	compute_dirlight_2(tex_albedo, tex_metallic, tex_roughness, light_dir, normal_need, view_dir,A,D,S);
+	float4 final_color = A + D + S;
+	//float4 tex_color = texture_pack_diffuse.Sample(samTex_liner, float3(pin.tex1.xy, texID_data));
 	//	if (texID_data < 1.5f) 
 	//	{
 	//		tex_color = float4(0.0f, 0.0f, 0.0f, 0.0f);
 	//	}
 
-		float4 final_color = tex_color *(A + D) + S;
-		return final_color;
+	//float4 final_color = tex_color *(A + D) + S;
+	return final_color;
 }
+
 technique11 light_tech
 {
 	pass P0
@@ -367,7 +453,8 @@ technique11 light_tech_array
 {
 	pass P0
 	{
-		SetVertexShader(CompileShader(vs_5_0, VS()));
+		//SetBlendState(CommonBlending, float4(0.0f, 0.0f, 0.0f, 0.0f), 0xffffffff);
+		SetVertexShader(CompileShader(vs_5_0, VS_array()));
 		SetGeometryShader(NULL);
 		SetPixelShader(CompileShader(ps_5_0, PS_array()));
 	}

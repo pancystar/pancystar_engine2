@@ -93,7 +93,7 @@ int count_divide_num(float3 final_pos)
 	float delta = (far_way - dist_2d) / (far_way - near_way);
 	delta = clamp(delta, 0, 1);
 	//delta = delta * delta;
-	return max(32 * delta, 2);
+	return max(64 * delta, 2);
 }
 patch_tess ConstantHS(InputPatch<VertexOut_terrain, 4> patch, uint PatchID:SV_PrimitiveID)
 {

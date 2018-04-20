@@ -76,7 +76,13 @@ private:
 	engine_basic::engine_fail_reason init_testure();
 	int_list count_dfs(int now_st_x, int now_st_y, int now_width, int now_height);
 };
-
+struct texture_input_message 
+{
+	int width_before;
+	int height_before;
+	int width_combine;
+	int height_combine;
+};
 class scene_test_square : public scene_root 
 {
 	float time_all;
@@ -85,7 +91,7 @@ class scene_test_square : public scene_root
 	animation_set *anim_read;
 	bool if_have_bone;
 	//µ„ª˜µ„—∞’“Œ∆¿Ì
-
+	bool if_export = false;
 	ID3D11Texture2D          *clipTex0;
 	ID3D11Texture2D          *CPU_read_buffer;
 	ID3D11ShaderResourceView *clip_SRV;
@@ -128,9 +134,12 @@ class scene_test_square : public scene_root
 	//model_reader_assimp<point_common> *mesh_model_need;
 	assimp_basic *mesh_model_need;
 	ID3D11ShaderResourceView *tex_floor;
-	std::map<std::string, ID3D11ShaderResourceView*> rec_texture_packmap;
 	std::vector<pbr_material> pbr_list;
-	std::vector<string> picture_namelist;
+	
+	//std::map<std::string, ID3D11ShaderResourceView*> rec_texture_packmap;
+	//std::vector<string> picture_namelist;
+
+	std::vector<ID3D11ShaderResourceView*> SRV_list;
 
 	ID3D11ShaderResourceView *metallic_choose_tex;
 	ID3D11ShaderResourceView *roughness_choose_tex;
@@ -138,7 +147,10 @@ class scene_test_square : public scene_root
 	ID3D11ShaderResourceView *export_model_tex;
 	ID3D11ShaderResourceView *cubemap_resource;
 
-	ID3D11ShaderResourceView *test_resource;
+	ID3D11ShaderResourceView *testpack_diffuse;
+	ID3D11ShaderResourceView *testpack_normal;
+	ID3D11ShaderResourceView *testpack_metallic;
+	ID3D11ShaderResourceView *testpack_roughness;
 
 public:
 	scene_test_square();
@@ -152,7 +164,8 @@ private:
 	void show_model();
 	void show_model_single();
 	void find_model_clip();
-	void show_square(texture_combine *texture_deal);
+	//void show_square(texture_combine *texture_deal);
+	void show_square_single(texture_combine *texture_deal);
 	void show_cube();
 	void show_pbr_metallic(pbr_material mat_in);
 	void show_pbr_roughness(pbr_material mat_in);
@@ -174,9 +187,9 @@ private:
 	void free_tree(skin_tree *now);
 	void save_anim_data(animation_set *anim_data);
 	void read_anim_data();
-	engine_basic::engine_fail_reason read_texture_from_file(std::vector<string> file_name_list);
-	void change_model_texcoord(texture_combine *texture_deal,point_common *vertex_need, int point_num);
-	void change_model_texcoord(texture_combine *texture_deal, point_skincommon *vertex_need, int point_num);
+	engine_basic::engine_fail_reason read_texture_from_file(ID3D11ShaderResourceView **input, std::vector<string> file_name_list);
+	void change_model_texcoord(texture_input_message *tex_size_data, texture_combine *texture_deal,point_common *vertex_need, point_output *point_singlemodel, int point_num);
+	void change_model_texcoord(texture_input_message *tex_size_data, texture_combine *texture_deal, point_skincommon *vertex_need, point_skinoutput *point_singlemodel, int point_num);
 	HRESULT CreateCPUaccessBuf(D3D11_TEXTURE2D_DESC texDesc, ID3D11Texture2D **resource_out);
 	void CreateAndCopyToDebugBuf(ID3D11Resource *dest_res, ID3D11Resource *source_res);
 	engine_basic::engine_fail_reason init_clip_texture();

@@ -37,6 +37,14 @@ struct point_common
 	XMFLOAT4 tex;
 	XMFLOAT4 tex2;
 };
+struct point_output
+{
+	XMFLOAT3 position;
+	XMFLOAT3 normal;
+	XMFLOAT3 tangent;
+	XMFLOAT3 tex_UVI;//UV&ID
+	XMFLOAT4 tex_range;
+};
 struct point_skincommon
 {
 	XMFLOAT3 position;
@@ -45,6 +53,16 @@ struct point_skincommon
 	XMUINT4  tex_id;
 	XMFLOAT4 tex;
 	XMFLOAT4 tex2;
+	XMUINT4  bone_id;
+	XMFLOAT4 bone_weight;
+};
+struct point_skinoutput
+{
+	XMFLOAT3 position;
+	XMFLOAT3 normal;
+	XMFLOAT3 tangent;
+	XMFLOAT3 tex_UVI;//UV&ID
+	XMFLOAT4 tex_range;
 	XMUINT4  bone_id;
 	XMFLOAT4 bone_weight;
 };
@@ -82,7 +100,6 @@ public:
 	virtual void show_mesh_instance(int copy_num);
 	void release();
 };
-
 //几何体创建父类
 template<typename T>
 class Geometry : public Geometry_basic

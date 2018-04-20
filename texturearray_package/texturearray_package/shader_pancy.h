@@ -117,6 +117,9 @@ class virtual_light_shader : public shader_basic
 	ID3DX11EffectShaderResourceVariable   *texture_brdfluv_handle;       //brdf预处理贴图句柄
 
 	ID3DX11EffectShaderResourceVariable   *texture_diffusearray_handle;     //漫反射贴图句柄
+	ID3DX11EffectShaderResourceVariable   *texture_normalarray_handle;     //漫反射贴图句柄
+	ID3DX11EffectShaderResourceVariable   *texture_metallicarray_handle;     //漫反射贴图句柄
+	ID3DX11EffectShaderResourceVariable   *texture_roughnessarray_handle;     //漫反射贴图句柄
 	ID3DX11EffectShaderResourceVariable   *cubemap_texture;                 //立方贴图资源
 
 	ID3DX11EffectShaderResourceVariable   *animation_buffer;      //动画数据
@@ -137,6 +140,10 @@ public:
 	engine_basic::engine_fail_reason set_tex_brdfluv(ID3D11ShaderResourceView *tex_in);//设置粗糙度纹理
 	
 	engine_basic::engine_fail_reason set_tex_diffuse_array(ID3D11ShaderResourceView *tex_in);//设置漫反射纹理数组
+	engine_basic::engine_fail_reason set_tex_normal_array(ID3D11ShaderResourceView *tex_in);//设置法线纹理数组
+	engine_basic::engine_fail_reason set_tex_metallic_array(ID3D11ShaderResourceView *tex_in);//设置金属度纹理数组
+	engine_basic::engine_fail_reason set_tex_roughness_array(ID3D11ShaderResourceView *tex_in);//设置粗糙度纹理数组
+
 	engine_basic::engine_fail_reason set_tex_environment(ID3D11ShaderResourceView* tex_cube);           //设置纹理资源
 
 	engine_basic::engine_fail_reason set_animation_buffer(ID3D11ShaderResourceView* buffer_in);

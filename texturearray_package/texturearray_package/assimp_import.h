@@ -239,7 +239,25 @@ engine_basic::engine_fail_reason model_reader_assimp<T>::init_mesh(bool if_adj)
 			if (paiMesh->HasTextureCoords(0))
 			{
 				point_need[j].tex.x = paiMesh->mTextureCoords[0][j].x;
-				point_need[j].tex.y = 1 - paiMesh->mTextureCoords[0][j].y;
+				point_need[j].tex.y = paiMesh->mTextureCoords[0][j].y;
+				/*
+				while (point_need[j].tex.x < 0.0f)
+				{
+					point_need[j].tex.x += 1.0f;
+				}
+				while (point_need[j].tex.x > 1.0f)
+				{
+					point_need[j].tex.x -= 1.0f;
+				}
+				while (point_need[j].tex.y < 0.0f)
+				{
+					point_need[j].tex.y += 1.0f;
+				}
+				while (point_need[j].tex.y > 1.0f)
+				{
+					point_need[j].tex.y -= 1.0f;
+				}*/
+				point_need[j].tex.y = 1 - point_need[j].tex.y;
 			}
 			else
 			{

@@ -886,6 +886,17 @@ engine_basic::engine_fail_reason scene_test_environment::create()
 		return check_error;
 	}
 	*/
+	//加载植被
+	check_error = geometry_buffer->load_a_plantmodel_type("plant\\Palmetto_Low\\Palmetto_Low.pancymesh", "plant\\Palmetto_Low\\Palmetto_Low.pancymat","plant\\Palmetto_Low\\Palmetto_Low.pancymeshanim", false, model_ID_plant);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
+	check_error = geometry_buffer->add_a_model_instance(model_ID_plant, mat_world, ID_model_plant);
+	if (!check_error.check_if_failed())
+	{
+		return check_error;
+	}
 	//加载天空
 	check_error = geometry_buffer->load_a_model_type("ballmodel\\outmodel.pancymesh", "ballmodel\\outmodel.pancymat", false, model_ID_sky);
 	if (!check_error.check_if_failed())
@@ -1030,9 +1041,11 @@ void scene_test_environment::display()
 	show_animation_test();
 	show_sky_single();
 	show_terrain();
+	show_physic_box();
+	show_plant_test();
 	show_particle();
 	show_sky_cube();
-	show_physic_box();
+	
 }
 void scene_test_environment::show_particle()
 {
@@ -1101,6 +1114,13 @@ void scene_test_environment::update(float delta_time)
 	geometry_resource_view *data_need;
 	geometry_buffer->update_a_model_instance(ID_model_castel, world_matrix, delta_time);
 	*/
+	//更新植被
+	trans_world = XMMatrixTranslation(0.0, 210.0, 0.0);
+	rotation_world = XMMatrixRotationX(XM_PIDIV2);
+	scal_world = XMMatrixScaling(1.0, 1, 1);
+	XMStoreFloat4x4(&world_matrix, scal_world * rotation_world * trans_world);
+	geometry_resource_view *data_need;
+	geometry_buffer->update_a_model_instance(ID_model_plant, world_matrix, 0.005f);
 	//更新天空
 	test_IBL->update_sky_data(delta_time);
 	XMFLOAT3 view_pos;
@@ -1174,7 +1194,7 @@ void scene_test_environment::show_sky_single()
 {
 	engine_basic::engine_fail_reason check_error;
 	auto shader_test = shader_control::GetInstance()->get_shader_sky_draw(check_error);
-
+	auto shader_light_deffered = shader_control::GetInstance()->get_shader_lightdeffered(check_error);
 	geometry_resource_view *data_view = NULL;
 	geometry_buffer->get_a_model_type(&data_view, model_ID_sky);
 	//选定绘制路径
@@ -1185,6 +1205,8 @@ void scene_test_environment::show_sky_single()
 	auto sky_data = test_IBL->get_IBL_data_by_time(time_need);
 	if (sky_data != NULL)
 	{
+		shader_light_deffered->set_IBL_tex(sky_data->get_SRV_spec());
+		shader_light_deffered->set_IBL_diffuse_tex(sky_data->get_SRV_diff());
 		shader_test->set_tex_resource(sky_data->get_SRV_spec());
 	}
 	//shader_test->set_tex_atmosphere_occlusion();
@@ -1245,6 +1267,39 @@ void scene_test_environment::show_physic_box()
 	data_view->get_technique(teque_need);
 
 	data_view->draw(false);
+}
+void scene_test_environment::show_plant_test()
+{
+	engine_basic::engine_fail_reason check_error;
+	auto shader_need = shader_control::GetInstance()->get_shader_lightdeffered(check_error);
+
+	geometry_resource_view *data_view = NULL;
+	geometry_buffer->get_a_model_type(&data_view, model_ID_plant);
+	XMFLOAT4X4 view_mat, final_mat, viewproj;
+	pancy_camera::get_instance()->count_view_matrix(&view_mat);
+	XMMATRIX proj = XMLoadFloat4x4(&engine_basic::perspective_message::get_instance()->get_proj_matrix());
+
+
+	XMMATRIX world_matrix_rec = XMLoadFloat4x4(&data_view->get_matrix_list()[0]);
+	XMMATRIX worldViewProj = world_matrix_rec*XMLoadFloat4x4(&view_mat)*proj;
+
+	XMMATRIX rec_world = XMLoadFloat4x4(&data_view->get_matrix_list()[0]) * XMLoadFloat4x4(&view_mat) * proj;
+	XMStoreFloat4x4(&final_mat, rec_world);
+
+
+	shader_need->set_trans_world(&data_view->get_matrix_list()[0]);
+	shader_need->set_trans_all(&final_mat);
+	shader_need->set_tex_diffuse_array(data_view->get_texture());
+
+	ID3DX11EffectTechnique *teque_need;
+	shader_need->get_technique(&teque_need, "LightTech_plant");
+	shader_need->set_animation_offset(data_view->get_meshanim_singledata());
+	shader_need->set_animation_buffer(data_view->get_mesh_animation_list());
+	data_view->get_technique(teque_need);
+	data_view->draw(false);
+	float blendFactor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetBlendState(0, blendFactor, 0xffffffff);
+	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->OMSetDepthStencilState(0, 0);
 }
 void scene_test_environment::show_sky_cube()
 {

@@ -145,8 +145,8 @@ float3 count_normal_sphereradiance
 	// Compute the radiance reflected by the sphere.
 	float3 sky_irradiance;
 	float3 rec_dir = sun_light.dir;
-	rec_dir.x = -rec_dir.x;
 	rec_dir.y = -rec_dir.y;
+	rec_dir = normalize(rec_dir);
 	float minus_hack = 1.0f;
 	if (rec_dir.y < 0.0f)
 	{
@@ -393,9 +393,11 @@ PixelOut_high count_pbr_lighting(VertexOut pin, float pz, float shadow_mask)
 	float4 A = 0.0f, D = 0.0f, S = 0.0f;
 	//先计算太阳光
 	pancy_light_basic rec_sunlight = sun_light;
+	float3 rec_dir = sun_light.dir;
+	rec_dir.x = -rec_dir.x;
 	float3 position_view_sun = float3(0.0f, 0.0f, 0.0f);
 	float3 eye_direct_sun = normalize(position_view_sun - position_need);
-	rec_sunlight.dir = mul(float4(sun_light.dir, 0.0f), view_matrix).xyz;
+	rec_sunlight.dir = mul(float4(rec_dir, 0.0f), view_matrix).xyz;
 
 
 	//计算大气光散射
@@ -446,7 +448,7 @@ PixelOut_high count_pbr_lighting(VertexOut pin, float pz, float shadow_mask)
 	float rec_shadow = max(CalcShadowFactor(samShadow, texture_sunshadow, count_sunlight, pos_shadow), shadow_mask);
 
 
-	pout.diffuse += (0.2f + 0.8f * rec_shadow) * (D) * 2;
+	pout.diffuse += (0.2f + 0.8f * rec_shadow) * (D);
 	pout.specular += (0.2f + 0.8f * rec_shadow) * (S);
 	//再计算普通光
 	int count_all = 0;

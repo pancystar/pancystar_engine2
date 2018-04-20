@@ -1,4 +1,5 @@
 #include"skinmesh.hlsli"
+#include"plant_anim_basic.hlsli"
 float4x4         final_matrix;     //�ܱ任
 float4x4 view_proj_matrix;
 float4x4 world_matrix_array[300];
@@ -99,6 +100,29 @@ VertexOut VS_bone_instance(Vertex_IN_bone_instance vin)
 	vout.tex2 = vin.tex2;
 	return vout;
 }
+
+VertexOut VS_mesh_anim(Vertex_IN_anim vin)
+{
+	float3 pos_anim = get_anim_point(vin);
+	VertexOut vout;
+	vout.position = mul(float4(pos_anim, 1.f), final_matrix);
+	vout.texid = vin.texid;
+	vout.tex1 = vin.tex1;
+	vout.tex2 = vin.tex2;
+	return vout;
+}
+VertexOut VS_mesh_anim_instance(Vertex_IN_anim_instance vin)
+{
+	float3 pos_anim = get_anim_point(vin);
+	VertexOut vout;
+	float4 pos_world = mul(float4(pos_anim, 1.0f), world_matrix_array[vin.InstanceId]);
+	vout.position = mul(pos_world, view_proj_matrix);
+	vout.texid = vin.texid;
+	vout.tex1 = vin.tex1;
+	vout.tex2 = vin.tex2;
+	return vout;
+}
+
 float4 PS(VertexOut pin) : SV_Target
 {
 	float texID_data_diffuse = pin.texid.x;
@@ -156,6 +180,26 @@ technique11 ShadowTechBone_instance
 		SetGeometryShader(NULL);
 		SetPixelShader(CompileShader(ps_5_0, PS()));
 		//SetRasterizerState(Depth);
+		SetRasterizerState(DisableCulling);
+	}
+}
+technique11 ShadowTechMeshAnim
+{
+	pass P0
+	{
+		SetVertexShader(CompileShader(vs_5_0, VS_mesh_anim()));
+		SetGeometryShader(NULL);
+		SetPixelShader(CompileShader(ps_5_0, PS()));
+		SetRasterizerState(DisableCulling);
+	}
+}
+technique11 ShadowTechMeshAnim_instance
+{
+	pass P0
+	{
+		SetVertexShader(CompileShader(vs_5_0, VS_mesh_anim_instance()));
+		SetGeometryShader(NULL);
+		SetPixelShader(CompileShader(ps_5_0, PS()));
 		SetRasterizerState(DisableCulling);
 	}
 }

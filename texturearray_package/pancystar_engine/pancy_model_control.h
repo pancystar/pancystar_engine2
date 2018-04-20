@@ -6,6 +6,12 @@
 #include<map>
 using namespace std;
 #define MAX_BONE_NUM 100
+struct mesh_animation_desc 
+{
+	int frame_num;
+	int frame_per_sec;
+	int point_per_frame;
+};
 class model_reader_pancymesh
 {
 protected:
@@ -241,15 +247,19 @@ class geometry_instance_view
 {
 	bool if_show;
 	bool if_skin;
+	bool if_meshanim;
 	int instance_ID;
 	float animation_time;
 	int now_animation_use;
 	model_reader_PancySkinMesh *skindata;
 	XMFLOAT4X4 bone_matrix[MAX_BONE_NUM];
 	XMFLOAT4X4 world_matrix;
+	XMUINT4 offset_mesh_animation;
+	mesh_animation_desc mesh_animation_data;
 public:
 	geometry_instance_view(int ID_need);
 	geometry_instance_view(int ID_need, model_reader_PancySkinMesh *skin_data_in);
+	geometry_instance_view(int ID_need, mesh_animation_desc mesh_animation_data_in);
 	engine_basic::engine_fail_reason get_bone_matrix(XMFLOAT4X4** mat_out, int &bone_num);
 	engine_basic::engine_fail_reason Set_AnimationUse_ByID(int anim_ID);
 	XMFLOAT4X4 get_world_matrix() { return world_matrix; };
@@ -257,29 +267,35 @@ public:
 	void sleep() { if_show = false; };
 	void wakeup() { if_show = true; };
 	void update(XMFLOAT4X4 mat_in, float delta_time);
+	XMUINT4 get_offset_mesh_animation() { return offset_mesh_animation; };
 };
 class geometry_resource_view
 {
 	int resource_view_ID;
 	int ID_instance_index;//自增ID号
-	bool if_cull_front;
-	bool if_dynamic;//是否在全局反射中显示
-	bool if_skin;//是否拥有骨骼动画
-	int max_instance_num;//最大实例数量
+	bool if_cull_front;   //反向消隐(标识天空)
+	bool if_dynamic;      //是否在全局反射中显示
+	bool if_skin;         //是否拥有骨骼动画
+	bool if_meshanim;     //是否拥有顶点动画
+	mesh_animation_desc meshanim_desc;//顶点动画格式
+	int max_instance_num; //最大实例数量
 	model_reader_pancymesh *model_data;
 	std::unordered_map<int, geometry_instance_view> instance_list;
 	std::vector<XMFLOAT4X4> world_matrix_array;//实例变换矩阵簇
-	//std::vector<XMFLOAT4X4> bone_matrix_array;//骨骼变换矩阵簇
-
+	std::vector<XMUINT4> meshanim_offset_array;//实例动画时间簇
 	ID3D11ShaderResourceView *bone_matrix_buffer_SRV;
+	ID3D11ShaderResourceView *mesh_animation_buffer_SRV;
 public:
 	geometry_resource_view(model_reader_pancymesh *model_data_in, int ID_need, bool if_dynamic_in, bool if_skin_in);
 	engine_basic::engine_fail_reason create(int max_instance_num_in);
 	engine_basic::engine_fail_reason Load_Animation_FromFile(string file_mame, int &anim_ID);
-
+	engine_basic::engine_fail_reason Load_MeshAnimation_FromFile(string file_mame);
 	std::vector<XMFLOAT4X4> get_matrix_list();
+	std::vector<XMUINT4>    get_meshanim_offset_list();
 	ID3D11ShaderResourceView * get_bone_matrix_list();
+	ID3D11ShaderResourceView * get_mesh_animation_list();
 	void get_bonematrix_singledata(XMFLOAT4X4 **mat_in, int &bone_num);
+	XMUINT4 get_meshanim_singledata();
 	int get_bone_mat_num();
 	int add_an_instance(XMFLOAT4X4 world_matrix);
 	engine_basic::engine_fail_reason get_technique(ID3DX11EffectTechnique *teque_need) { return model_data->get_technique(teque_need); };
@@ -291,6 +307,7 @@ public:
 	void set_cull_front() { if_cull_front = true; };
 	bool check_if_cullfront() { return if_cull_front; };
 	bool check_if_skin() { return if_skin; };
+	bool check_if_meshanim() { return if_meshanim; };
 	ID3D11ShaderResourceView *get_texture() { return model_data->get_texture(); }
 	void draw(bool if_static);
 	void release();
@@ -433,6 +450,12 @@ void geometry_ResourceView_list<T>::render_gbuffer(XMFLOAT4X4 view_matrix, XMFLO
 				UINT num_member = sizeof(rec_inputdesc) / sizeof(D3D11_INPUT_ELEMENT_DESC);
 				shader_gbuffer->get_technique(rec_inputdesc, num_member, &teque_need, "NormalDepthSkin_withnormal");
 			}
+			else if (data_need->second.check_if_meshanim())
+			{
+				shader_gbuffer->set_animation_offset(data_need->second.get_meshanim_singledata());
+				shader_gbuffer->set_animation_buffer(data_need->second.get_mesh_animation_list());
+				shader_gbuffer->get_technique(&teque_need, "NormalDepth_withnormal_MeshAnim");
+			}
 			else
 			{
 				shader_gbuffer->get_technique(&teque_need, "NormalDepth_withnormal");
@@ -462,9 +485,23 @@ void geometry_ResourceView_list<T>::render_gbuffer(XMFLOAT4X4 view_matrix, XMFLO
 				UINT num_member = sizeof(rec_inputdesc) / sizeof(D3D11_INPUT_ELEMENT_DESC);
 				shader_gbuffer->get_technique(rec_inputdesc, num_member, &teque_need, "NormalDepthSkin_withinstance_normal");
 			}
+			else if (data_need->second.check_if_meshanim())
+			{
+				std::vector<XMUINT4>  data_anim_list = data_need->second.get_meshanim_offset_list();
+				XMUINT4 *mesh_anim_array = new XMUINT4[data_anim_list.size()];
+				int count_num = 0;
+				for (auto data_now = data_anim_list.begin(); data_now != data_anim_list.end(); data_now++) 
+				{
+					mesh_anim_array[count_num++] = *data_now._Ptr;
+				}
+				shader_gbuffer->set_animation_offset_array(mesh_anim_array, data_anim_list.size());
+				delete[] mesh_anim_array;
+				shader_gbuffer->set_animation_buffer(data_need->second.get_mesh_animation_list());
+				shader_gbuffer->get_technique(&teque_need, "NormalDepth_withnormal_MeshAnim");
+			}
 			else
 			{
-				shader_gbuffer->get_technique(&teque_need, "NormalDepth_withinstance_normal");
+				shader_gbuffer->get_technique(&teque_need, "NormalDepth_withinstance_MeshAnim");
 			}
 		}
 		data_need->second.get_technique(teque_need);
@@ -680,6 +717,7 @@ public:
 	//加载和删除一个模型种类
 	engine_basic::engine_fail_reason load_a_model_type(string file_name_mesh, string file_name_mat, bool if_dynamic, int &model_type_ID);
 	engine_basic::engine_fail_reason load_a_skinmodel_type(string file_name_mesh, string file_name_mat, string file_name_bone, bool if_dynamic, int &model_type_ID, int max_instance_num);
+	engine_basic::engine_fail_reason load_a_plantmodel_type(string file_name_mesh, string file_name_mat, string file_name_animation, bool if_dynamic, int &model_type_ID);
 	engine_basic::engine_fail_reason load_a_skinmodel_animation(int model_type_ID, string file_name_animation, int& animition_ID);
 	engine_basic::engine_fail_reason delete_a_model_type(int model_type_ID);
 	//添加和删除一个模型实例

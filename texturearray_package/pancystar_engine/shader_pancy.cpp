@@ -227,6 +227,49 @@ void terrain_shader_basic::init_handle_terrain()
 	//tex_ColorArray_handle = fx_need->GetVariableByName("ColorTexture_pack_albedo")->AsShaderResource();
 	//tex_NormalArray_handle = fx_need->GetVariableByName("ColorTexture_pack_normal")->AsShaderResource();
 }
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~植被处理~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+plant_shader_basic::plant_shader_basic(LPCWSTR filename) : shader_basic(filename)
+{
+}
+engine_basic::engine_fail_reason plant_shader_basic::set_animation_buffer(ID3D11ShaderResourceView* buffer_in)
+{
+	HRESULT hr = animation_buffer->SetResource(buffer_in);
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason failed_message(hr, "set animation_buffer error in" + shader_file_string);
+		return failed_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason plant_shader_basic::set_animation_offset(XMUINT4 offset_data)
+{
+	HRESULT hr = point_offset_handle->SetRawValue((void*)&offset_data, 0, sizeof(offset_data));
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason failed_message(hr, "set point_offset_handle error in" + shader_file_string);
+		return failed_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason plant_shader_basic::set_animation_offset_array(XMUINT4 *offset_data, int array_num)
+{
+	HRESULT hr = point_offset_handle->SetRawValue((void*)offset_data, 0, array_num * sizeof(offset_data));
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason failed_message(hr, "set point_offset_array_handle error in" + shader_file_string);
+		return failed_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+void plant_shader_basic::init_handle_plant()
+{
+	animation_buffer = fx_need->GetVariableByName("input_point")->AsShaderResource();
+	point_offset_handle = fx_need->GetVariableByName("offset_num");
+	point_offset_array_handle = fx_need->GetVariableByName("offset_num_list");
+}
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~颜色测试~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 color_shader::color_shader(LPCWSTR filename) : shader_basic(filename)
 {
@@ -481,12 +524,13 @@ engine_basic::engine_fail_reason picture_show_shader::set_UI_position(XMFLOAT4 r
 	return succeed;
 }
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~gbuffer记录~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-shader_pretreat_gbuffer::shader_pretreat_gbuffer(LPCWSTR filename) :terrain_shader_basic(filename)
+shader_pretreat_gbuffer::shader_pretreat_gbuffer(LPCWSTR filename) :shader_basic(filename), plant_shader_basic(filename),terrain_shader_basic(filename)
 {
 }
 void shader_pretreat_gbuffer::init_handle()
 {
 	init_handle_terrain();
+	init_handle_plant();
 	world_matrix_handle = fx_need->GetVariableByName("world_matrix")->AsMatrix();
 	normal_matrix_handle = fx_need->GetVariableByName("normal_matrix")->AsMatrix();
 	project_matrix_handle = fx_need->GetVariableByName("final_matrix")->AsMatrix();
@@ -1410,7 +1454,7 @@ void light_defered_lightbuffer::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *me
 	}
 }
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~延迟光照算法最终渲染~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-light_defered_draw::light_defered_draw(LPCWSTR filename) : terrain_shader_basic(filename)
+light_defered_draw::light_defered_draw(LPCWSTR filename) : shader_basic(filename), plant_shader_basic(filename), terrain_shader_basic(filename)
 {
 }
 /*
@@ -1609,6 +1653,17 @@ engine_basic::engine_fail_reason light_defered_draw::set_IBL_tex(ID3D11ShaderRes
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
+engine_basic::engine_fail_reason light_defered_draw::set_IBL_diffuse_tex(ID3D11ShaderResourceView *tex_in)
+{
+	HRESULT hr = texture_ibl_diffuse_handle->SetResource(tex_in);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason error_message(hr, "deffered light draw error when set IBL diffuse tex");
+		return error_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
 engine_basic::engine_fail_reason light_defered_draw::set_tex_atmosphere_occlusion(ID3D11ShaderResourceView* tex_in)
 {
 	HRESULT hr;
@@ -1683,9 +1738,11 @@ void light_defered_draw::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_po
 void light_defered_draw::init_handle()
 {
 	init_handle_terrain();
+	init_handle_plant();
 	atomosphere_fog = fx_need->GetVariableByName("fog_color_tex")->AsShaderResource();
 	atomosphere_occlusion = fx_need->GetVariableByName("atmosphere_occlusion")->AsShaderResource();
 	texture_ibl_handle = fx_need->GetVariableByName("IBL_cube")->AsShaderResource();
+	texture_ibl_diffuse_handle = fx_need->GetVariableByName("IBL_diffuse")->AsShaderResource();
 	tex_specroughness = fx_need->GetVariableByName("gInputspecular_roughness")->AsShaderResource();
 	tex_brdf_list = fx_need->GetVariableByName("gInputbrdf")->AsShaderResource();
 	texture_normal_handle = fx_need->GetVariableByName("gNormalspecMap")->AsShaderResource();
@@ -3687,7 +3744,7 @@ void shader_IBL_specular::set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_p
 	}
 }
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~地形渲染~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-shader_terrain_render::shader_terrain_render(LPCWSTR filename) : terrain_shader_basic(filename)
+shader_terrain_render::shader_terrain_render(LPCWSTR filename) : terrain_shader_basic(filename),shader_basic(filename)
 {
 }
 engine_basic::engine_fail_reason shader_terrain_render::set_trans_world(XMFLOAT4X4 *mat_world)

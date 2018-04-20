@@ -5,6 +5,7 @@
 #include"skinmesh.hlsli"
 #include"atmosphere_renderfunc.hlsli"
 #include"terrain_tess_basic.hlsli"
+#include"plant_anim_basic.hlsli"
 cbuffer perobject
 {
 	pancy_material   material_need;    //材质
@@ -22,7 +23,11 @@ cbuffer perframe
 	float4x4         view_matrix;    //取景变换
 	float4x4         invview_matrix; //取景变换逆变换
 };
-
+DepthStencilState NoDepthWrites
+{
+	DepthEnable = TRUE;
+	DepthWriteMask = ZERO;
+};
 StructuredBuffer<float4x4> input_buffer;
 Texture2D        atmosphere_occlusion;           //大气散射掩码
 Texture2D        texture_light_diffuse;      //漫反射光照贴图
@@ -34,6 +39,12 @@ Texture2D        gInputspecular_roughness;
 Texture2D        gInputbrdf;
 Texture2D	     fog_color_tex;     //雾效图
 TextureCube      IBL_cube;
+TextureCube      IBL_diffuse;
+BlendState CommonBlending
+{
+	AlphaToCoverageEnable = TRUE;
+	BlendEnable[0] = FALSE;
+};
 struct Vertex_IN//含法线贴图顶点
 {
 	float3	pos 	: POSITION;     //顶点位置
@@ -125,7 +136,32 @@ VertexOut VS_instance(Vertex_IN_instance vin)
 	vout.pos_ssao = mul(float4(vout.position_before, 1.0f), ssao_matrix);
 	return vout;
 }
-
+VertexOut VS_mesh_anim(Vertex_IN_anim vin)
+{
+	VertexOut vout;
+	float3 pos_anim = get_anim_point(vin);
+	vout.position_before = mul(float4(pos_anim, 1.0f), world_matrix).xyz;
+	vout.position_view = mul(float4(vout.position_before, 1.0f), view_matrix).xyz;
+	vout.position = mul(float4(pos_anim, 1.0f), final_matrix);
+	vout.texid = vin.texid;
+	vout.tex1 = vin.tex1;
+	vout.tex2 = vin.tex2;
+	vout.pos_ssao = mul(float4(vout.position_before, 1.0f), ssao_matrix);
+	return vout;
+}
+VertexOut VS_mesh_anim_instance(Vertex_IN_anim_instance vin)
+{
+	VertexOut vout;
+	float3 pos_anim = get_anim_point(vin);
+	vout.position_before = mul(float4(vin.pos, 1.0f), world_matrix_array[vin.InstanceId]).xyz;
+	vout.position_view = mul(float4(vout.position_before, 1.0f), view_matrix).xyz;
+	vout.position = mul(float4(vout.position_before, 1.0f), view_proj_matrix);
+	vout.texid = vin.texid;
+	vout.tex1 = vin.tex1;
+	vout.tex2 = vin.tex2;
+	vout.pos_ssao = mul(float4(vout.position_before, 1.0f), ssao_matrix);
+	return vout;
+}
 PixelOut PS(VertexOut pin) :SV_TARGET
 {
 	pin.pos_ssao /= pin.pos_ssao.w;
@@ -134,7 +170,6 @@ PixelOut PS(VertexOut pin) :SV_TARGET
 	//gamma校正
 	//tex_color = float4(pow(tex_color.rgb, float3(2.2f, 2.2f, 2.2f)), tex_color.a);
 	//float4 tex_color = texture_diffuse.Sample(samTex_liner, pin.tex);
-	clip(tex_color.a - 0.6f);
 	//float4 ambient = 0.4f* texture_ssao.Sample(samTex_liner, pin.pos_ssao.xy, 0.0f).r;
 	float tex_ao = texture_ssao.Sample(samTex_liner, pin.pos_ssao.xy, 0.0f).r;
 	
@@ -157,19 +192,20 @@ PixelOut PS(VertexOut pin) :SV_TARGET
 	//采样环境光
 	uint index = tex_roughness * 6;
 	float4 enviornment_color = IBL_cube.SampleLevel(samTex_liner, reflect_dir, index);
-
+	float4 color_diffuse = IBL_diffuse.Sample(samTex_liner, reflect_dir);
 
 
 	//gamma校正
 	//enviornment_color = float4(pow(enviornment_color.rgb, float3(2.2f, 2.2f, 2.2f)), enviornment_color.a);
 	//tex_ao = pow(tex_ao, 2.2f);
 	//计算环境光反射
-	float4 ambient_diffuse = 0.2f*tex_ao *(1.0f - tex_matallic) * tex_color;
+	
+	float4 ambient_diffuse = color_diffuse*tex_ao *(1.0f - tex_matallic) * tex_color;
 	float4 ambient_specular = 0.2f*tex_ao * (0.6f*enviornment_color + 0.4f*tex_color) * (SpecularColor * EnvBRDF.x + EnvBRDF.y);
 	float4 ambient = ambient_diffuse + ambient_specular;
 
 	//float4 ambient = 0;
-	float4 diffuse = texture_light_diffuse.Sample(samTex_liner, pin.pos_ssao.xy, 0.0f)* (1.0 / 3.1415926);      //漫反射光
+	float4 diffuse = texture_light_diffuse.Sample(samTex_liner, pin.pos_ssao.xy, 0.0f);      //漫反射光
 	//return diffuse;
 	float4 spec =texture_light_specular.Sample(samTex_liner, pin.pos_ssao.xy, 0.0f);       //镜面反射光
 	float4 final_color = ambient + tex_color * diffuse + spec;
@@ -207,7 +243,10 @@ PixelOut PS_withputao(VertexOut pin) :SV_TARGET
 	*/
 	pin.pos_ssao /= pin.pos_ssao.w;
 	float texID_data_diffuse = pin.texid.x;
+
+	
 	float4 tex_color = texture_pack_array.Sample(samTex_liner, float3(pin.tex1.xy, texID_data_diffuse));
+	
 	//gamma校正
 	//tex_color = float4(pow(tex_color.rgb, float3(2.2f, 2.2f, 2.2f)), tex_color.a);
 	//float4 tex_color = texture_diffuse.Sample(samTex_liner, pin.tex);
@@ -289,17 +328,18 @@ PixelOut PS_terrain(DominOut_terrain pin) :SV_TARGET
 	//采样环境光
 	uint index = tex_roughness * 6;
 	float4 enviornment_color = IBL_cube.SampleLevel(samTex_liner, reflect_dir, index);
+	float4 color_diffuse = IBL_diffuse.Sample(samTex_liner, reflect_dir);
 	//gamma校正
 	//enviornment_color = float4(pow(enviornment_color.rgb, float3(2.2f, 2.2f, 2.2f)), enviornment_color.a);
 	//tex_ao = pow(tex_ao, 2.2f);
 	//计算环境光反射
-	float4 ambient_diffuse = 0.2f*tex_ao *(1.0f - tex_matallic) * tex_color;
+	float4 ambient_diffuse = color_diffuse*tex_ao *(1.0f - tex_matallic) * tex_color;
 	float4 ambient_specular = 0.2f*tex_ao * (0.6f*enviornment_color + 0.4f*tex_color) * (SpecularColor * EnvBRDF.x + EnvBRDF.y);
 	float4 ambient = ambient_diffuse + ambient_specular;
 
 	float4 diffuse = texture_light_diffuse.Sample(samTex_liner, pin.pos_ssao.xy, 0.0f);      //漫反射光
 	float4 spec =texture_light_specular.Sample(samTex_liner, pin.pos_ssao.xy, 0.0f);       //镜面反射光
-	ambient = float4(0, 0, 0, 0);
+	//ambient = float4(0, 0, 0, 0);
 	float4 final_color = ambient + tex_color * diffuse + spec;
 	//float4 final_color = float4(normal_dir,1.0f);
 	final_color.a = tex_color.a;
@@ -310,12 +350,13 @@ PixelOut PS_terrain(DominOut_terrain pin) :SV_TARGET
 	float s_need = saturate((distance_need - 300.0) / 1000.0);
 	final_color.rgb = lerp(final_color.rgb, fog_color.rgb, s_need);
 	PixelOut ans_pix;
-	ans_pix.final_color.xyz = final_colora;
+	ans_pix.final_color.xyz = final_color;
 
 	ans_pix.reflect_message.rgb = tex_color.rgb;
 	ans_pix.reflect_message.r = 1.0;
 	return ans_pix;
 }
+
 technique11 LightTech
 {
 	pass P0
@@ -379,5 +420,25 @@ technique11 LightTech_Terrain
 		SetDomainShader(CompileShader(ds_5_0, DS()));
 		SetGeometryShader(NULL);
 		SetPixelShader(CompileShader(ps_5_0, PS_terrain()));
+	}
+}
+technique11 LightTech_plant
+{
+	pass P0
+	{
+		SetVertexShader(CompileShader(vs_5_0, VS_mesh_anim()));
+		SetGeometryShader(NULL);
+		SetPixelShader(CompileShader(ps_5_0, PS()));
+		SetBlendState(CommonBlending, float4(0.0f, 0.0f, 0.0f, 0.0f), 0xffffffff);
+		//SetDepthStencilState(NoDepthWrites, 0);
+	}
+}
+technique11 LightTech_plant_instance
+{
+	pass P0
+	{
+		SetVertexShader(CompileShader(vs_5_0, VS_mesh_anim_instance()));
+		SetGeometryShader(NULL);
+		SetPixelShader(CompileShader(ps_5_0, PS()));
 	}
 }

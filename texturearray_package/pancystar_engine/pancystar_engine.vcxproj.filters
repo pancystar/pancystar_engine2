@@ -255,5 +255,8 @@
     <None Include="atmosphere_fog_func.hlsli">
       <Filter>源文件</Filter>
     </None>
+    <None Include="plant_anim_basic.hlsli">
+      <Filter>源文件</Filter>
+    </None>
   </ItemGroup>
 </Project>

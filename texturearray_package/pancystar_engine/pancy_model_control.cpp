@@ -211,18 +211,18 @@ void model_reader_PancySkinMesh::read_bone_tree(skin_tree *now)
 	/*
 	if (strcmp(data, "*heaphead*") == 0)
 	{
-		//入栈符号，代表子节点
-		now->son = new skin_tree();
-		read_bone_tree(now->son);
+	//入栈符号，代表子节点
+	now->son = new skin_tree();
+	read_bone_tree(now->son);
 	}
 	if (strcmp(data, "*heaptail*") == 0)
 	{
-		if (strcmp(data, "*heaphead*") == 0)
-		{
-			//出栈符号，代表兄弟节点
-			now->brother = new skin_tree();
-			read_bone_tree(now->brother);
-		}
+	if (strcmp(data, "*heaphead*") == 0)
+	{
+	//出栈符号，代表兄弟节点
+	now->brother = new skin_tree();
+	read_bone_tree(now->brother);
+	}
 	}
 	*/
 }
@@ -586,6 +586,7 @@ geometry_instance_view::geometry_instance_view(int ID_need)
 	now_animation_use = -1;
 	animation_time = 0.0f;
 	if_skin = false;
+	if_meshanim = false;
 	skindata = NULL;
 	if_show = true;
 	instance_ID = ID_need;
@@ -596,9 +597,25 @@ geometry_instance_view::geometry_instance_view(int ID_need, model_reader_PancySk
 	now_animation_use = -1;
 	animation_time = 0.0f;
 	if_skin = true;
+	if_meshanim = false;
 	skindata = skin_data_in;
 	if_show = true;
 	instance_ID = ID_need;
+	XMStoreFloat4x4(&world_matrix, XMMatrixIdentity());
+}
+geometry_instance_view::geometry_instance_view(int ID_need, mesh_animation_desc mesh_animation_data_in)
+{
+	now_animation_use = -1;
+	animation_time = 0.0f;
+	if_skin = false;
+	if_meshanim = true;
+	skindata = NULL;
+	if_show = true;
+	instance_ID = ID_need;
+	mesh_animation_data = mesh_animation_data_in;
+	offset_mesh_animation.x = 0;
+	offset_mesh_animation.y = 0;
+	offset_mesh_animation.z = mesh_animation_data_in.point_per_frame;
 	XMStoreFloat4x4(&world_matrix, XMMatrixIdentity());
 }
 engine_basic::engine_fail_reason geometry_instance_view::get_bone_matrix(XMFLOAT4X4** mat_out, int &bone_num)
@@ -640,7 +657,14 @@ void geometry_instance_view::update(XMFLOAT4X4 mat_in, float delta_time)
 		for (int i = 0; i < skindata->get_bone_num(); ++i)
 		{
 			bone_matrix[i] = bonemat_ptr[i];
-		}	
+		}
+	}
+	if(if_meshanim)
+	{
+		//将时间换算成帧数据
+		float per_fram_time = 1.0f / static_cast<float>(mesh_animation_data.frame_per_sec);
+		int now_frame = static_cast<int>(animation_time / per_fram_time) % mesh_animation_data.frame_num;
+		offset_mesh_animation.y = now_frame;
 	}
 	world_matrix = mat_in;
 }
@@ -657,6 +681,7 @@ geometry_resource_view::geometry_resource_view(model_reader_pancymesh *model_dat
 	if_cull_front = false;
 	if_dynamic = if_dynamic_in;
 	if_skin = if_skin_in;
+	if_meshanim = false;
 }
 engine_basic::engine_fail_reason geometry_resource_view::create(int max_instance_num_in)
 {
@@ -704,8 +729,8 @@ engine_basic::engine_fail_reason geometry_resource_view::create_buffer()
 	DescSRV.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
 	DescSRV.Buffer.FirstElement = 0;
 	DescSRV.Buffer.NumElements = max_instance_num * animation_point->get_bone_num();
-	
-	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateShaderResourceView(bone_matrix_buffer, &DescSRV,&bone_matrix_buffer_SRV);
+
+	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateShaderResourceView(bone_matrix_buffer, &DescSRV, &bone_matrix_buffer_SRV);
 	if (FAILED(hr))
 	{
 		stringstream stream;
@@ -731,6 +756,19 @@ std::vector<XMFLOAT4X4> geometry_resource_view::get_matrix_list()
 	}
 	return world_matrix_array;
 }
+std::vector<XMUINT4> geometry_resource_view::get_meshanim_offset_list()
+{
+	meshanim_offset_array.clear();
+	for (auto data_now = instance_list.begin(); data_now != instance_list.end(); ++data_now)
+	{
+		if (data_now->second.check_if_show())
+		{
+			XMUINT4 anim_need = data_now->second.get_offset_mesh_animation();
+			meshanim_offset_array.push_back(anim_need);
+		}
+	}
+	return meshanim_offset_array;
+}
 void geometry_resource_view::get_bonematrix_singledata(XMFLOAT4X4 **mat_in, int &bone_num)
 {
 	if (!if_skin)
@@ -740,38 +778,22 @@ void geometry_resource_view::get_bonematrix_singledata(XMFLOAT4X4 **mat_in, int 
 	auto data_now = instance_list.begin();
 	engine_basic::engine_fail_reason check_error = data_now->second.get_bone_matrix(mat_in, bone_num);
 }
+XMUINT4 geometry_resource_view::get_meshanim_singledata()
+{
+	if (!if_meshanim || instance_list.size() < 1)
+	{
+		return XMUINT4(0,0,0,0);
+	}
+	auto data_now = instance_list.begin();
+	return data_now->second.get_offset_mesh_animation();
+}
 ID3D11ShaderResourceView * geometry_resource_view::get_bone_matrix_list()
 {
-	/*
-	if (!if_skin)
-	{
-		return NULL;
-	}
-	auto animation_point = dynamic_cast<model_reader_PancySkinMesh*>(model_data);
-	XMFLOAT4X4 *bone_matrix_CPU_buffer;
-	int now_point = 0;
-	bone_matrix_CPU_buffer = new XMFLOAT4X4[instance_list.size() * animation_point->get_bone_num()];
-	for (auto data_now = instance_list.begin(); data_now != instance_list.end(); ++data_now)
-	{
-		XMFLOAT4X4 *data;
-		int bone_num;
-		engine_basic::engine_fail_reason check_error = data_now->second.get_bone_matrix(&data, bone_num);
-		for (int i = 0; i < bone_num; ++i)
-		{
-			XMStoreFloat4x4(&bone_matrix_CPU_buffer[now_point++],XMMatrixTranspose(XMLoadFloat4x4(&data[i])));
-		}
-	}
-	ID3D11Resource *data;
-	bone_matrix_buffer_SRV->GetResource(&data);
-	D3D11_MAPPED_SUBRESOURCE mappedResource;
-	ZeroMemory(&mappedResource, sizeof(D3D11_MAPPED_SUBRESOURCE));
-	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->Map(data, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
-	memcpy(mappedResource.pData, bone_matrix_CPU_buffer, instance_list.size() * animation_point->get_bone_num()*sizeof(XMFLOAT4X4));
-	d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex()->Unmap(data, 0);
-	data->Release();
-	delete[] bone_matrix_CPU_buffer;
-	*/
 	return bone_matrix_buffer_SRV;
+}
+ID3D11ShaderResourceView * geometry_resource_view::get_mesh_animation_list()
+{
+	return mesh_animation_buffer_SRV;
 }
 int geometry_resource_view::get_bone_mat_num()
 {
@@ -801,19 +823,78 @@ engine_basic::engine_fail_reason geometry_resource_view::Load_Animation_FromFile
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
+engine_basic::engine_fail_reason geometry_resource_view::Load_MeshAnimation_FromFile(string file_mame)
+{
+	if (if_meshanim)
+	{
+		engine_basic::engine_fail_reason error_message(E_FAIL, "the mesh have already load mesh animation");
+		return error_message;
+	}
+	if_meshanim = true;
+	std::ifstream load_animation;
+	load_animation.open(file_mame, ios::binary);
+	load_animation.read((char*)&meshanim_desc.frame_num, sizeof(meshanim_desc.frame_num));
+	load_animation.read((char*)&meshanim_desc.frame_per_sec, sizeof(meshanim_desc.frame_per_sec));
+	load_animation.read((char*)&meshanim_desc.point_per_frame, sizeof(meshanim_desc.point_per_frame));
+	XMFLOAT3 *point_data_now = new XMFLOAT3[meshanim_desc.frame_num * meshanim_desc.point_per_frame];
+	load_animation.read((char*)point_data_now, meshanim_desc.frame_num * meshanim_desc.point_per_frame * sizeof(XMFLOAT3));
+
+
+	ID3D11Buffer *buffer_vertex_need;
+	//创建顶点动画缓冲区
+	D3D11_BUFFER_DESC FBX_vertex_desc;
+	FBX_vertex_desc.Usage = D3D11_USAGE_DEFAULT;            //通用类型
+	FBX_vertex_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;//缓存类型为srv
+	FBX_vertex_desc.ByteWidth = meshanim_desc.frame_num * meshanim_desc.point_per_frame * sizeof(XMFLOAT3);
+	FBX_vertex_desc.CPUAccessFlags = 0;
+	FBX_vertex_desc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+	FBX_vertex_desc.StructureByteStride = sizeof(XMFLOAT3);
+
+	D3D11_SUBRESOURCE_DATA resource_buffer = { 0 };
+	resource_buffer.pSysMem = point_data_now;
+	HRESULT hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateBuffer(&FBX_vertex_desc, &resource_buffer, &buffer_vertex_need);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason check_error(hr, "create model mesh animation data buffer error");
+		return check_error;
+	}
+
+	D3D11_SHADER_RESOURCE_VIEW_DESC DescSRV;
+	ZeroMemory(&DescSRV, sizeof(D3D11_SHADER_RESOURCE_VIEW_DESC));
+	DescSRV.Format = DXGI_FORMAT_UNKNOWN;
+	DescSRV.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+	DescSRV.Buffer.FirstElement = 0;
+	DescSRV.Buffer.NumElements = meshanim_desc.frame_num * meshanim_desc.point_per_frame;
+	hr = d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device()->CreateShaderResourceView(buffer_vertex_need, &DescSRV, &mesh_animation_buffer_SRV);
+	if (FAILED(hr))
+	{
+		engine_basic::engine_fail_reason check_error(hr, "create model mesh animation data SRV buffer error");
+		return check_error;
+	}
+	buffer_vertex_need->Release();
+
+
+	delete[] point_data_now;
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
 int geometry_resource_view::add_an_instance(XMFLOAT4X4 world_matrix)
 {
 	geometry_instance_view *p1;
-	if (!if_skin)
-	{
-		p1 = new geometry_instance_view(ID_instance_index);
-		//unique_ptr<geometry_instance_view> p1(new geometry_instance_view(ID_instance_index));
-	}
-	else
+	if (if_skin)
 	{
 		auto animation_point = dynamic_cast<model_reader_PancySkinMesh*>(model_data);
 		p1 = new geometry_instance_view(ID_instance_index, animation_point);
-		///unique_ptr<geometry_instance_view> p1(new geometry_instance_view(ID_instance_index));
+		///unique_ptr<geometry_instance_view> p1(new geometry_instance_view(ID_instance_index))	
+	}
+	else if (if_meshanim)
+	{
+		p1 = new geometry_instance_view(ID_instance_index, meshanim_desc);
+	}
+	else
+	{
+		p1 = new geometry_instance_view(ID_instance_index);
+		//unique_ptr<geometry_instance_view> p1(new geometry_instance_view(ID_instance_index));;
 	}
 	p1->update(world_matrix, 0);
 	std::pair<int, geometry_instance_view> data_need(ID_instance_index, *p1);
@@ -895,7 +976,7 @@ engine_basic::engine_fail_reason geometry_resource_view::set_a_instance_anim(int
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
-void geometry_resource_view::update_skinmatbuffer() 
+void geometry_resource_view::update_skinmatbuffer()
 {
 	if (!if_skin)
 	{
@@ -922,7 +1003,7 @@ void geometry_resource_view::update_skinmatbuffer()
 			count_show_num += 1;
 		}
 	}
-	if (count_show_num == 0) 
+	if (count_show_num == 0)
 	{
 		return;
 	}
@@ -983,6 +1064,10 @@ void geometry_resource_view::release()
 	{
 		bone_matrix_buffer_SRV->Release();
 	}
+	if (if_meshanim)
+	{
+		mesh_animation_buffer_SRV->Release();
+	}
 	model_data->release();
 }
 
@@ -1003,7 +1088,7 @@ engine_basic::engine_fail_reason pancy_geometry_control::load_terrain(
 	float rebuild_dis
 	)
 {
-	if (if_have_terrain) 
+	if (if_have_terrain)
 	{
 		engine_basic::engine_fail_reason error_message(E_FAIL, "the terrain have been loaded, do not reload resource");
 		return error_message;
@@ -1022,21 +1107,21 @@ engine_basic::engine_fail_reason pancy_geometry_control::load_terrain(
 }
 //预处理渲染
 void pancy_geometry_control::render_gbuffer(XMFLOAT4X4 view_matrix, XMFLOAT4X4 proj_matrix, bool if_static)
-{ 
-	if (if_have_terrain) 
+{
+	if (if_have_terrain)
 	{
 		terrain_data->display_gbuffer();
 	}
 	model_view_list->render_gbuffer(view_matrix, proj_matrix, if_static);
-} 
-void pancy_geometry_control::render_gbuffer_post(XMFLOAT4X4 view_matrix, XMFLOAT4X4 proj_matrix, bool if_static) 
+}
+void pancy_geometry_control::render_gbuffer_post(XMFLOAT4X4 view_matrix, XMFLOAT4X4 proj_matrix, bool if_static)
 {
 	model_view_list->render_gbuffer_post(view_matrix, proj_matrix, if_static);
 }
 //加载动画模型
 void pancy_geometry_control::delete_terrain_data()
 {
-	if (if_have_terrain) 
+	if (if_have_terrain)
 	{
 		terrain_data->release();
 		terrain_data = NULL;
@@ -1079,6 +1164,35 @@ engine_basic::engine_fail_reason pancy_geometry_control::load_a_skinmodel_type(s
 	//根据模型资源创建访问器
 	geometry_resource_view *GRV_model = new geometry_resource_view(model_common, model_view_list->get_now_index(), if_dynamic, true);
 	error_check = GRV_model->create(max_instance_num);
+	if (!error_check.check_if_failed())
+	{
+		model_type_ID = -1;
+		return error_check;
+	}
+	//添加到模型管理表中
+	model_type_ID = model_view_list->add_new_geometry(*GRV_model);
+	if (model_type_ID < 0)
+	{
+		engine_basic::engine_fail_reason error_mssage("could not add the model resource" + file_name_mesh);
+		return error_mssage;
+	}
+	delete GRV_model;
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason pancy_geometry_control::load_a_plantmodel_type(string file_name_mesh, string file_name_mat, string file_name_animation, bool if_dynamic, int &model_type_ID)
+{
+	//从文件中导入模型资源
+	model_reader_pancymesh *model_common = new model_reader_pancymesh_build<point_common>(file_name_mesh, file_name_mat);
+	auto error_check = model_common->create();
+	if (!error_check.check_if_failed())
+	{
+		model_type_ID = -1;
+		return error_check;
+	}
+	//根据模型资源创建访问器
+	geometry_resource_view *GRV_model = new geometry_resource_view(model_common, model_view_list->get_now_index(), if_dynamic, false);
+	error_check = GRV_model->Load_MeshAnimation_FromFile(file_name_animation);
 	if (!error_check.check_if_failed())
 	{
 		model_type_ID = -1;

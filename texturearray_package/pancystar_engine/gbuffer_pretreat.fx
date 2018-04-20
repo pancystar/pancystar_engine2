@@ -1,5 +1,6 @@
 #include"skinmesh.hlsli"
 #include"terrain_tess_basic.hlsli"
+#include"plant_anim_basic.hlsli"
 cbuffer PerFrame
 {
 	float4x4 world_matrix_array[300];
@@ -112,6 +113,37 @@ VertexOut VS_bone_instance(Vertex_IN_bone_instance vin)
 	vout.tex2 = vin.tex2;
 	return vout;
 }
+VertexOut VS_mesh_anim(Vertex_IN_anim vin)
+{
+	float3 pos_anim = get_anim_point(vin);
+	VertexOut vout;
+	float4x4 mat_world_view = mul(world_matrix, view_matrix);
+	float4x4 mat_normal_view = mul(normal_matrix, view_matrix);
+	vout.PosV = mul(float4(pos_anim, 1.0f), mat_world_view).xyz;
+	vout.NormalV = mul(float4(vin.normal, 0.0f), mat_normal_view).xyz;
+	vout.tangent = mul(float4(vin.tangent, 0.0f), mat_normal_view).xyz;
+	//vout.PosH = mul(float4(vin.pos, 1.0f), final_matrix);
+	vout.PosH = mul(float4(vout.PosV, 1.0f), proj_matrix);
+	vout.texid = vin.texid;
+	vout.tex1 = vin.tex1;
+	vout.tex2 = vin.tex2;
+	return vout;
+}
+VertexOut VS_mesh_anim_instance(Vertex_IN_anim_instance vin)
+{
+	float3 pos_anim = get_anim_point(vin);
+	VertexOut vout;
+	float4x4 mat_world_view = mul(world_matrix_array[vin.InstanceId], view_matrix);
+	float4x4 mat_normal_view = mul(normal_matrix_array[vin.InstanceId], view_matrix);
+	vout.PosV = mul(float4(pos_anim, 1.0f), mat_world_view).xyz;
+	vout.NormalV = mul(float4(vin.normal, 0.0f), mat_normal_view).xyz;
+	vout.tangent = mul(float4(vin.tangent, 0.0f), mat_normal_view).xyz;
+	vout.PosH = mul(float4(vout.PosV, 1.0f), proj_matrix);
+	vout.texid = vin.texid;
+	vout.tex1 = vin.tex1;
+	vout.tex2 = vin.tex2;
+	return vout;
+}
 
 struct PixelOut_pbr
 {
@@ -123,7 +155,7 @@ float4 PS(VertexOut pin) : SV_Target
 {
 	float texID_data_diffuse = pin.texid.x;
 	float4 tex_color = texture_pack_array.Sample(samTex_liner, float3(pin.tex1.xy, texID_data_diffuse));
-	clip(tex_color.a - 0.5f);
+	clip(tex_color.a - 0.1f);
 	pin.NormalV = normalize(pin.NormalV);
 	return float4(pin.NormalV, 10.0f);
 }
@@ -135,7 +167,7 @@ PixelOut_pbr PS_withnormal(VertexOut pin, uniform float mask) : SV_Target
 	float texID_data_diffuse = pin.texid.x;//漫反射纹理ID
 	float texID_data_normal = pin.texid.y;//法线纹理ID
 	float4 tex_color = texture_pack_array.Sample(samTex_liner, float3(pin.tex1.xy, texID_data_diffuse));
-	clip(tex_color.a - 0.5f);
+	clip(tex_color.a - 0.9f);
 	//获取金属度及粗糙度材质
 	float texID_data_metallic = pin.texid.z;//金属度纹理ID
 	float texID_data_roughness = pin.texid.w;//粗糙度纹理ID
@@ -274,3 +306,23 @@ technique11 NormalDepth_Terrain
 		SetPixelShader(CompileShader(ps_5_0, PS_terrain_normal(1.0f)));
 	}
 }
+
+technique11 NormalDepth_withnormal_MeshAnim
+{
+	pass P0
+	{
+		SetVertexShader(CompileShader(vs_5_0, VS_mesh_anim()));
+		SetGeometryShader(NULL);
+		SetPixelShader(CompileShader(ps_5_0, PS_withnormal(1.0f)));
+	}
+}
+technique11 NormalDepth_withinstance_MeshAnim
+{
+	pass P0
+	{
+		SetVertexShader(CompileShader(vs_5_0, VS_mesh_anim_instance()));
+		SetGeometryShader(NULL);
+		SetPixelShader(CompileShader(ps_5_0, PS_withnormal(1.0f)));
+	}
+}
+

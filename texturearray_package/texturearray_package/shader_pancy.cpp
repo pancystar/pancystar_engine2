@@ -185,6 +185,9 @@ void virtual_light_shader::init_handle()
 	texture_brdfluv_handle = fx_need->GetVariableByName("texture_rdfluv")->AsShaderResource();
 	cubemap_texture = fx_need->GetVariableByName("texture_environment")->AsShaderResource();
 	texture_diffusearray_handle = fx_need->GetVariableByName("texture_pack_diffuse")->AsShaderResource();
+	texture_normalarray_handle = fx_need->GetVariableByName("texture_pack_normal")->AsShaderResource();
+	texture_metallicarray_handle = fx_need->GetVariableByName("texture_pack_metallic")->AsShaderResource();
+	texture_roughnessarray_handle = fx_need->GetVariableByName("texture_pack_roughness")->AsShaderResource();
 
 	animation_buffer = fx_need->GetVariableByName("input_point")->AsShaderResource();
 	point_offset_handle = fx_need->GetVariableByName("offset_num");
@@ -233,6 +236,40 @@ engine_basic::engine_fail_reason virtual_light_shader::set_tex_diffuse_array(ID3
 	engine_basic::engine_fail_reason succeed;
 	return succeed;
 }
+engine_basic::engine_fail_reason virtual_light_shader::set_tex_normal_array(ID3D11ShaderResourceView *tex_in)
+{
+	HRESULT hr = texture_normalarray_handle->SetResource(tex_in);
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason failed_message(hr, "set normal texarray error in" + shader_file_string);
+		return failed_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason virtual_light_shader::set_tex_metallic_array(ID3D11ShaderResourceView *tex_in)
+{
+	HRESULT hr = texture_metallicarray_handle->SetResource(tex_in);
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason failed_message(hr, "set metallic texarray error in" + shader_file_string);
+		return failed_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+engine_basic::engine_fail_reason virtual_light_shader::set_tex_roughness_array(ID3D11ShaderResourceView *tex_in)
+{
+	HRESULT hr = texture_roughnessarray_handle->SetResource(tex_in);
+	if (hr != S_OK)
+	{
+		engine_basic::engine_fail_reason failed_message(hr, "set roughness texarray error in" + shader_file_string);
+		return failed_message;
+	}
+	engine_basic::engine_fail_reason succeed;
+	return succeed;
+}
+
 engine_basic::engine_fail_reason virtual_light_shader::set_trans_world(XMFLOAT4X4 *mat_world)
 {
 	// ¿ΩÁ±‰ªª

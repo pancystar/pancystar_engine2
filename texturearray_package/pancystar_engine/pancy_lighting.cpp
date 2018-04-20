@@ -315,7 +315,7 @@ sunlight_with_shadowmap::sunlight_with_shadowmap(int width_need, int height_need
 	shadow_width = width_need;
 	shadow_height = height_need;
 	shadow_devide = shadow_divide_num;
-	sunlight_lamda_log = 0.75;
+	sunlight_lamda_log = 0.45;
 	for (int i = 0; i < 20; ++i)
 	{
 		shadowmap_array[i] = NULL;
@@ -417,13 +417,13 @@ void sunlight_with_shadowmap::draw_shadow_basic(pancy_geometry_control *geometry
 }
 void sunlight_with_shadowmap::divide_view_frustum(float lamda_log, int divide_num)
 {
-	float C_log, C_uni;
+	volatile float C_log, C_uni;
 	for (int i = 0; i < divide_num + 1; ++i)
 	{
 		float now_percent = static_cast<float>(i) / static_cast<float>(divide_num);
-		C_log = engine_basic::perspective_message::get_instance()->get_perspective_near_plane() * pow((300 / engine_basic::perspective_message::get_instance()->get_perspective_near_plane()), now_percent);
-		C_uni = engine_basic::perspective_message::get_instance()->get_perspective_near_plane() + (300 - engine_basic::perspective_message::get_instance()->get_perspective_near_plane()) * now_percent;
-		sunlight_pssm_depthdevide[i] = C_log * lamda_log + (1.0f - lamda_log) * C_uni - 25;
+		C_log = engine_basic::perspective_message::get_instance()->get_perspective_near_plane() * pow((600 / engine_basic::perspective_message::get_instance()->get_perspective_near_plane()), now_percent);
+		C_uni = engine_basic::perspective_message::get_instance()->get_perspective_near_plane() + (600 - engine_basic::perspective_message::get_instance()->get_perspective_near_plane()) * now_percent;
+		sunlight_pssm_depthdevide[i] = C_log * lamda_log + (1.0f - lamda_log) * C_uni - 65;
 		if (i > 0)
 		{
 			mat_sunlight_pssm[i - 1] = build_matrix_sunlight(sunlight_pssm_depthdevide[0], sunlight_pssm_depthdevide[i], light_data.dir);

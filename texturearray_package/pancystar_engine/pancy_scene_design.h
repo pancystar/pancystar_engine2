@@ -126,6 +126,8 @@ class scene_test_environment : public scene_root
 {
 	pancy_model_ID ID_model_castel;
 	int model_ID_castel;
+	pancy_model_ID ID_model_plant;
+	int model_ID_plant;
 	particle_looping<point_ParticleBasic>          *particle_fire;
 	//pancy_terrain_part        *terrain_need;
 	//pancy_terrain_control *terrain_test;
@@ -173,6 +175,7 @@ public:
 private:
 	void show_sky_single();
 	void show_sky_cube();
+	void show_plant_test();
 	void show_animation_test();
 	void show_terrain();
 	void show_particle();

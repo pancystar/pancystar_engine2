@@ -246,6 +246,7 @@
     <None Include="atmosphere_renderfunc.hlsli" />
     <None Include="HDR_define.hlsli" />
     <None Include="light_count.hlsli" />
+    <None Include="plant_anim_basic.hlsli" />
     <None Include="sample.hlsli" />
     <None Include="skinmesh.hlsli" />
     <None Include="terrain_tess_basic.hlsli" />

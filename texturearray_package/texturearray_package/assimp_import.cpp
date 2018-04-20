@@ -108,6 +108,10 @@ engine_basic::engine_fail_reason assimp_basic::model_create(bool if_adj, int alp
 			strcat(rec_name, matlist_need[i].texture_normal);
 			strcpy(matlist_need[i].texture_normal, rec_name);
 		}
+		else 
+		{
+			strcpy(matlist_need[i].texture_normal,"F:\\Microsoft Visual Studio\\pancystar_engine2.0\\pancystar_engine2\\texturearray_package\\texturearray_package\\pbr_basic\\basic_normal.dds");
+		}
 	}
 
 	check_fail = init_mesh(if_adj);
@@ -154,7 +158,7 @@ engine_basic::engine_fail_reason assimp_basic::init_texture()
 			texture_name = (wchar_t*)malloc(len*sizeof(wchar_t));
 			mbstowcs_s(&converted, texture_name, len, matlist_need[i].texture_diffuse, _TRUNCATE);
 			//根据文件名创建纹理资源
-			//hr_need = CreateDDSTextureFromFile(device_pancy, texture_name, 0, &matlist_need[i].tex_diffuse_resource, 0, 0);
+			//hr_need = CreateDDSTextureFromFile(d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device(), texture_name, 0, &matlist_need[i].tex_diffuse_resource, 0, 0);
 			hr_need = CreateDDSTextureFromFileEx(d3d_pancy_basic_singleton::GetInstance()->get_d3d11_device(), d3d_pancy_basic_singleton::GetInstance()->get_d3d11_contex(), texture_name, 0, D3D11_USAGE_DEFAULT, D3D11_BIND_SHADER_RESOURCE, 0, 0., false, NULL, &matlist_need[i].tex_diffuse_resource);
 			if (FAILED(hr_need))
 			{
@@ -782,7 +786,8 @@ engine_basic::engine_fail_reason mesh_animation_FBX::ReadVertexCacheData(FbxMesh
 	bool                    lReadSucceed = false;
 	float*                  lReadBuf = NULL;
 	unsigned int			BufferSize = 0;
-
+	FbxString lChnlName, lChnlInterp;
+	lCache->GetChannelInterpretation(lChannelIndex, lChnlInterp);
 	if (lDeformer->Type.Get() != FbxVertexCacheDeformer::ePositions)
 	{
 		engine_basic::engine_fail_reason error_message(E_FAIL, "animation data type not support");
@@ -918,10 +923,18 @@ void mesh_animation_FBX::UpdateVertexPosition(FbxMesh * pMesh, const FbxVector4 
 
 void mesh_animation_FBX::compute_normal()
 {
+	FbxGeometryConverter lGeometryConverter(lSdkManager);
 	int triangle_num = point_index_num / 3;
 
 	XMFLOAT3 *positions = new XMFLOAT3[point_num];
 	XMFLOAT3 *normals = new XMFLOAT3[point_num];
+	UINT *index_test = new UINT[point_index_num];
+	for (int i = 0; i < triangle_num; ++i) 
+	{
+		index_test[3 * i + 0] = index_buffer[3 * i + 0];
+		index_test[3 * i + 1] = index_buffer[3 * i + 1];
+		index_test[3 * i + 2] = index_buffer[3 * i + 2];
+	}
 	for (auto now_frame_data = anim_data_list.begin(); now_frame_data != anim_data_list.end(); ++now_frame_data)
 	{
 		
@@ -929,13 +942,14 @@ void mesh_animation_FBX::compute_normal()
 		{
 			positions[i] = now_frame_data._Ptr->point_data[i].position;
 		}
-		ComputeNormals(index_buffer, triangle_num, positions, point_num, CNORM_DEFAULT, normals);
+		ComputeNormals(index_buffer, triangle_num, positions, point_num, CNORM_WEIGHT_BY_AREA, normals);
 		
 		XMFLOAT3 *new_normal = new XMFLOAT3[now_frame_data._Ptr->point_num];
 		for (int i = 0; i < now_frame_data._Ptr->point_num; ++i)
 		{
-			new_normal[i] = XMFLOAT3(0, 0, 0);
+			now_frame_data._Ptr->point_data[i].normal = normals[i];
 		}
+		/*
 		for (int i = 0; i < triangle_num; ++i)
 		{
 			
@@ -943,7 +957,7 @@ void mesh_animation_FBX::compute_normal()
 			int index_triangle_0 = index_buffer[i * 3 + 0];
 			int index_triangle_1 = index_buffer[i * 3 + 1];
 			int index_triangle_2 = index_buffer[i * 3 + 2];
-			/*
+			
 			XMFLOAT3 point_triangle_0 = now_frame_data._Ptr->point_data[index_triangle_0].position;
 			XMFLOAT3 point_triangle_1 = now_frame_data._Ptr->point_data[index_triangle_1].position;
 			XMFLOAT3 point_triangle_2 = now_frame_data._Ptr->point_data[index_triangle_2].position;
@@ -976,7 +990,7 @@ void mesh_animation_FBX::compute_normal()
 			now_frame_data._Ptr->point_data[index_triangle_2].normal.x += vec_cross.x;
 			now_frame_data._Ptr->point_data[index_triangle_2].normal.y += vec_cross.y;
 			now_frame_data._Ptr->point_data[index_triangle_2].normal.z += vec_cross.z;
-			*/
+			
 			//求面法线
 			XMFLOAT3 face_normal;
 			face_normal.x += now_frame_data._Ptr->point_data[index_triangle_0].normal.x;
@@ -1019,6 +1033,7 @@ void mesh_animation_FBX::compute_normal()
 			XMStoreFloat3(&vec_normal_normalize, XMVector3Normalize(XMLoadFloat3(&vec_normal)));
 			now_frame_data._Ptr->point_data[i].normal = vec_normal_normalize;
 		}
+		*/
 		int a = 0;
 	}
 }

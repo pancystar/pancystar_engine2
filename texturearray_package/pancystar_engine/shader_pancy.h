@@ -106,7 +106,7 @@ protected:
 	}
 };
 
-class terrain_shader_basic : public shader_basic
+class terrain_shader_basic : virtual public shader_basic
 {
 	ID3DX11EffectVariable                    *terrain_size;
 	ID3DX11EffectVariable                    *view_pos_handle;
@@ -127,6 +127,19 @@ public:
 	engine_basic::engine_fail_reason set_texture_color(terrain_color_resource tex_color_in[4]);
 protected:
 	void init_handle_terrain();
+};
+class plant_shader_basic : virtual public shader_basic 
+{
+	ID3DX11EffectShaderResourceVariable   *animation_buffer;            //动画数据
+	ID3DX11EffectVariable                 *point_offset_handle;         //动画数据偏移
+	ID3DX11EffectVariable                 *point_offset_array_handle;   //动画数据偏移数组
+public:
+	plant_shader_basic(LPCWSTR filename);
+	engine_basic::engine_fail_reason set_animation_buffer(ID3D11ShaderResourceView* buffer_in);
+	engine_basic::engine_fail_reason set_animation_offset(XMUINT4 offset_data);
+	engine_basic::engine_fail_reason set_animation_offset_array(XMUINT4 *offset_data,int array_num);
+protected:
+	void init_handle_plant();
 };
 
 
@@ -187,7 +200,7 @@ private:
 	void init_handle();                 //注册全局变量句柄
 	void set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member);
 };
-class shader_pretreat_gbuffer : public terrain_shader_basic
+class shader_pretreat_gbuffer : public terrain_shader_basic,public plant_shader_basic
 {
 	ID3DX11EffectMatrixVariable           *project_matrix_handle;      //全套几何变换句柄
 	ID3DX11EffectMatrixVariable           *world_matrix_handle;        //世界变换句柄
@@ -378,7 +391,7 @@ private:
 	void init_handle();                 //注册全局变量句柄
 	void set_inputpoint_desc(D3D11_INPUT_ELEMENT_DESC *member_point, UINT *num_member);
 };
-class light_defered_draw : public terrain_shader_basic
+class light_defered_draw : public terrain_shader_basic, public plant_shader_basic
 {
 	ID3DX11EffectVariable                 *material_need;            //材质
 	//ID3DX11EffectVariable                 *view_pos_handle;          //视点位置
@@ -399,6 +412,7 @@ class light_defered_draw : public terrain_shader_basic
 	ID3DX11EffectShaderResourceVariable   *texture_diffuse_handle;   //漫反射纹理资源句柄
 	ID3DX11EffectShaderResourceVariable   *texture_normal_handle;    //法线纹理资源句柄
 	ID3DX11EffectShaderResourceVariable   *texture_ibl_handle;       //环境光纹理资源句柄
+	ID3DX11EffectShaderResourceVariable   *texture_ibl_diffuse_handle;//漫反射环境光纹理资源句柄
 	ID3DX11EffectShaderResourceVariable   *tex_specroughness;        //镜面光&粗糙度
 	ID3DX11EffectShaderResourceVariable   *tex_brdf_list;            //brdf表
 
@@ -423,6 +437,7 @@ public:
 	engine_basic::engine_fail_reason set_specular_light_tex(ID3D11ShaderResourceView *tex_in);               //设置镜面反射光纹理
 	engine_basic::engine_fail_reason set_normal_tex(ID3D11ShaderResourceView *tex_in);                       //设置法线纹理
 	engine_basic::engine_fail_reason set_IBL_tex(ID3D11ShaderResourceView *tex_in);                          //设置环境光纹理
+	engine_basic::engine_fail_reason set_IBL_diffuse_tex(ID3D11ShaderResourceView *tex_in);                          //设置漫反射环境光纹理
 	engine_basic::engine_fail_reason set_tex_specroughness_resource(ID3D11ShaderResourceView *buffer_input); //设置镜面光&粗糙度纹理
 	engine_basic::engine_fail_reason set_tex_brdflist_resource(ID3D11ShaderResourceView *buffer_input);      //设置brdf查找表
 	engine_basic::engine_fail_reason set_world_matrix_array(const XMFLOAT4X4* M, int cnt);	                 //设置世界变换组矩阵
